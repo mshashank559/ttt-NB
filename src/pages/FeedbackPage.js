@@ -9,7 +9,7 @@ import {
 import { toast } from 'sonner';
 import { useApp } from '../context/AppContext';
 import { PageHeader, SectionCard, StatusBadge } from '../components/common';
-import { calculateOverallRating, TECH_SUPPORT_TEAM, ROLES } from '../data/mockData';
+import { calculateOverallRating, TECH_SUPPORT_TEAM, ROLES, roleIsMarketing } from '../data/mockData';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import { Textarea } from '../components/ui/textarea';
 
@@ -445,7 +445,7 @@ export default function FeedbackPage() {
             <thead>
               <tr className="border-b border-slate-200 text-slate-600 uppercase tracking-wider text-[11px] font-bold bg-slate-50/70">
                 <th className="py-3 px-4">Date</th>
-                <th className="py-3 px-4">Tech Support</th>
+                <th className="py-3 px-4">{roleIsMarketing(currentRole) ? 'Tech ID' : 'Tech Support'}</th>
                 <th className="py-3 px-4">Candidate & Recruiter</th>
                 <th className="py-3 px-4">Status & Overall Stars</th>
                 <th className="py-3 px-4 text-right">Actions</th>
@@ -479,21 +479,29 @@ export default function FeedbackPage() {
                           className="flex items-center gap-2 text-left group/btn"
                         >
                           <div className="h-7 w-7 rounded-lg bg-blue-50 border border-blue-200 text-[#1416c1] flex items-center justify-center font-bold text-xs shrink-0 group-hover/btn:border-[#1416c1]">
-                            {row.techSupport?.charAt(0)}
+                            {roleIsMarketing(currentRole) ? '#' : (row.techSupport?.charAt(0) || 'T')}
                           </div>
                           <div>
                             <div className="font-bold text-slate-900 group-hover/btn:text-[#1416c1] transition-colors flex items-center gap-1.5">
-                              <span>{row.techSupport}</span>
-                              {row.techSupportId && (
-                                <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-blue-50 border border-blue-200 text-[#1416c1]">
-                                  {row.techSupportId}
-                                </span>
+                              {roleIsMarketing(currentRole) ? (
+                                <span className="font-mono text-[#1416c1] font-semibold">{row.techSupportId || 'TSE-ID'}</span>
+                              ) : (
+                                <>
+                                  <span>{row.techSupport}</span>
+                                  {row.techSupportId && (
+                                    <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-blue-50 border border-blue-200 text-[#1416c1]">
+                                      {row.techSupportId}
+                                    </span>
+                                  )}
+                                </>
                               )}
                               <ChevronRight size={13} className="opacity-0 group-hover/btn:opacity-100 -translate-x-1 group-hover/btn:translate-x-0 transition-all text-[#1416c1]" />
                             </div>
-                            <div className="text-[10px] text-slate-500 truncate mt-0.5">
-                              {row.techSupportEmail || (TECH_SUPPORT_TEAM.find(t => t.supportName === row.techSupport)?.email) || 'nbtech@netbounceplacement.com'}
-                            </div>
+                            {!roleIsMarketing(currentRole) && (
+                              <div className="text-[10px] text-slate-500 truncate mt-0.5">
+                                {row.techSupportEmail || (TECH_SUPPORT_TEAM.find(t => t.supportName === row.techSupport)?.email) || 'nbtech@netbounceplacement.com'}
+                              </div>
+                            )}
                           </div>
                         </button>
                       </td>
@@ -621,11 +629,17 @@ export default function FeedbackPage() {
                 <span>Tech Support Detail View</span>
               </div>
               <DialogTitle className="text-2xl font-bold text-slate-900 mt-1 flex items-center gap-3">
-                <span>{selectedTechSupport?.name}</span>
-                {TECH_SUPPORT_TEAM.find(t => t.supportName === selectedTechSupport?.name) && (
-                  <span className="text-xs font-mono px-2 py-0.5 rounded bg-blue-50 border border-blue-200 text-[#1416c1]">
-                    {TECH_SUPPORT_TEAM.find(t => t.supportName === selectedTechSupport?.name)?.id}
-                  </span>
+                {roleIsMarketing(currentRole) ? (
+                  <span className="font-mono text-[#1416c1]">{TECH_SUPPORT_TEAM.find(t => t.supportName === selectedTechSupport?.name)?.id || selectedTechSupport?.name || 'TSE-ID'}</span>
+                ) : (
+                  <>
+                    <span>{selectedTechSupport?.name}</span>
+                    {TECH_SUPPORT_TEAM.find(t => t.supportName === selectedTechSupport?.name) && (
+                      <span className="text-xs font-mono px-2 py-0.5 rounded bg-blue-50 border border-blue-200 text-[#1416c1]">
+                        {TECH_SUPPORT_TEAM.find(t => t.supportName === selectedTechSupport?.name)?.id}
+                      </span>
+                    )}
+                  </>
                 )}
                 {drillDownAvgRating && (
                   <span className="text-xs px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-800 flex items-center gap-1 font-semibold">
@@ -636,7 +650,7 @@ export default function FeedbackPage() {
               </DialogTitle>
               <DialogDescription className="text-xs text-slate-500 mt-1 flex items-center gap-2 flex-wrap">
                 <span>Date: <strong className="text-slate-700">{selectedTechSupport?.date || 'All Recorded Dates'}</strong></span>
-                {TECH_SUPPORT_TEAM.find(t => t.supportName === selectedTechSupport?.name) && canViewRealName && (
+                {!roleIsMarketing(currentRole) && TECH_SUPPORT_TEAM.find(t => t.supportName === selectedTechSupport?.name) && canViewRealName && (
                   <>
                     <span>•</span>
                     <span>Employee: <strong className="text-slate-700">{TECH_SUPPORT_TEAM.find(t => t.supportName === selectedTechSupport?.name)?.employeeName}</strong></span>

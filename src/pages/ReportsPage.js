@@ -12,7 +12,7 @@ import autoTable from 'jspdf-autotable';
 
 import { useApp } from '../context/AppContext';
 import { PageHeader, SectionCard, StatusBadge } from '../components/common';
-import { calculateOverallRating, TECH_SUPPORT_TEAM } from '../data/mockData';
+import { calculateOverallRating, TECH_SUPPORT_TEAM, roleIsMarketing } from '../data/mockData';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 
 // Performance Classification Utility (Configurable thresholds)
@@ -859,7 +859,7 @@ export default function ReportsPage() {
         return [
           s.date,
           s.techSupportId || '—',
-          s.techSupport,
+          roleIsMarketing(currentRole) ? (s.techSupportId || 'TSE-ID') : s.techSupport,
           canViewRealName ? (s.techSupportEmail || '—') : '—',
           s.candidateName,
           s.candidateEmail || '—',
@@ -1395,9 +1395,9 @@ export default function ReportsPage() {
                         </div>
                         <div>
                           <div className="font-semibold text-slate-900 group-hover:text-blue-700 transition-colors">
-                            {tse.name}
+                            {roleIsMarketing(currentRole) ? (tse.id || 'TSE-ID') : tse.name}
                           </div>
-                          {canViewRealName && tse.employeeName && (
+                          {!roleIsMarketing(currentRole) && canViewRealName && tse.employeeName && (
                             <div className="text-[10px] text-slate-500 truncate">
                               {tse.employeeName}
                             </div>
@@ -1408,7 +1408,7 @@ export default function ReportsPage() {
 
                     {/* Column 3: Email */}
                     <td className="py-3.5 px-4 text-slate-600 font-mono text-[11px]">
-                      {tse.email}
+                      {roleIsMarketing(currentRole) ? '—' : tse.email}
                     </td>
 
                     {/* Column 4: Candidates Handled */}
@@ -1469,7 +1469,7 @@ export default function ReportsPage() {
                 <span>TSE Performance & Feedback Intelligence</span>
               </div>
               <DialogTitle className="text-2xl font-bold text-slate-900 mt-1 flex items-center gap-2.5 flex-wrap">
-                <span>{drillDownTse?.name}</span>
+                <span>{roleIsMarketing(currentRole) ? (drillDownTse?.id || 'TSE-ID') : drillDownTse?.name}</span>
                 <span className="text-xs font-mono px-2 py-0.5 rounded bg-blue-50 border border-blue-200 text-blue-700 font-semibold">
                   {drillDownTse?.id}
                 </span>

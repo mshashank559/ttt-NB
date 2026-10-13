@@ -179,40 +179,84 @@ export const TECH_SUPPORT_TEAM = [
 
 export const INITIAL_FEEDBACK_RECORDS = [];
 
-export const roleIsMarketing = (role) => role === 'marketing_tl' || role === 'marketing_sr';
+export const roleIsMarketing = (role) => role === 'marketing_tl' || role === 'marketing_sr' || role === 'recruiter';
 
-// Identity Privacy Sanitizer: Never expose TSE or TSM real names or personal emails to Marketing TL / SR
+export const TSE_IDS = {
+  'Abhishek': 'TTT-NB-008',
+  'Harit verma': 'TTT-NB-008',
+  'Harit': 'TTT-NB-008',
+  'Kiran': 'TTT-NB-009',
+  'Prem makwana': 'TTT-NB-009',
+  'Prem': 'TTT-NB-009',
+  'Henil': 'TTT-NB-010',
+  'Shaurya mishra': 'TTT-NB-010',
+  'Shaurya': 'TTT-NB-010',
+  'Saurav': 'TTT-NB-011',
+  'Nikunj kataria': 'TTT-NB-011',
+  'Nikunj': 'TTT-NB-011',
+  'Divya': 'TTT-NB-012',
+  'Jindal patel': 'TTT-NB-012',
+  'Jindal': 'TTT-NB-012',
+  'Smriti': 'TTT-NB-013',
+  'Amber Afreen': 'TTT-NB-013',
+  'Amber': 'TTT-NB-013',
+  'jemimah': 'TTT-NB-014',
+  'Jemimah': 'TTT-NB-014',
+  'Rashika Sharma': 'TTT-NB-014',
+  'Rashika': 'TTT-NB-014',
+  'Shreya': 'TTT-NB-015',
+  'AARTI VISHWAKARMA': 'TTT-NB-015',
+  'Aarti': 'TTT-NB-015',
+};
+
+export const getTseId = (name, record) => {
+  if (record && (record.techSupportId || record.assigneeId || record.empId || record.tttNbId)) {
+    const idVal = record.empId || record.tttNbId || record.techSupportId || record.assigneeId;
+    if (typeof idVal === 'string' && idVal.startsWith('TTT-NB')) return idVal;
+  }
+  if (name && TSE_IDS[name]) return TSE_IDS[name];
+  if (record?.techPerson && TSE_IDS[record.techPerson]) return TSE_IDS[record.techPerson];
+  if (record?.techSupport && TSE_IDS[record.techSupport]) return TSE_IDS[record.techSupport];
+  return record?.techSupportId || record?.assigneeId || 'TTT-NB-TSE';
+};
+
+export const TSM_IDS = {
+  'Abhishek': 'TTT-NB-008',
+  'Rohan Kapoor': 'TTT-NB-008',
+  'TSM Titan': 'TTT-NB-008',
+  'TSM Nova': 'TTT-NB-008',
+};
+
+export const getTsmId = (name, record) => {
+  if (record && (record.createdById || record.empId || record.tttNbId)) {
+    const idVal = record.empId || record.tttNbId || record.createdById;
+    if (typeof idVal === 'string' && idVal.startsWith('TTT-NB')) return idVal;
+  }
+  if (name && TSM_IDS[name]) return TSM_IDS[name];
+  return 'TTT-NB-TSM';
+};
+
+// Identity Privacy Sanitizer: Never expose TSE or TSM real names or code names to Marketing TL / SR (ONLY their IDs)
 export const sanitizeForIdentityPrivacy = (record, role) => {
   if (!record) return record;
-  if (role === 'marketing_tl' || role === 'marketing_sr') {
-    const tseCode = record.codeName ||
-                    TSE_CODE_NAMES[record.techPerson] ||
-                    TSE_CODE_NAMES[record.techSupport] ||
-                    'Code Name Unassigned';
-    const tsmCode = TSM_CODE_NAMES[record.by] ||
-                    TSM_CODE_NAMES[record.createdByName] ||
-                    'TSM Nova';
+  if (roleIsMarketing(role)) {
+    const tseId = getTseId(record.techPerson || record.techSupport || record.employeeName, record);
+    const tsmId = getTsmId(record.by || record.createdByName, record);
     const copy = { ...record };
-    if (copy.techPerson) copy.techPerson = tseCode;
-    if (copy.techSupport) copy.techSupport = tseCode;
+    if (copy.techPerson) copy.techPerson = tseId;
+    if (copy.techSupport) copy.techSupport = tseId;
+    if (copy.codeName) copy.codeName = tseId;
+    if (copy.techSupportId) copy.techSupportId = tseId;
     // Strictly mask employee real name
-    if (copy.employeeName !== undefined) copy.employeeName = tseCode;
+    if (copy.employeeName !== undefined) copy.employeeName = tseId;
     // Mask real tech support email
-    if (copy.techSupportEmail) copy.techSupportEmail = 'techsupport@netbounceplacement.com';
+    if (copy.techSupportEmail) copy.techSupportEmail = '—';
     if (Array.isArray(copy.timeline)) {
-      copy.timeline = copy.timeline.map(tl => {
-        let eventText = tl.event || '';
-        Object.keys(TSE_CODE_NAMES).forEach(realName => {
-          if (realName.length > 2) {
-            eventText = eventText.replace(new RegExp(`\\b${realName}\\b`, 'gi'), TSE_CODE_NAMES[realName]);
-          }
-        });
-        return {
-          ...tl,
-          event: eventText,
-          by: TSM_CODE_NAMES[tl.by] || TSE_CODE_NAMES[tl.by] || tl.by,
-        };
-      });
+      copy.timeline = copy.timeline.map(tl => ({
+        ...tl,
+        event: (tl.event || '').replace(/\b(Abhishek|Harit|Kiran|Prem|Henil|Shaurya|Saurav|Nikunj|Divya|Jindal|Smriti|Amber|Jemimah|Rashika|Shreya|Aarti)\b/gi, tseId),
+        by: tsmId,
+      }));
     }
     return copy;
   }
@@ -251,16 +295,18 @@ export const filterAuthorizedData = (items, currentUser, currentRole) => {
     });
   }
 
-  // 3. Recruiter / POC: Can ONLY see their own assigned candidates!
+  // 3. Recruiter / POC (Marketing SR): Can ONLY see their own assigned candidates + ID only!
   if (currentRole === 'recruiter') {
     const currentId = currentUser.id;
     const currentName = (currentUser.name || '').toLowerCase();
 
-    return items.filter(item => {
-      const isPocId = item.pocId === currentId;
-      const isRecruiterName = item.recruiterName && item.recruiterName.toLowerCase() === currentName;
-      return isPocId || isRecruiterName;
-    });
+    return items
+      .filter(item => {
+        const isPocId = item.pocId === currentId;
+        const isRecruiterName = item.recruiterName && item.recruiterName.toLowerCase() === currentName;
+        return isPocId || isRecruiterName;
+      })
+      .map(item => sanitizeForIdentityPrivacy(item, currentRole));
   }
 
   // 4. Marketing TL (Mukesh, Shivam, Vijesh):

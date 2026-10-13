@@ -173,7 +173,7 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
               <SelectContent className="bg-white border-slate-200 text-slate-900">
                 {tseUsers.map(u => (
                   <SelectItem key={u.id} value={u.id}>
-                    {roleIsMarketing(currentRole) ? (u.codeName || getTseCodeName(u.name)) : `${u.name} (${u.codeName || getTseCodeName(u.name)})`}
+                    {roleIsMarketing(currentRole) ? (u.empId || u.tttNbId || u.id) : `${u.name} (${u.codeName || getTseCodeName(u.name)})`}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -367,11 +367,11 @@ const TaskDrawer = ({ task, onClose }) => {
             </div>
             <div>
               <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1 flex items-center gap-1.5">
-                <UserRound size={12} className="text-blue-600" /> Tech Person (TSE)
+                <UserRound size={12} className="text-blue-600" /> {roleIsMarketing(currentRole) ? 'Tech ID' : 'Tech Person (TSE)'}
               </div>
               <div className="text-sm font-semibold text-slate-900">
                 {roleIsMarketing(currentRole)
-                  ? (task.codeName || assignee?.codeName || getTseCodeName(assignee?.name || task.techPerson))
+                  ? (assignee?.empId || assignee?.tttNbId || task.techPersonId || task.assigneeId || 'TSE-ID')
                   : (assignee?.name || task.techPerson || 'Unassigned')}
               </div>
             </div>
@@ -392,7 +392,7 @@ const TaskDrawer = ({ task, onClose }) => {
                 <UserRound size={12} className="text-blue-600" /> Created By
               </div>
               <div className="text-sm font-semibold text-slate-900">
-                {roleIsMarketing(currentRole) ? (getTsmCodeName(creator?.name) || 'TSM Nova') : (creator?.name || 'TSM')}
+                {roleIsMarketing(currentRole) ? (creator?.empId || creator?.tttNbId || 'TSM-ID') : (creator?.name || 'TSM')}
               </div>
             </div>
           </div>
@@ -570,7 +570,7 @@ export default function Tasks() {
                 <SelectItem value="all">All Tech Persons</SelectItem>
                 {users.filter(u => u.role === 'tse').map(u => (
                   <SelectItem key={u.id} value={u.id}>
-                    {roleIsMarketing(currentRole) ? (u.codeName || getTseCodeName(u.name)) : u.name}
+                    {roleIsMarketing(currentRole) ? (u.empId || u.tttNbId || u.id) : u.name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -589,7 +589,7 @@ export default function Tasks() {
               <thead className="sticky top-0 bg-slate-50 border-b border-slate-200 z-10">
                 <tr className="text-left text-xs text-slate-600 uppercase tracking-wider">
                   <th className="py-3 px-4 font-semibold">Date</th>
-                  <th className="py-3 px-4 font-semibold">Tech Person</th>
+                  <th className="py-3 px-4 font-semibold">{roleIsMarketing(currentRole) ? 'Tech ID' : 'Tech Person'}</th>
                   <th className="py-3 px-3 font-semibold">Duration</th>
                   <th className="py-3 px-3 font-semibold">Task</th>
                   <th className="py-3 px-4 font-semibold">Candidate Name</th>
@@ -604,7 +604,7 @@ export default function Tasks() {
                   const a = users.find(u => u.id === t.assigneeId);
                   const isMarketing = roleIsMarketing(currentRole);
                   const techName = isMarketing
-                    ? (t.codeName || a?.codeName || getTseCodeName(a?.name || t.techPerson))
+                    ? (a?.empId || a?.tttNbId || t.techPersonId || t.assigneeId || 'TSE-ID')
                     : (a?.name || t.techPerson || 'Unassigned');
                   return (
                     <motion.tr
