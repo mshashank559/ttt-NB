@@ -4,7 +4,9 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "concurrently -k -p \"[{name}]\" -n \"SERVER,VITE\" -c \"cyan,magenta\" \"node server.js\" \"vite\"",
+    "dev": "concurrently -p \"[{name}]\" -n \"SERVER,VITE\" -c \"cyan,magenta\" \"node server.js\" \"vite\"",
+    "dev:server": "node server.js",
+    "dev:client": "vite",
     "server": "node server.js",
     "client": "vite",
     "build": "vite build",

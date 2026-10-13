@@ -44,8 +44,8 @@ const perTseBars = (tasks, users) => {
   const tses = users.filter(u => u.role === 'tse');
   return tses.map(u => ({
     name: u.name.split(' ')[0],
-    completed: tasks.filter(t => t.assigneeId === u.id && t.status === 'Completed').length,
-    pending: tasks.filter(t => t.assigneeId === u.id && t.status === 'Pending').length,
+    completed: tasks.filter(t => (t.assigneeId === u.id || t.techPerson === u.name) && (t.status === 'Completed' || t.status === 'Done')).length,
+    pending: tasks.filter(t => (t.assigneeId === u.id || t.techPerson === u.name) && t.status === 'Pending').length,
   }));
 };
 
@@ -86,10 +86,10 @@ export default function Dashboard() {
 
   const totals = {
     total: tasks.length,
-    completed: tasks.filter(t => t.status === 'Completed').length,
+    completed: tasks.filter(t => t.status === 'Completed' || t.status === 'Done').length,
     pending: tasks.filter(t => t.status === 'Pending').length,
-    inProgress: tasks.filter(t => t.status === 'In Progress').length,
-    overdue: tasks.filter(t => new Date(t.dueDate) < new Date() && t.status !== 'Completed').length,
+    inProgress: tasks.filter(t => t.status === 'In Progress' || t.status === 'Reschedule').length,
+    overdue: tasks.filter(t => new Date(t.dueDate) < new Date() && t.status !== 'Completed' && t.status !== 'Done').length,
   };
   const completionRate = totals.total ? Math.round((totals.completed / totals.total) * 100) : 0;
 
@@ -498,9 +498,9 @@ export default function Dashboard() {
         <SectionCard title="Team Workload" subtitle="Capacity across your TSEs">
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
             {myTeam.map(u => {
-              const a = tasks.filter(t => t.assigneeId === u.id);
-              const c = a.filter(t => t.status === 'Completed').length;
-              const p = a.filter(t => t.status === 'In Progress').length;
+              const a = tasks.filter(t => t.assigneeId === u.id || t.techPerson === u.name);
+              const c = a.filter(t => t.status === 'Completed' || t.status === 'Done').length;
+              const p = a.filter(t => t.status === 'In Progress' || t.status === 'Pending' || t.status === 'Reschedule').length;
               const rate = a.length ? Math.round((c / a.length) * 100) : 0;
               return (
                 <div
@@ -600,12 +600,12 @@ export default function Dashboard() {
 
   // ---------- TSE ----------
   if (currentRole === 'tse') {
-    const myTasks = tasks.filter(t => t.assigneeId === currentUser?.id);
+    const myTasks = tasks;
     const myStats = {
       assigned: myTasks.length,
-      inProgress: myTasks.filter(t => t.status === 'In Progress').length,
+      inProgress: myTasks.filter(t => t.status === 'In Progress' || t.status === 'Reschedule').length,
       pending: myTasks.filter(t => t.status === 'Pending').length,
-      completed: myTasks.filter(t => t.status === 'Completed').length,
+      completed: myTasks.filter(t => t.status === 'Done' || t.status === 'Completed').length,
     };
     const tseRate = myStats.assigned ? Math.round((myStats.completed / myStats.assigned) * 100) : 0;
 
@@ -674,13 +674,18 @@ export default function Dashboard() {
   // ---------- MARKETING TL/SR & RECRUITER (POC) ----------
   if (currentRole === 'marketing_tl' || currentRole === 'marketing_sr' || currentRole === 'recruiter') {
     const assigned = visibleInterviews.filter(i => i.interviewerId === currentUser?.id || true).slice(0, 20);
-    const evalRate = assigned.length ? Math.round((assigned.filter(i => i.feedbackSubmitted).length / assigned.length) * 100) : 0;
+    const candidateTasks = tasks;
+    const completedCandidateInterviews = candidateTasks.filter(t => t.status === 'Done' || t.status === 'Completed').length;
+    const pendingCandidateInterviews = candidateTasks.filter(t => t.status === 'Pending' || t.status === 'In Progress' || t.status === 'Reschedule').length;
+    const totalPool = candidateTasks.length > 0 ? candidateTasks.length : assigned.length;
+    const completedTotal = candidateTasks.length > 0 ? completedCandidateInterviews : assigned.filter(i => i.status === 'Interview Completed' || i.status === 'Done').length;
+    const evalRate = totalPool ? Math.round((completedTotal / totalPool) * 100) : 0;
 
     return (
       <div className="space-y-6">
         <PageHeader
-          title={currentRole === 'recruiter' ? 'Candidate Pipeline & Evaluation' : 'TSE Interview Evaluation'}
-          subtitle="Candidate identities are scoped according to role policy."
+          title={currentRole === 'recruiter' ? 'Candidate Pipeline & Evaluation' : 'Team Candidates & Evaluation'}
+          subtitle={`Scoped to authorized team and candidate boundaries (${currentUser?.name})`}
         />
 
         {/* Ghulam Image 1 Style Hero Arc Gauge & Metric Cards */}
@@ -700,10 +705,10 @@ export default function Dashboard() {
             stat2Value={`${ivTotals.cleared} Qualified`}
           />
           <div className="xl:col-span-2 grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <NeumorphicMetricCard testid="kpi-assigned" label="Assigned" value={assigned.length} subValue="In Pool" percentage={assigned.length > 0 ? 100 : 0} ringColor="#1416c1" />
-            <NeumorphicMetricCard testid="kpi-completed" label="Completed" value={assigned.filter(i => i.status === 'Interview Completed').length} subValue="Conducted" percentage={assigned.length > 0 ? Math.round((assigned.filter(i => i.status === 'Interview Completed').length / assigned.length) * 100) : 0} ringColor="#10b981" />
-            <NeumorphicMetricCard testid="kpi-feedback" label="Feedback Pending" value={assigned.filter(i => i.status === 'Feedback Pending').length} subValue="Action Needed" percentage={assigned.length > 0 ? Math.round((assigned.filter(i => i.status === 'Feedback Pending').length / assigned.length) * 100) : 0} ringColor="#f59e0b" />
-            <NeumorphicMetricCard testid="kpi-evaluated" label="Evaluated" value={assigned.filter(i => i.feedbackSubmitted).length} subValue="Scorecard Done" percentage={evalRate} ringColor="#8b5cf6" />
+            <NeumorphicMetricCard testid="kpi-assigned" label="Assigned" value={totalPool} subValue="In Pool" percentage={totalPool > 0 ? 100 : 0} ringColor="#1416c1" />
+            <NeumorphicMetricCard testid="kpi-completed" label="Completed" value={completedTotal} subValue="Conducted" percentage={evalRate} ringColor="#10b981" />
+            <NeumorphicMetricCard testid="kpi-feedback" label="Pending / Queue" value={candidateTasks.length > 0 ? pendingCandidateInterviews : assigned.filter(i => i.status === 'Feedback Pending').length} subValue="Action Needed" percentage={totalPool > 0 ? Math.round(((candidateTasks.length > 0 ? pendingCandidateInterviews : assigned.filter(i => i.status === 'Feedback Pending').length) / totalPool) * 100) : 0} ringColor="#f59e0b" />
+            <NeumorphicMetricCard testid="kpi-evaluated" label="Evaluated" value={assigned.filter(i => i.feedbackSubmitted).length || completedTotal} subValue="Scorecard Done" percentage={evalRate} ringColor="#8b5cf6" />
           </div>
         </div>
 

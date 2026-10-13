@@ -124,58 +124,203 @@ export const AppProvider = ({ children }) => {
   }, []);
 
   const [dbConnected, setDbConnected] = useState(false);
+  const [realtimeConnected, setRealtimeConnected] = useState(false);
 
-  // Live Sync with MongoDB Atlas Backend (Mumbai Region)
+  // Live Fetch & Reconcile with MongoDB Atlas Backend
+  const fetchLiveData = useCallback(async () => {
+    try {
+      const q = new URLSearchParams();
+      if (currentRole) q.set('role', currentRole);
+      if (currentUserId) q.set('userId', currentUserId);
+      if (currentUser?.teamId) q.set('teamId', currentUser.teamId);
+
+      const qs = q.toString() ? `?${q.toString()}` : '';
+
+      const [tasksRes, feedbacksRes, usersRes, healthRes] = await Promise.all([
+        fetch(`/api/tasks${qs}`).catch(() => null),
+        fetch(`/api/feedbacks${qs}`).catch(() => null),
+        fetch('/api/users').catch(() => null),
+        fetch('/api/health').catch(() => null),
+      ]);
+
+      if (healthRes && healthRes.ok) {
+        const healthData = await healthRes.json();
+        if (healthData.database === 'connected') {
+          setDbConnected(true);
+        }
+      }
+
+      if (tasksRes && tasksRes.ok) {
+        const liveTasks = await tasksRes.json();
+        if (Array.isArray(liveTasks)) {
+          setTasks(liveTasks);
+        }
+      }
+
+      if (feedbacksRes && feedbacksRes.ok) {
+        const liveFeedbacks = await feedbacksRes.json();
+        if (Array.isArray(liveFeedbacks)) {
+          setFeedbacks(liveFeedbacks);
+          try {
+            localStorage.setItem('ttt_feedbacks', JSON.stringify(liveFeedbacks));
+          } catch (e) { }
+        }
+      }
+
+      if (usersRes && usersRes.ok) {
+        const liveUsers = await usersRes.json();
+        if (Array.isArray(liveUsers) && liveUsers.length > 0) {
+          setUsers(liveUsers);
+          try {
+            localStorage.setItem('ttt_users', JSON.stringify(liveUsers));
+          } catch (e) { }
+        }
+      }
+    } catch (err) {
+      console.warn('Backend server offline, falling back to local storage/state:', err);
+    }
+  }, [currentRole, currentUserId, currentUser]);
+
   React.useEffect(() => {
-    const fetchLiveData = async () => {
+    fetchLiveData();
+  }, [fetchLiveData]);
+
+  // Live Realtime Server-Sent Events (SSE) Cross-Role Listener
+  React.useEffect(() => {
+    if (!currentUserId || !currentRole) return;
+
+    let es = null;
+    let reconnectTimeout = null;
+
+    const connectSse = () => {
       try {
-        const [tasksRes, feedbacksRes, usersRes, healthRes] = await Promise.all([
-          fetch('/api/tasks').catch(() => null),
-          fetch('/api/feedbacks').catch(() => null),
-          fetch('/api/users').catch(() => null),
-          fetch('/api/health').catch(() => null),
-        ]);
+        const queryParams = new URLSearchParams({
+          role: currentRole || '',
+          userId: currentUserId || '',
+          teamId: currentUser?.teamId || '',
+          pocId: currentUser?.pocId || currentUser?.id || '',
+          name: currentUser?.name || '',
+        });
 
-        if (healthRes && healthRes.ok) {
-          const healthData = await healthRes.json();
-          if (healthData.database === 'connected') {
-            setDbConnected(true);
-          }
-        }
+        es = new EventSource(`/api/events?${queryParams.toString()}`);
 
-        if (tasksRes && tasksRes.ok) {
-          const liveTasks = await tasksRes.json();
-          if (Array.isArray(liveTasks)) {
-            setTasks(liveTasks);
-          }
-        }
+        es.onopen = () => {
+          setRealtimeConnected(true);
+          // Reconcile latest persisted state from DB upon connection/reconnection
+          fetchLiveData();
+        };
 
-        if (feedbacksRes && feedbacksRes.ok) {
-          const liveFeedbacks = await feedbacksRes.json();
-          if (Array.isArray(liveFeedbacks)) {
-            setFeedbacks(liveFeedbacks);
-            try {
-              localStorage.setItem('ttt_feedbacks', JSON.stringify(liveFeedbacks));
-            } catch (e) { }
-          }
-        }
+        es.onerror = () => {
+          setRealtimeConnected(false);
+          if (es) es.close();
+          // Safe reconnect
+          reconnectTimeout = setTimeout(connectSse, 4000);
+        };
 
-        if (usersRes && usersRes.ok) {
-          const liveUsers = await usersRes.json();
-          if (Array.isArray(liveUsers) && liveUsers.length > 0) {
-            setUsers(liveUsers);
-            try {
-              localStorage.setItem('ttt_users', JSON.stringify(liveUsers));
-            } catch (e) { }
+        // Realtime event handlers for task/interview lifecycle
+        const handleTaskLifecycleEvent = (e) => {
+          try {
+            const eventPayload = JSON.parse(e.data);
+            const taskData = eventPayload.data || eventPayload;
+            if (!taskData || !taskData.id) return;
+
+            setTasks(prev => {
+              const existingIdx = prev.findIndex(t => t.id === taskData.id);
+              if (existingIdx >= 0) {
+                const nextTasks = [...prev];
+                nextTasks[existingIdx] = { ...nextTasks[existingIdx], ...taskData };
+                return nextTasks;
+              }
+              return [taskData, ...prev];
+            });
+
+            // Activity feed / audit stream live sync
+            setEvents(prev => {
+              if (prev.some(ev => ev.eventId === eventPayload.eventId)) return prev;
+              return [{
+                id: `evt-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+                eventId: eventPayload.eventId,
+                type: e.type,
+                candidateName: taskData.candidateName,
+                taskType: taskData.taskType,
+                status: taskData.status,
+                at: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                description: `${taskData.candidateName || 'Candidate'} (${taskData.taskType || 'Interview'}) - ${taskData.status || 'Updated'}`,
+              }, ...prev];
+            });
+          } catch (err) {
+            console.warn('Error processing task SSE event:', err);
           }
-        }
+        };
+
+        es.addEventListener('task.created', handleTaskLifecycleEvent);
+        es.addEventListener('task.updated', handleTaskLifecycleEvent);
+        es.addEventListener('task.status_changed', handleTaskLifecycleEvent);
+        es.addEventListener('task.completed', handleTaskLifecycleEvent);
+        es.addEventListener('task.reassigned', handleTaskLifecycleEvent);
+        es.addEventListener('interview.status_changed', handleTaskLifecycleEvent);
+        es.addEventListener('interview.completed', handleTaskLifecycleEvent);
+
+        es.addEventListener('task.deleted', (e) => {
+          try {
+            const data = JSON.parse(e.data);
+            if (data && data.id) {
+              setTasks(prev => prev.filter(t => t.id !== data.id));
+            }
+          } catch (err) {}
+        });
+
+        // Targeted live notifications
+        es.addEventListener('notification', (e) => {
+          try {
+            const notif = JSON.parse(e.data);
+            if (!notif || !notif.id) return;
+
+            setNotifications(prev => {
+              if (prev.some(n => n.id === notif.id || (notif.eventId && n.eventId === notif.eventId))) {
+                return prev;
+              }
+              toast.info(notif.title, { description: notif.message });
+              return [notif, ...prev];
+            });
+          } catch (err) {}
+        });
+
+        // Candidate feedback events
+        const handleFeedbackEvent = (e) => {
+          try {
+            const fbData = JSON.parse(e.data);
+            const actualFb = fbData.data || fbData;
+            if (!actualFb || !actualFb.id) return;
+
+            updateFeedbacksWithStorage(prev => {
+              const idx = prev.findIndex(f => f.id === actualFb.id);
+              if (idx >= 0) {
+                const updated = [...prev];
+                updated[idx] = { ...updated[idx], ...actualFb };
+                return updated;
+              }
+              return [actualFb, ...prev];
+            });
+          } catch (err) {}
+        };
+
+        es.addEventListener('candidate.feedback_created', handleFeedbackEvent);
+        es.addEventListener('candidate.feedback_submitted', handleFeedbackEvent);
+        es.addEventListener('candidate.feedback_reviewed', handleFeedbackEvent);
+
       } catch (err) {
-        console.warn('Backend server offline, falling back to local storage/state:', err);
+        console.warn('SSE connection error:', err);
       }
     };
 
-    fetchLiveData();
-  }, []);
+    connectSse();
+
+    return () => {
+      if (es) es.close();
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+    };
+  }, [currentRole, currentUserId, currentUser, fetchLiveData, updateFeedbacksWithStorage]);
 
   // Sync feedbacks to localStorage whenever changed
   const updateFeedbacksWithStorage = useCallback((updater) => {
@@ -540,49 +685,97 @@ export const AppProvider = ({ children }) => {
       })
       .catch(() => { });
 
-    setNotifications(prev => [{
-      id: `n-${Date.now()}`,
-      type: 'task',
-      title: 'New task assigned',
-      message: `${id}: ${candidateName} (${taskType}) assigned to ${assignee?.name || 'TSE'}`,
-      time: 'just now',
-      read: false,
-    }, ...prev]);
+    setNotifications(prev => [
+      {
+        id: `n-${Date.now()}-tse`,
+        type: 'task',
+        title: 'New task assigned',
+        message: `${id}: ${candidateName} (${taskType}) assigned to you`,
+        time: 'just now',
+        read: false,
+        targetUserId: assignee?.id,
+      },
+      {
+        id: `n-${Date.now()}-creator`,
+        type: 'task',
+        title: 'Task created',
+        message: `${id}: ${candidateName} assigned to ${assignee?.name || 'TSE'}`,
+        time: 'just now',
+        read: false,
+        targetUserId: creator?.id,
+      },
+      ...prev
+    ]);
     toast.success('Task created successfully.');
     return newTask;
   }, [tasks.length, currentUser, updateFeedbacksWithStorage]);
 
   const updateTask = useCallback((id, patch, note) => {
+    let patchedTask = null;
     setTasks(prev => prev.map(t => {
       if (t.id !== id) return t;
       const updated = { ...t, ...patch };
       if (note) {
         updated.timeline = [
-          ...t.timeline,
+          ...(t.timeline || []),
           { at: new Date().toISOString().slice(0, 10), event: note, by: currentUser?.name || 'System' },
         ];
       }
+      patchedTask = updated;
       return updated;
     }));
+
+    // Persist to backend database & trigger server-side realtime SSE broadcast
+    if (patchedTask) {
+      fetch(`/api/tasks/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patchedTask),
+      }).catch(err => console.warn('Failed to sync task update to server:', err));
+    }
+
     toast.success(note || 'Task updated.');
   }, [currentUser]);
 
   const reassignTask = useCallback((id, newAssigneeId) => {
-    const newUser = getUserById(newAssigneeId);
-    updateTask(id, { assigneeId: newAssigneeId }, `Reassigned to ${newUser?.name}`);
+    const allUsers = users && users.length > 0 ? users : USERS;
+    const newUser = allUsers.find(u => u.id === newAssigneeId) || getUserById(newAssigneeId);
+    updateTask(id, {
+      assigneeId: newAssigneeId,
+      techPerson: newUser?.name || 'Unassigned',
+      codeName: newUser?.codeName || getTseCodeName(newUser?.name),
+    }, `Reassigned to ${newUser?.name}`);
     toast.success('Task reassigned successfully.');
-  }, [updateTask]);
+  }, [updateTask, users]);
 
   const changeTaskStatus = useCallback((id, status) => {
     updateTask(id, { status }, `Status changed to ${status}`);
   }, [updateTask]);
 
   const submitInterviewFeedback = useCallback((interviewId, feedback) => {
+    let targetIv = null;
     setInterviews(prev => prev.map(iv => {
       if (iv.id !== interviewId) return iv;
       const newStatus = feedback.decision === 'Cleared' ? 'Cleared' : feedback.decision === 'Rejected' ? 'Rejected' : 'Hold';
-      return { ...iv, feedback, feedbackSubmitted: true, status: newStatus };
+      targetIv = { ...iv, feedback, feedbackSubmitted: true, status: newStatus };
+      return targetIv;
     }));
+
+    // Broadcast interview completed/feedback submitted to backend
+    fetch('/api/events/broadcast', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        eventType: 'interview.completed',
+        payload: {
+          id: interviewId,
+          status: 'Done',
+          candidateName: targetIv?.candidateName || 'Candidate',
+          decision: feedback.decision,
+        },
+      }),
+    }).catch(() => {});
+
     setNotifications(prev => [{
       id: `n-${Date.now()}`,
       type: 'interview',
@@ -596,6 +789,17 @@ export const AppProvider = ({ children }) => {
 
   const updateInterviewStatus = useCallback((id, status) => {
     setInterviews(prev => prev.map(iv => iv.id === id ? { ...iv, status } : iv));
+
+    // Broadcast interview status change
+    fetch('/api/events/broadcast', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        eventType: 'interview.status_changed',
+        payload: { id, status },
+      }),
+    }).catch(() => {});
+
     toast.success('Interview status updated.');
   }, []);
 
@@ -724,6 +928,8 @@ export const AppProvider = ({ children }) => {
     unreadCount: scopedNotifications.filter(n => !n.read).length,
     events: scopedEvents,
     dbConnected,
+    realtimeConnected,
+    fetchLiveData,
     setFeedbacks,
     addMarketingReview,
     submitCandidateFeedback,

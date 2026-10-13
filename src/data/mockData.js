@@ -503,6 +503,44 @@ export const filterAuthorizedData = (items, currentUser, currentRole) => {
   if (!items || !Array.isArray(items)) return [];
   if (!currentUser || !currentRole) return items;
 
+  // Handle Targeted Notifications
+  const isNotificationList = items.length > 0 && ('title' in items[0] && 'message' in items[0]);
+  if (isNotificationList) {
+    const currentId = currentUser.id;
+    const currentEmpId = currentUser.empId || '';
+    const currentTeamId = currentUser.teamId;
+
+    return items.filter(n => {
+      // 1. Direct user targeting
+      if (n.targetUserId) {
+        return n.targetUserId === currentId || n.targetUserId === currentEmpId;
+      }
+      // 2. Direct role targeting
+      if (n.targetRole) {
+        if (n.targetRole === currentRole) {
+          if (n.teamId && (currentRole === 'marketing_tl' || currentRole === 'marketing_sr')) {
+            return n.teamId === currentTeamId;
+          }
+          return true;
+        }
+        return false;
+      }
+      // 3. Fallback for role-specific notifications
+      if (currentRole === 'management' || currentRole === 'upper_management') return true;
+      if (currentRole === 'tsm') return true;
+      if (currentRole === 'marketing_tl' || currentRole === 'marketing_sr') {
+        return !n.teamId || n.teamId === currentTeamId;
+      }
+      if (currentRole === 'recruiter') {
+        return !n.pocId || n.pocId === currentId;
+      }
+      if (currentRole === 'tse') {
+        return !n.assigneeId || n.assigneeId === currentId || n.assigneeId === currentEmpId;
+      }
+      return true;
+    });
+  }
+
   // 1. Management & Upper Management: authorized cross-team access with real names & code names
   if (currentRole === 'management' || currentRole === 'upper_management') {
     return items;

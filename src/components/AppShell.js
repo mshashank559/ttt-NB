@@ -347,7 +347,7 @@ const CommandPalette = () => {
 };
 
 const TopBar = ({ onOpenMobileNav, onOpenAvatarModal, onOpenAiPanel }) => {
-  const { currentUser, currentRole, logout, loginAs, notifications, unreadCount, markNotificationRead, markAllRead, setCmdOpen, theme, toggleTheme, userAvatar } = useApp();
+  const { currentUser, currentRole, logout, loginAs, notifications, unreadCount, markNotificationRead, markAllRead, setCmdOpen, theme, toggleTheme, userAvatar, realtimeConnected } = useApp();
   const location = useLocation();
   const navigate = useNavigate();
   const page = breadcrumbMap[location.pathname] || 'Dashboard';
@@ -360,6 +360,21 @@ const TopBar = ({ onOpenMobileNav, onOpenAvatarModal, onOpenAiPanel }) => {
         <span className="text-slate-300 dark:text-slate-600">/</span>
         <span className="text-slate-900 dark:text-white font-bold">{page}</span>
       </div>
+
+      {/* Realtime Live Sync Status Indicator */}
+      <div
+        data-testid="realtime-status-indicator"
+        title={realtimeConnected ? "Live Realtime Sync Connected (Auto-updates without manual refresh)" : "Reconnecting to live sync stream..."}
+        className={`hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition-all ${
+          realtimeConnected
+            ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/40'
+            : 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 border-amber-200 dark:border-amber-800/40'
+        }`}
+      >
+        <span className={`w-2 h-2 rounded-full ${realtimeConnected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+        <span>{realtimeConnected ? 'Live Synced' : 'Syncing...'}</span>
+      </div>
+
       <div className="flex-1" />
 
       {/* Search Input Button */}

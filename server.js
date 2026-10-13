@@ -27,16 +27,20 @@ app.use(express.json());
 // -------------------------------------------------------------
 // MongoDB Connection
 // -------------------------------------------------------------
-mongoose.connect(MONGODB_URI, {
-  serverSelectionTimeoutMS: 8000,
-})
-  .then(() => {
-    console.log('✅ Connected to MongoDB Atlas (Mumbai Region - TTT-Database)');
-    seedDatabaseIfEmpty();
+if (MONGODB_URI) {
+  mongoose.connect(MONGODB_URI, {
+    serverSelectionTimeoutMS: 8000,
   })
-  .catch((err) => {
-    console.error('❌ MongoDB Connection Error:', err.message);
-  });
+    .then(() => {
+      console.log(' Connected to MongoDB Atlas (Mumbai Region - TTT-Database)');
+      seedDatabaseIfEmpty();
+    })
+    .catch((err) => {
+      console.error(' MongoDB Connection Error:', err.message);
+    });
+} else {
+  console.warn(' MONGODB_URI not set. Running in local/offline memory mode with Realtime SSE.');
+}
 
 // -------------------------------------------------------------
 // Mongoose Models
@@ -135,6 +139,312 @@ const Feedback = mongoose.model('Feedback', FeedbackSchema);
 const User = mongoose.model('User', UserSchema);
 
 // -------------------------------------------------------------
+// Real-Time SSE (Server-Sent Events) Architecture
+// -------------------------------------------------------------
+const sseClients = new Set();
+
+app.get('/api/events', (req, res) => {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache, no-transform',
+    'Connection': 'keep-alive',
+    'Access-Control-Allow-Origin': '*',
+  });
+
+  const clientId = `client-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+  const client = {
+    id: clientId,
+    res,
+    role: req.query.role || '',
+    userId: req.query.userId || '',
+    teamId: req.query.teamId || '',
+    pocId: req.query.pocId || '',
+    name: decodeURIComponent(req.query.name || ''),
+  };
+
+  sseClients.add(client);
+
+  // Immediate handshake
+  res.write(`data: ${JSON.stringify({ type: 'init', status: 'connected', clientId })}\n\n`);
+
+  // Heartbeat keep-alive every 20 seconds
+  const heartbeat = setInterval(() => {
+    try {
+      res.write(':keepalive\n\n');
+    } catch (e) {
+      clearInterval(heartbeat);
+      sseClients.delete(client);
+    }
+  }, 20000);
+
+  req.on('close', () => {
+    clearInterval(heartbeat);
+    sseClients.delete(client);
+  });
+});
+
+// Check authorization and team isolation for each SSE event
+async function isClientAuthorizedForEvent(client, event) {
+  const { role, userId, teamId, name } = client;
+  if (!role) return false;
+
+  // 1. Upper Management: sees all authorized operational records
+  if (role === 'upper_management') return true;
+
+  // 2. Management: sees all cross-team operational records
+  if (role === 'management') return true;
+
+  // 3. Direct user-targeted notification
+  if (event.targetUserId && event.targetUserId === userId) return true;
+
+  // 4. Role-targeted notification
+  if (event.targetRole && event.targetRole === role) {
+    if (event.teamId && (role === 'marketing_tl' || role === 'marketing_sr')) {
+      return event.teamId === teamId;
+    }
+    return true;
+  }
+
+  // 5. TSM: Operational scope for all TSE tasks and interviews
+  if (role === 'tsm') return true;
+
+  // 6. TSE: ONLY sees tasks/interviews specifically assigned to them!
+  if (role === 'tse') {
+    const isAssignee = event.assigneeId && event.assigneeId === userId;
+    const isSupportId = event.techSupportId && event.techSupportId === userId;
+    const isTechPerson = event.techPerson && name && event.techPerson.toLowerCase() === name.toLowerCase();
+    const isTargetUser = event.targetUserId && event.targetUserId === userId;
+    return Boolean(isAssignee || isSupportId || isTechPerson || isTargetUser);
+  }
+
+  // 7. Recruiter (Marketing SR / POC): ONLY sees their own assigned candidates!
+  if (role === 'recruiter') {
+    const isPocId = event.pocId && event.pocId === userId;
+    const isRecruiterName = event.recruiterName && name && event.recruiterName.toLowerCase() === name.toLowerCase();
+    const isTargetUser = event.targetUserId && event.targetUserId === userId;
+    return Boolean(isPocId || isRecruiterName || isTargetUser);
+  }
+
+  // 8. Marketing TL (Mukesh, Shivam, Vijesh):
+  // STRICT TEAM ISOLATION: Mukesh sees ONLY Mukesh's team; Shivam sees ONLY Shivam; Vijesh sees ONLY Vijesh!
+  if (role === 'marketing_tl') {
+    const matchesTeamId = event.teamId && teamId && event.teamId === teamId;
+    const matchesTeamLeadId = event.teamLeadId && event.teamLeadId === userId;
+    const matchesTeamName = event.teamName && client.teamName && event.teamName.toLowerCase() === client.teamName.toLowerCase();
+    const isTargetUser = event.targetUserId && event.targetUserId === userId;
+    return Boolean(matchesTeamId || matchesTeamLeadId || matchesTeamName || isTargetUser);
+  }
+
+  // 9. Marketing SR: ONLY sees their assigned team
+  if (role === 'marketing_sr') {
+    const matchesTeamId = event.teamId && teamId && event.teamId === teamId;
+    const isTargetUser = event.targetUserId && event.targetUserId === userId;
+    return Boolean(matchesTeamId || isTargetUser);
+  }
+
+  return false;
+}
+
+// Server-side identity privacy: Never leak real TSE/TSM names to Marketing roles
+async function sanitizePayloadForClient(event, client) {
+  const { role } = client;
+  if (role !== 'marketing_tl' && role !== 'marketing_sr' && role !== 'recruiter') {
+    return event;
+  }
+
+  try {
+    const { TSE_CODE_NAMES, TSM_CODE_NAMES } = await import('./src/data/mockData.js');
+    const copy = JSON.parse(JSON.stringify(event));
+
+    if (copy.data) {
+      if (copy.data.techPerson) {
+        copy.data.techPerson = copy.data.codeName || TSE_CODE_NAMES[copy.data.techPerson] || copy.data.techPerson;
+      }
+      if (copy.data.techSupport) {
+        copy.data.techSupport = copy.data.codeName || TSE_CODE_NAMES[copy.data.techSupport] || copy.data.techSupport;
+      }
+      if (copy.data.employeeName) {
+        copy.data.employeeName = copy.data.codeName || TSE_CODE_NAMES[copy.data.employeeName] || 'TSE';
+      }
+      if (Array.isArray(copy.data.timeline)) {
+        copy.data.timeline = copy.data.timeline.map(tl => ({
+          ...tl,
+          by: (TSM_CODE_NAMES && TSM_CODE_NAMES[tl.by]) || (TSE_CODE_NAMES && TSE_CODE_NAMES[tl.by]) || tl.by,
+        }));
+      }
+    }
+    return copy;
+  } catch (e) {
+    return event;
+  }
+}
+
+// Broadcast Realtime Event to all authorized, isolated clients
+async function broadcastRealtimeEvent(eventType, payload, meta = {}) {
+  const eventId = `evt-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+  const event = {
+    eventId,
+    type: eventType,
+    data: payload,
+    candidateId: payload?.candidateId,
+    candidateName: payload?.candidateName,
+    taskType: payload?.taskType,
+    teamId: payload?.teamId,
+    teamName: payload?.teamName,
+    teamLeadId: payload?.teamLeadId,
+    pocId: payload?.pocId,
+    recruiterName: payload?.recruiterName,
+    assigneeId: payload?.assigneeId,
+    techSupportId: payload?.techSupportId,
+    techPerson: payload?.techPerson,
+    codeName: payload?.codeName,
+    previousStatus: meta.previousStatus,
+    newStatus: payload?.status || meta.newStatus,
+    actorId: meta.actorId,
+    timestamp: new Date().toISOString(),
+    ...meta,
+  };
+
+  for (const client of sseClients) {
+    try {
+      const authorized = await isClientAuthorizedForEvent(client, event);
+      if (authorized) {
+        const sanitized = await sanitizePayloadForClient(event, client);
+        client.res.write(`event: ${eventType}\ndata: ${JSON.stringify(sanitized)}\n\n`);
+      }
+    } catch (err) {
+      console.warn('Error broadcasting SSE event:', err.message);
+    }
+  }
+
+  // Automated Targeted Notifications
+  handleAutomatedNotifications(eventType, payload, meta, eventId);
+}
+
+// Generate targeted, isolated notifications for events
+async function handleAutomatedNotifications(eventType, payload, meta, eventId) {
+  if (!payload) return;
+  const isDone = payload.status === 'Done' || eventType === 'task.completed' || eventType === 'interview.completed';
+  const isCreated = eventType === 'task.created' || eventType === 'interview.created';
+
+  const timeFormatted = 'just now';
+
+  if (isDone) {
+    // 1. Notification for Assigned TSE
+    if (payload.assigneeId) {
+      sendDirectNotification({
+        id: `notif-${Date.now()}-tse`,
+        eventId,
+        targetUserId: payload.assigneeId,
+        type: 'interview',
+        title: 'Interview Completed',
+        message: `Interview marked as Done for ${payload.candidateName || 'Candidate'}.`,
+        time: timeFormatted,
+        read: false,
+      });
+    }
+
+    // 2. Notification for Assigned Recruiter / POC
+    if (payload.pocId) {
+      sendDirectNotification({
+        id: `notif-${Date.now()}-poc`,
+        eventId,
+        targetUserId: payload.pocId,
+        type: 'interview',
+        title: 'Candidate Interview Done',
+        message: `${payload.candidateName || 'Candidate'} completed evaluation. Recruiter: ${payload.recruiterName || 'Assigned'}.`,
+        time: timeFormatted,
+        read: false,
+      });
+    }
+
+    // 3. Notification for Marketing TL (e.g. Mukesh - NEVER Shivam or Vijesh)
+    if (payload.teamLeadId) {
+      sendDirectNotification({
+        id: `notif-${Date.now()}-tl`,
+        eventId,
+        targetUserId: payload.teamLeadId,
+        teamId: payload.teamId,
+        type: 'interview',
+        title: 'Team Candidate Completed',
+        message: `Interview Done: ${payload.candidateName || 'Candidate'} (${payload.teamName || 'Your Team'}).`,
+        time: timeFormatted,
+        read: false,
+      });
+    }
+
+    // 4. Notification for TSM
+    sendDirectNotification({
+      id: `notif-${Date.now()}-tsm`,
+      eventId,
+      targetRole: 'tsm',
+      type: 'task',
+      title: 'TSE Completed Interview',
+      message: `${payload.techPerson || 'TSE'} completed ${payload.candidateName} (${payload.taskType || 'Interview'}).`,
+      time: timeFormatted,
+      read: false,
+    });
+
+    // 5. Notification for Management & Upper Management
+    sendDirectNotification({
+      id: `notif-${Date.now()}-mgmt`,
+      eventId,
+      targetRole: 'management',
+      type: 'interview',
+      title: 'Interview Completed',
+      message: `${payload.candidateName || 'Candidate'} marked Done (${payload.teamName || 'Team'}).`,
+      time: timeFormatted,
+      read: false,
+    });
+    sendDirectNotification({
+      id: `notif-${Date.now()}-umgmt`,
+      eventId,
+      targetRole: 'upper_management',
+      type: 'interview',
+      title: 'Interview Completed',
+      message: `${payload.candidateName || 'Candidate'} marked Done (${payload.teamName || 'Team'}).`,
+      time: timeFormatted,
+      read: false,
+    });
+  } else if (isCreated) {
+    // Notify assigned TSE of new task
+    if (payload.assigneeId) {
+      sendDirectNotification({
+        id: `notif-${Date.now()}-newtse`,
+        eventId,
+        targetUserId: payload.assigneeId,
+        type: 'task',
+        title: 'New Task Assigned',
+        message: `${payload.candidateName || 'Candidate'} (${payload.taskType || 'Task'}) assigned to you.`,
+        time: timeFormatted,
+        read: false,
+      });
+    }
+  }
+}
+
+// Push notification to authorized connected clients
+function sendDirectNotification(notif) {
+  for (const client of sseClients) {
+    let match = false;
+    if (notif.targetUserId && client.userId === notif.targetUserId) match = true;
+    else if (notif.targetRole && client.role === notif.targetRole) {
+      if (notif.teamId && (client.role === 'marketing_tl' || client.role === 'marketing_sr')) {
+        match = client.teamId === notif.teamId;
+      } else {
+        match = true;
+      }
+    }
+
+    if (match) {
+      try {
+        client.res.write(`event: notification\ndata: ${JSON.stringify(notif)}\n\n`);
+      } catch (err) {}
+    }
+  }
+}
+
+// -------------------------------------------------------------
 // Auto-Seed Initial Data if Collections are Empty
 // -------------------------------------------------------------
 async function seedDatabaseIfEmpty() {
@@ -142,7 +452,7 @@ async function seedDatabaseIfEmpty() {
     const { USERS } = await import('./src/data/mockData.js');
     const userCount = await User.countDocuments();
     if (userCount < USERS.length) {
-      console.log('🔄 Syncing all authorized team members into MongoDB...');
+      console.log(' Syncing all authorized team members into MongoDB...');
       for (const u of USERS) {
         await User.findOneAndUpdate(
           { id: u.id },
@@ -150,12 +460,12 @@ async function seedDatabaseIfEmpty() {
           { upsert: true, new: true }
         );
       }
-      console.log(`✅ All ${USERS.length} team members verified in MongoDB.`);
+      console.log(` All ${USERS.length} team members verified in MongoDB.`);
     } else {
-      console.log('✅ Database is configured with team members.');
+      console.log(' Database is configured with team members.');
     }
   } catch (err) {
-    console.error('⚠️ Seeding check error:', err.message);
+    console.error(' Seeding check error:', err.message);
   }
 }
 
@@ -170,8 +480,20 @@ app.get('/api/health', (req, res) => {
     database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
     databaseName: 'TTT-Database',
     region: 'ap-south-1 (Mumbai)',
+    activeSseClients: sseClients.size,
     timestamp: new Date().toISOString(),
   });
+});
+
+// Broadcast custom client event endpoint
+app.post('/api/events/broadcast', async (req, res) => {
+  try {
+    const { eventType, payload, meta } = req.body;
+    await broadcastRealtimeEvent(eventType || 'custom.event', payload, meta);
+    res.json({ success: true, message: 'Event broadcast to authorized clients' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Clean Reset Database Route
@@ -219,7 +541,6 @@ app.post('/api/seed', async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 });
-
 
 // ----------------- AUTHENTICATION ENDPOINT -----------------
 app.post('/api/auth/login', async (req, res) => {
@@ -321,6 +642,7 @@ app.post('/api/users', async (req, res) => {
       email: userData.email?.toLowerCase(),
     });
     await user.save();
+    broadcastRealtimeEvent('user.created', user.toObject ? user.toObject() : user);
     res.status(201).json(user);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -339,6 +661,7 @@ app.put('/api/users/:id', async (req, res) => {
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
+    broadcastRealtimeEvent('user.updated', user.toObject ? user.toObject() : user);
     res.json(user);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -351,6 +674,7 @@ app.delete('/api/users/:id', async (req, res) => {
     const result = await User.findOneAndDelete({
       $or: [{ id: userId }, { empId: userId }, { tttNbId: userId }]
     });
+    broadcastRealtimeEvent('user.deleted', { id: userId });
     res.json({ message: 'User deleted successfully', deleted: result });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -381,7 +705,14 @@ app.get('/api/tasks', async (req, res) => {
       filter = { teamId: teamId || 'team-mukesh' };
     }
 
-    let tasks = await Task.find(filter).sort({ createdAt: -1 });
+    let tasks = [];
+    if (mongoose.connection.readyState === 1) {
+      tasks = await Task.find(filter).sort({ createdAt: -1 });
+    }
+    if (!tasks || tasks.length === 0) {
+      const { INITIAL_TASKS } = await import('./src/data/mockData.js');
+      tasks = INITIAL_TASKS;
+    }
 
     // Server-side identity privacy: never expose TSE/TSM real names to Marketing roles
     if (role === 'marketing_tl' || role === 'marketing_sr') {
@@ -424,19 +755,28 @@ app.post('/api/tasks', async (req, res) => {
       }
     }
 
-    const task = new Task(taskData);
-    await task.save();
+    let task;
+    if (mongoose.connection.readyState === 1) {
+      task = new Task(taskData);
+      await task.save();
+    } else {
+      task = taskData;
+    }
 
     // Auto-create linked feedback session
     const feedbackId = `fb-task-${task.id}`;
-    const existingFeedback = await Feedback.findOne({ id: feedbackId });
+    let existingFeedback = null;
+    if (mongoose.connection.readyState === 1) {
+      existingFeedback = await Feedback.findOne({ id: feedbackId });
+    }
+
     if (!existingFeedback) {
       const { TECH_SUPPORT_TEAM } = await import('./src/data/mockData.js');
       const assignedTse = TECH_SUPPORT_TEAM.find(t => 
         t.supportName.toLowerCase() === (task.techPerson || '').toLowerCase()
       ) || TECH_SUPPORT_TEAM[0];
 
-      const linkedFeedback = new Feedback({
+      const linkedFeedback = {
         id: feedbackId,
         date: task.date || new Date().toISOString().slice(0, 10),
         techSupport: task.codeName || assignedTse.supportName,
@@ -457,9 +797,20 @@ app.post('/api/tasks', async (req, res) => {
         timestamp: new Date().toLocaleString('en-GB'),
         candidateFeedback: { submitted: false },
         marketingReview: null,
-      });
-      await linkedFeedback.save();
+      };
+
+      if (mongoose.connection.readyState === 1) {
+        const fbModel = new Feedback(linkedFeedback);
+        await fbModel.save();
+      }
     }
+
+    // Broadcast Realtime Event
+    const payload = task.toObject ? task.toObject() : task;
+    broadcastRealtimeEvent('task.created', payload, {
+      actorId: taskData.createdById,
+      newStatus: task.status || 'Pending',
+    });
 
     res.status(201).json({ task, linkedFeedbackId: feedbackId });
   } catch (err) {
@@ -469,8 +820,37 @@ app.post('/api/tasks', async (req, res) => {
 
 app.put('/api/tasks/:id', async (req, res) => {
   try {
-    const updated = await Task.findOneAndUpdate({ id: req.params.id }, req.body, { new: true });
+    let existing = null;
+    let updated = null;
+
+    if (mongoose.connection.readyState === 1) {
+      existing = await Task.findOne({ id: req.params.id });
+      updated = await Task.findOneAndUpdate({ id: req.params.id }, req.body, { new: true });
+    } else {
+      updated = { id: req.params.id, ...req.body };
+    }
+
     if (!updated) return res.status(404).json({ error: 'Task not found' });
+
+    const prevStatus = existing?.status;
+    const newStatus = updated.status;
+    const isDone = newStatus === 'Done' || newStatus === 'Completed';
+
+    let eventType = 'task.updated';
+    if (isDone && prevStatus !== 'Done' && prevStatus !== 'Completed') {
+      eventType = 'task.completed';
+    } else if (newStatus && prevStatus && newStatus !== prevStatus) {
+      eventType = 'task.status_changed';
+    } else if (req.body.assigneeId && existing?.assigneeId && req.body.assigneeId !== existing.assigneeId) {
+      eventType = 'task.reassigned';
+    }
+
+    const payload = updated.toObject ? updated.toObject() : updated;
+    broadcastRealtimeEvent(eventType, payload, {
+      previousStatus: prevStatus,
+      newStatus,
+    });
+
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -479,7 +859,10 @@ app.put('/api/tasks/:id', async (req, res) => {
 
 app.delete('/api/tasks/:id', async (req, res) => {
   try {
-    await Task.findOneAndDelete({ id: req.params.id });
+    if (mongoose.connection.readyState === 1) {
+      await Task.findOneAndDelete({ id: req.params.id });
+    }
+    broadcastRealtimeEvent('task.deleted', { id: req.params.id });
     res.json({ success: true, id: req.params.id });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -502,7 +885,14 @@ app.get('/api/feedbacks', async (req, res) => {
       filter = { teamId: teamId || 'team-mukesh' };
     }
 
-    let feedbacks = await Feedback.find(filter).sort({ createdAt: -1 });
+    let feedbacks = [];
+    if (mongoose.connection.readyState === 1) {
+      feedbacks = await Feedback.find(filter).sort({ createdAt: -1 });
+    }
+    if (!feedbacks || feedbacks.length === 0) {
+      const { INITIAL_FEEDBACK_RECORDS } = await import('./src/data/mockData.js');
+      feedbacks = INITIAL_FEEDBACK_RECORDS;
+    }
 
     // Sanitize identity privacy for Marketing roles
     if (role === 'marketing_tl' || role === 'marketing_sr') {
@@ -525,8 +915,14 @@ app.get('/api/feedbacks', async (req, res) => {
 
 app.post('/api/feedbacks', async (req, res) => {
   try {
-    const feedback = new Feedback(req.body);
-    await feedback.save();
+    let feedback;
+    if (mongoose.connection.readyState === 1) {
+      feedback = new Feedback(req.body);
+      await feedback.save();
+    } else {
+      feedback = req.body;
+    }
+    broadcastRealtimeEvent('candidate.feedback_created', feedback.toObject ? feedback.toObject() : feedback);
     res.status(201).json(feedback);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -549,11 +945,18 @@ app.put('/api/feedbacks/:id/candidate', async (req, res) => {
       'candidateFeedback.timestamp': nowFormatted,
     };
 
-    const updated = await Feedback.findOneAndUpdate(
-      { id: req.params.id },
-      { $set: updateData },
-      { new: true, upsert: true }
-    );
+    let updated;
+    if (mongoose.connection.readyState === 1) {
+      updated = await Feedback.findOneAndUpdate(
+        { id: req.params.id },
+        { $set: updateData },
+        { new: true, upsert: true }
+      );
+    } else {
+      updated = { id: req.params.id, ...updateData };
+    }
+
+    broadcastRealtimeEvent('candidate.feedback_submitted', updated.toObject ? updated.toObject() : updated);
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -576,12 +979,19 @@ app.put('/api/feedbacks/:id/marketing', async (req, res) => {
       },
     };
 
-    const updated = await Feedback.findOneAndUpdate(
-      { id: req.params.id },
-      { $set: updateData },
-      { new: true }
-    );
+    let updated;
+    if (mongoose.connection.readyState === 1) {
+      updated = await Feedback.findOneAndUpdate(
+        { id: req.params.id },
+        { $set: updateData },
+        { new: true }
+      );
+    } else {
+      updated = { id: req.params.id, ...updateData };
+    }
+
     if (!updated) return res.status(404).json({ error: 'Feedback record not found' });
+    broadcastRealtimeEvent('candidate.feedback_reviewed', updated.toObject ? updated.toObject() : updated);
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -596,16 +1006,26 @@ app.post('/api/ai/ask', async (req, res) => {
     const { query, conversationHistory = [] } = req.body;
     if (!query) return res.status(400).json({ error: 'Query is required' });
 
-    // 1. Fetch live records straight from MongoDB Atlas
-    const [tasks, feedbacks, users] = await Promise.all([
-      Task.find().lean(),
-      Feedback.find().lean(),
-      User.find().lean(),
-    ]);
+    let tasks = [];
+    let feedbacks = [];
+    let users = [];
+
+    if (mongoose.connection.readyState === 1) {
+      [tasks, feedbacks, users] = await Promise.all([
+        Task.find().lean(),
+        Feedback.find().lean(),
+        User.find().lean(),
+      ]);
+    } else {
+      const mock = await import('./src/data/mockData.js');
+      tasks = mock.INITIAL_TASKS;
+      feedbacks = mock.INITIAL_FEEDBACK_RECORDS;
+      users = mock.USERS;
+    }
 
     // 2. Aggregate statistics
     const totalTasks = tasks.length;
-    const completedTasks = tasks.filter(t => t.status === 'Done').length;
+    const completedTasks = tasks.filter(t => t.status === 'Done' || t.status === 'Completed').length;
     const pendingTasks = tasks.filter(t => t.status === 'Pending').length;
     const rescheduleTasks = tasks.filter(t => t.status === 'Reschedule').length;
     const cancelTasks = tasks.filter(t => t.status === 'Cancel').length;
@@ -618,7 +1038,7 @@ app.post('/api/ai/ask', async (req, res) => {
       const name = t.techPerson || 'Unassigned';
       if (!tseBreakdown[name]) tseBreakdown[name] = { total: 0, done: 0, pending: 0, other: 0 };
       tseBreakdown[name].total += 1;
-      if (t.status === 'Done') tseBreakdown[name].done += 1;
+      if (t.status === 'Done' || t.status === 'Completed') tseBreakdown[name].done += 1;
       else if (t.status === 'Pending') tseBreakdown[name].pending += 1;
       else tseBreakdown[name].other += 1;
     });
@@ -636,20 +1056,20 @@ app.post('/api/ai/ask', async (req, res) => {
     // Construct live MongoDB Atlas Snapshot
     const dbSnapshot = `
 --- LIVE MONGODB ATLAS DATABASE SNAPSHOT (Cluster: TTT-Database, Mumbai ap-south-1) ---
-• Total Team Members: ${totalUsers} active members in roster.
-• Team Roster Members:
+ Total Team Members: ${totalUsers} active members in roster.
+ Team Roster Members:
 ${users.map(u => `  - ${u.name} (Role: ${u.role}, Dept: ${u.dept || 'Operations'}, ID: ${u.empId || u.tttNbId || u.id})`).join('\n')}
-• Total Tasks in Database: ${totalTasks}
+ Total Tasks in Database: ${totalTasks}
   - Done: ${completedTasks} | Pending: ${pendingTasks} | Reschedule: ${rescheduleTasks} | Cancel: ${cancelTasks} | Not Possible: ${notPossibleTasks}
-• Tasks by Team: Team Mukesh: ${mukeshTasks} | Team Shivam: ${shivamTasks}
-• TSE Task Breakdown:
+ Tasks by Team: Team Mukesh: ${mukeshTasks} | Team Shivam: ${shivamTasks}
+ TSE Task Breakdown:
 ${Object.entries(tseBreakdown).map(([name, s]) => `  - ${name}: Total ${s.total} (Done: ${s.done}, Pending: ${s.pending}, Other: ${s.other})`).join('\n')}
-• Feedback & Evaluations:
+ Feedback & Evaluations:
   - Total Sessions: ${totalFeedbacks} | Candidate Submitted: ${submittedFeedbacks} | Pending Candidate: ${pendingFeedbacks}
   - Marketing TSE Reviews Completed: ${reviewedTseCount}
-• Sample Recent Tasks:
+ Sample Recent Tasks:
 ${tasks.slice(0, 15).map(t => `  - [${t.date}] Candidate: ${t.candidateName || 'N/A'} | TSE: ${t.techPerson} | Company: ${t.companyName || t.company} | Type: ${t.taskType} | Status: ${t.status}${t.remark ? ` | Remark: ${t.remark}` : ''}`).join('\n')}
-• Sample Feedback Records:
+ Sample Feedback Records:
 ${feedbacks.slice(0, 10).map(f => `  - Candidate: ${f.candidateName} | TSE: ${f.techSupport} (${f.techSupportId}) | Recruiter: ${f.recruiterName} (${f.teamName}) | Submitted: ${f.candidateFeedback?.submitted ? 'YES (Rating: ' + (f.candidateFeedback.performanceRating || 5) + '/5)' : 'NO (Pending)'}`).join('\n')}
 ----------------------------------------------------------------------------------------`;
 
@@ -682,13 +1102,13 @@ ${feedbacks.slice(0, 10).map(f => `  - Candidate: ${f.candidateName} | TSE: ${f.
 ${dbSnapshot}
 
 Operational Directives:
-1. Conversational Intelligence (Like ChatGPT): You possess vast general intelligence across all domains—science, Mars, astronomy, general knowledge, business strategy, coding, and drafting communications. When asked general questions (e.g. "tell me about mars", "write an email", "what is photosynthesis"), answer naturally, thoroughly, and intelligently just like ChatGPT. DO NOT mention NetBounce or database metrics, and DO NOT add any preamble headers (like "NB AI – live connection...") when answering general, unrelated questions.
-2. Answering NetBounce & Dashboard Inquiries: When the user asks about the NetBounce dashboard, team members, tasks, interviews, or ratings, answer PRECISELY and SPECIFICALLY to what was asked. DO NOT output a broad copy-paste dashboard template or dump all metrics. Answer only the exact question asked using the live MongoDB database snapshot above. For example, if asked "How many members are there?", answer "There are currently 19 active members in the roster." without reciting unrelated clear rates or overdue counts.
+1. Conversational Intelligence (Like ChatGPT): You possess vast general intelligence across all domains science, Mars, astronomy, general knowledge, business strategy, coding, and drafting communications. When asked general questions (e.g. "tell me about mars", "write an email", "what is photosynthesis"), answer naturally, thoroughly, and intelligently just like ChatGPT. DO NOT mention NetBounce or database metrics, and DO NOT add any preamble headers (like "NB AI live connection...") when answering general, unrelated questions.
+2. Answering NetBounce & Dashboard Inquiries: When the user asks about the NetBounce dashboard, team members, tasks, interviews, or ratings, answer PRECISELY and SPECIFICALLY to what was asked. DO NOT output a broad copy-paste dashboard template or dump all metrics. Answer only the exact question asked using the live MongoDB database snapshot above.
 3. Identity & Neural Architecture: If asked who built, created, or designed you or about your neural schema (in English, Hindi, or any language), answer strictly in English:
    "My neural schema and operational architecture have been designed and engineered by Shashank for the NetBounce Operations Platform."
 4. Tone & Salutation: NEVER use "Sir" or "Ma'am" under any circumstances. Address the user directly by name or friendly, polished professional tone.
 5. Language: Always answer in English. Do not use Hindi or Hinglish.
-6. Clean Formatting: Never use markdown asterisks (never use ** around words or bolding). Write in clean, legible text. Use neat bullet points (•) and line breaks when presenting multiple points.
+6. Clean Formatting: Never use markdown asterisks (never use ** around words or bolding). Write in clean, legible text. Use neat bullet points and line breaks when presenting multiple points.
 7. Identity: Identify yourself as "NB AI".`;
 
     const messages = [
@@ -758,5 +1178,5 @@ Operational Directives:
 
 // Start Express Server
 app.listen(PORT, () => {
-  console.log(`🚀 TTT-NB Backend Server running on http://localhost:${PORT}`);
+  console.log(` TTT-NB Backend Server running on http://localhost:${PORT}`);
 });
