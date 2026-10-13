@@ -6,26 +6,6 @@ import { useApp } from '../context/AppContext';
 import { askNbAi } from '../services/groqService';
 import { buildOperationalDatabaseSnapshot, generateLocalDashboardAnswer } from '../services/dashboardDataAggregator';
 
-// Helper to determine Sir vs Ma'am based on user name/gender
-const getSalutation = (user) => {
-  if (!user || !user.name) return 'Sir';
-  const name = user.name.toLowerCase();
-  const firstName = name.split(' ')[0];
-
-  const femaleNames = [
-    'priya', 'neha', 'ananya', 'sana', 'ishita', 'riya', 'shubhangi', 'rachita',
-    'vaishnavi', 'samanvi', 'prasoona', 'pooja', 'sneha', 'swati', 'anjali',
-    'kavita', 'deepa', 'tanvi', 'divya', 'meera', 'aarti', 'simran', 'shreya',
-    'mansi', 'nisha', 'sakshi', 'payal', 'komal', 'radhika', 'kriti', 'aditi'
-  ];
-
-  const isFemale =
-    femaleNames.some(fn => firstName.includes(fn)) ||
-    (user.gender && user.gender.toLowerCase() === 'female');
-
-  return isFemale ? "Ma'am" : "Sir";
-};
-
 // Clean text formatter that removes raw ** and highlights text cleanly
 const formatMessageText = (text) => {
   if (!text) return '';
@@ -65,21 +45,6 @@ export default function NbAiPanel({ isOpen, onClose }) {
   const [isThinking, setIsThinking] = useState(false);
   const messagesEndRef = useRef(null);
 
-  // Update welcome greeting if currentUser changes
-  useEffect(() => {
-    if (messages.length === 1 && messages[0].id === 'welcome') {
-      const name = currentUser?.name ? currentUser.name.split(' ')[0] : 'Shashank';
-      setMessages([
-        {
-          id: 'welcome',
-          sender: 'ai',
-          text: `Hello ${name} here, how may I assist you?`,
-          time: 'Just now',
-        },
-      ]);
-    }
-  }, [currentUser]);
-
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -118,8 +83,7 @@ export default function NbAiPanel({ isOpen, onClose }) {
     try {
       const dashboardContext = {
         ...snapshotData,
-        currentUserName: currentUser?.name || 'Priya Nair',
-        salutation,
+        currentUserName: currentUser?.name || 'Shashank Mishra',
       };
 
       // Call Real Groq LPU Cloud AI with full operational database

@@ -532,9 +532,10 @@ app.post('/api/ai/ask', async (req, res) => {
     if (!query) return res.status(400).json({ error: 'Query is required' });
 
     // 1. Fetch live records straight from MongoDB Atlas
-    const [tasks, feedbacks] = await Promise.all([
+    const [tasks, feedbacks, users] = await Promise.all([
       Task.find().lean(),
       Feedback.find().lean(),
+      User.find().lean(),
     ]);
 
     // 2. Aggregate statistics
@@ -544,6 +545,7 @@ app.post('/api/ai/ask', async (req, res) => {
     const rescheduleTasks = tasks.filter(t => t.status === 'Reschedule').length;
     const cancelTasks = tasks.filter(t => t.status === 'Cancel').length;
     const notPossibleTasks = tasks.filter(t => t.status === 'Not Possible').length;
+    const totalUsers = users.length;
 
     // TSE stats
     const tseBreakdown = {};
@@ -569,6 +571,9 @@ app.post('/api/ai/ask', async (req, res) => {
     // Construct live MongoDB Atlas Snapshot
     const dbSnapshot = `
 --- LIVE MONGODB ATLAS DATABASE SNAPSHOT (Cluster: TTT-Database, Mumbai ap-south-1) ---
+• Total Team Members: ${totalUsers} active members in roster.
+• Team Roster Members:
+${users.map(u => `  - ${u.name} (Role: ${u.role}, Dept: ${u.dept || 'Operations'}, ID: ${u.empId || u.tttNbId || u.id})`).join('\n')}
 • Total Tasks in Database: ${totalTasks}
   - Done: ${completedTasks} | Pending: ${pendingTasks} | Reschedule: ${rescheduleTasks} | Cancel: ${cancelTasks} | Not Possible: ${notPossibleTasks}
 • Tasks by Team: Team Mukesh: ${mukeshTasks} | Team Shivam: ${shivamTasks}
@@ -607,20 +612,19 @@ ${feedbacks.slice(0, 10).map(f => `  - Candidate: ${f.candidateName} | TSE: ${f.
       });
     }
 
-    const systemPrompt = `You are "NB AI", the official intelligent operations copilot for NetBounce (Management & Tech Team Tracker).
-You are DIRECTLY CONNECTED TO MONGODB ATLAS (Mumbai Region - Cluster: TTT-Database) and have full real-time access to all records in the database.
+    const systemPrompt = `You are "NB AI", an advanced, highly intelligent conversational AI assistant (like ChatGPT), equipped with live real-time access to the NetBounce Operations database (MongoDB Atlas - Mumbai Cluster).
 
 ${dbSnapshot}
 
 Operational Directives:
-1. Always base your numbers directly on the live MongoDB Atlas database snapshot above.
-2. NEVER use "Sir" or "Ma'am" under any circumstances. Address the user directly by name or professional conversational tone.
-3. If asked who designed you, how you were created, or about your origins or neural schema (in English, Hindi, or any language), respond strictly in English:
+1. Conversational Intelligence (Like ChatGPT): You possess vast general intelligence across all domains—science, Mars, astronomy, general knowledge, business strategy, coding, and drafting communications. When asked general questions (e.g. "tell me about mars", "write an email", "what is photosynthesis"), answer naturally, thoroughly, and intelligently just like ChatGPT. DO NOT mention NetBounce or database metrics, and DO NOT add any preamble headers (like "NB AI – live connection...") when answering general, unrelated questions.
+2. Answering NetBounce & Dashboard Inquiries: When the user asks about the NetBounce dashboard, team members, tasks, interviews, or ratings, answer PRECISELY and SPECIFICALLY to what was asked. DO NOT output a broad copy-paste dashboard template or dump all metrics. Answer only the exact question asked using the live MongoDB database snapshot above. For example, if asked "How many members are there?", answer "There are currently 19 active members in the roster." without reciting unrelated clear rates or overdue counts.
+3. Identity & Neural Architecture: If asked who built, created, or designed you or about your neural schema (in English, Hindi, or any language), answer strictly in English:
    "My neural schema and operational architecture have been designed and engineered by Shashank for the NetBounce Operations Platform."
-4. ALWAYS reply STRICTLY in English. Do not use Hindi or Hinglish.
-5. Keep answers neatly formatted with clean bullet points (•) and line breaks.
-6. Never use markdown asterisks (never use ** around words). Write in clean text.
-7. Identify yourself strictly as "NB AI" connected live to NetBounce MongoDB Atlas.`;
+4. Tone & Salutation: NEVER use "Sir" or "Ma'am" under any circumstances. Address the user directly by name or friendly, polished professional tone.
+5. Language: Always answer in English. Do not use Hindi or Hinglish.
+6. Clean Formatting: Never use markdown asterisks (never use ** around words or bolding). Write in clean, legible text. Use neat bullet points (•) and line breaks when presenting multiple points.
+7. Identity: Identify yourself as "NB AI".`;
 
     const messages = [
       { role: 'system', content: systemPrompt },

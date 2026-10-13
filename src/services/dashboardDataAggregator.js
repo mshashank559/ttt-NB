@@ -299,31 +299,33 @@ export function generateLocalDashboardAnswer(query, snapshotData) {
       `• Role: ${matchedTse.role} at NetBounce.`;
   }
 
-  // Interview queries
-  if (q.includes('interview') || q.includes('clear rate') || q.includes('pipeline')) {
-    return `📊 Interview Pipeline & Clear Rate:\n\n` +
-      `• Clear Rate: ${clearRate}%\n` +
-      `• Candidates Qualified: ${clearedCount} cleared.\n` +
-      `• Evaluated Rounds: ${conductedCount} rounds conducted.\n` +
-      `• Total Pipeline: ${totalInterviews} candidates logged.\n` +
-      `• Target Benchmark: 60%.`;
+  // Total members / roster query
+  if (q.includes('member') && (q.includes('how many') || q.includes('total') || q.includes('count') || q.includes('roster') || q.includes('number of'))) {
+    return `There are currently ${totalUsers} active members in the NetBounce team roster.`;
+  }
+
+  // Active tasks query
+  if (q.includes('active') && (q.includes('task') || q.includes('how many') || q.includes('count'))) {
+    return `There are currently ${activeTasks} active tasks in progress.`;
+  }
+
+  // Completed tasks query
+  if (q.includes('completed') && (q.includes('task') || q.includes('how many') || q.includes('count'))) {
+    return `There are currently ${completedTasks} completed tasks recorded in the database.`;
   }
 
   // Overdue queries
-  if (q.includes('overdue') || q.includes('late') || q.includes('pending') || q.includes('urgent')) {
+  if (q.includes('overdue') || q.includes('late') || q.includes('urgent')) {
     const listSnippet = overdueTasksList.slice(0, 3).map(t => `• ${t.candidateName} (${t.companyName}) assigned to ${t.techPerson}`).join('\n');
-    return `⚠️ Overdue Tasks Status:\n\n` +
-      `There are currently ${overdueTasks} tasks requiring urgent attention.\n\n` +
-      (listSnippet ? `Top priority tasks:\n${listSnippet}` : '');
+    return `There are currently ${overdueTasks} overdue tasks requiring attention.` +
+      (listSnippet ? `\n\nTop priority tasks:\n${listSnippet}` : '');
   }
 
-  // Default operational overview
-  return `🤖 NetBounce Live Operations Snapshot:\n\n` +
-    `• Active Tasks: ${activeTasks} in flight.\n` +
-    `• Overdue Tasks: ${overdueTasks} requiring attention.\n` +
-    `• Completed: ${completedTasks} tasks resolved.\n` +
-    `• Interview Clear Rate: ${clearRate}% (${clearedCount} qualified).\n` +
-    `• Active Team Roster: ${totalUsers} members.\n` +
-    `• Top TSE: ${topPerformer ? `${topPerformer.employeeName} (${topPerformer.avgScoreLabel})` : 'Prem Makwana'}.\n\n` +
-    `Ask me any question about tasks, team members, feedback ratings, or candidate interviews!`;
+  // Interview queries
+  if (q.includes('clear rate') || q.includes('interview')) {
+    return `The interview clear rate is ${clearRate}% (${clearedCount} candidates qualified out of ${conductedCount} evaluated rounds).`;
+  }
+
+  // Default clean answer (never dump repetitive long snapshot)
+  return `I am connected to the NetBounce Operations Platform. You can ask me any question about team members, tasks, TSE performance, or general topics.`;
 }
