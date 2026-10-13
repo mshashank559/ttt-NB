@@ -180,7 +180,7 @@ export default function Login() {
                 </div>
               </div>
 
-              {/* Remember Me & Forgot Password Row */}
+              {/* Remember Me Row */}
               <div className="flex items-center justify-between pt-0.5">
                 <label className="flex items-center gap-1.5 cursor-pointer select-none">
                   <input
@@ -194,17 +194,10 @@ export default function Login() {
                     Remember me
                   </span>
                 </label>
-                <button
-                  type="button"
-                  onClick={() => alert('Demo prototype: Use Demo Login below to test any role.')}
-                  className="text-xs sm:text-[13px] font-semibold text-[#0B1EE6] hover:text-[#0817B8] hover:underline transition-colors cursor-pointer"
-                >
-                  Forgot password?
-                </button>
               </div>
 
               {/* Log In Pill Button */}
-              <div className="pt-1.5">
+              <div className="pt-2">
                 <button
                   type="submit"
                   data-testid="login-submit-btn"
@@ -213,69 +206,27 @@ export default function Login() {
                   Log in
                 </button>
               </div>
-
-              {/* Don't have an account & Demo Access */}
-              <div className="text-center pt-1.5">
-                <p className="text-xs sm:text-[13px] text-slate-600">
-                  Don't have an account?{' '}
-                  <button
-                    type="button"
-                    onClick={() => setShowRoles(true)}
-                    className="text-[#0B1EE6] hover:text-[#0817B8] font-bold hover:underline cursor-pointer"
-                  >
-                    Sign up.
-                  </button>
-                </p>
-
-                {/* Demo Login Trigger */}
-                <button
-                  type="button"
-                  data-testid="demo-login-btn"
-                  onClick={() => setShowRoles(true)}
-                  className="mt-2 inline-flex items-center gap-1.5 px-4 py-1 rounded-full bg-[#0B1EE6]/10 hover:bg-[#0B1EE6]/15 text-xs font-bold text-[#0B1EE6] transition-colors cursor-pointer"
-                >
-                  <Zap size={13} className="text-[#0B1EE6]" />
-                  <span>Demo Login — Pick a role</span>
-                </button>
-              </div>
             </form>
 
-            {/* App Store & Google Play Badges */}
-            <div className="mt-4 flex items-center justify-center gap-3">
-              <AppStoreBadge />
-              <GooglePlayBadge />
-            </div>
-
             {/* Legal Disclaimer */}
-            <p className="mt-2.5 text-[10.5px] text-slate-400 text-center leading-tight max-w-xs mx-auto">
-              By creating an account or logging in, you agree to the current Terms of Service and Privacy Policy
+            <p className="mt-4 text-[10.5px] text-slate-400 text-center leading-tight max-w-xs mx-auto">
+              By logging in, you agree to the NetBounce Terms of Service and Privacy Policy
             </p>
           </div>
 
           {/* Footer: Language Dropdown & Get Support */}
-          <div className="mt-2 pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 max-w-[380px] mx-auto w-full">
+          <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 max-w-[380px] mx-auto w-full">
             <div className="flex items-center gap-1 cursor-pointer hover:text-slate-800 transition-colors">
               <span>English (Inglés)</span>
               <ChevronDown size={14} />
             </div>
 
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => navigate('/candidate-saga')}
-                className="text-[#0B1EE6] hover:underline font-semibold flex items-center gap-1 cursor-pointer"
-              >
-                <Sparkles size={13} />
-                <span>Candidate SAGA</span>
-              </button>
-
-              <div
-                onClick={() => alert('Support line: contact support@netbounce.io or talk to your TSM lead.')}
-                className="flex items-center gap-1 cursor-pointer hover:text-slate-800 transition-colors"
-              >
-                <MessageSquare size={14} className="text-slate-400" />
-                <span>Get Support</span>
-              </div>
+            <div
+              onClick={() => alert('Support line: contact support@netbounce.io or talk to your TSM lead.')}
+              className="flex items-center gap-1 cursor-pointer hover:text-slate-800 transition-colors"
+            >
+              <MessageSquare size={14} className="text-slate-400" />
+              <span>Get Support</span>
             </div>
           </div>
         </div>
