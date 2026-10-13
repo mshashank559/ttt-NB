@@ -24,8 +24,26 @@ import { DEFAULT_AVATAR } from '../data/avatars';
 const AppCtx = createContext(null);
 
 export const AppProvider = ({ children }) => {
-  const [currentRole, setCurrentRole] = useState(null); // null = login screen
-  const [currentUserId, setCurrentUserId] = useState(null);
+  const [session, setSession] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('ttt_auth_session');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed && parsed.userId && parsed.role) {
+            return parsed;
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to parse auth session:', e);
+      }
+    }
+    return { userId: null, role: null };
+  });
+
+  const [currentRole, setCurrentRole] = useState(() => session.role);
+  const [currentUserId, setCurrentUserId] = useState(() => session.userId);
+  const [authLoading, setAuthLoading] = useState(false);
   const [tasks, setTasks] = useState(INITIAL_TASKS);
   const [interviews, setInterviews] = useState(INITIAL_INTERVIEWS);
   const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS);
@@ -209,22 +227,145 @@ export const AppProvider = ({ children }) => {
     setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
   }, []);
 
+  const login = useCallback(async (emailOrId, password) => {
+    if (!emailOrId || !password) {
+      throw new Error('Please enter both Email/ID and Password.');
+    }
+    const cleanInput = emailOrId.trim();
+    const cleanLower = cleanInput.toLowerCase();
+
+    setAuthLoading(true);
+
+    try {
+      let authUser = null;
+
+      // 1. First attempt to authenticate against MongoDB backend
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ emailOrId: cleanInput, password }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.success && data.user) {
+            authUser = data.user;
+          }
+        } else {
+          const errData = await res.json().catch(() => null);
+          if (errData && errData.error) {
+            throw new Error(errData.error);
+          }
+        }
+      } catch (apiErr) {
+        // If error message indicates invalid credentials or inactive account, fail immediately
+        if (apiErr.message && (
+          apiErr.message.includes('credentials') ||
+          apiErr.message.includes('password') ||
+          apiErr.message.includes('inactive') ||
+          apiErr.message.includes('No account found')
+        )) {
+          throw apiErr;
+        }
+        // If server is unreachable/offline, continue to local registry below
+      }
+
+      // 2. Validate against known users registry if backend didn't return
+      if (!authUser) {
+        const allKnownUsers = users && users.length > 0 ? users : USERS;
+        const matched = allKnownUsers.find(u =>
+          (u.email && u.email.toLowerCase() === cleanLower) ||
+          (u.id && u.id.toLowerCase() === cleanLower) ||
+          (u.empId && u.empId.toLowerCase() === cleanLower) ||
+          (u.tttNbId && u.tttNbId.toLowerCase() === cleanLower)
+        );
+
+        if (!matched) {
+          throw new Error('Invalid credentials: No account found with this Email or ID.');
+        }
+
+        if (matched.status && matched.status.toLowerCase() !== 'active') {
+          throw new Error('Your account is currently inactive. Please contact Management.');
+        }
+
+        if (matched.password && matched.password !== password) {
+          throw new Error('Invalid credentials: Incorrect password.');
+        }
+
+        authUser = matched;
+      }
+
+      if (!authUser || !authUser.role) {
+        throw new Error('Authentication failed: No assigned role found for this user.');
+      }
+
+      const finalRole = authUser.role;
+      const finalUserId = authUser.id;
+
+      // Persist session to localStorage
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('ttt_auth_session', JSON.stringify({
+            userId: finalUserId,
+            role: finalRole,
+            email: authUser.email,
+            name: authUser.name,
+          }));
+        } catch (e) {}
+      }
+
+      setCurrentRole(finalRole);
+      setCurrentUserId(finalUserId);
+      setSession({ userId: finalUserId, role: finalRole });
+
+      toast.success(`Welcome, ${authUser.name}!`);
+      return authUser;
+    } finally {
+      setAuthLoading(false);
+    }
+  }, [users]);
+
   const loginAs = useCallback((roleId, userId) => {
+    const allUsers = users && users.length > 0 ? users : USERS;
     let user = null;
     if (userId) {
-      user = users.find(u => u.id === userId) || USERS.find(u => u.id === userId);
+      user = allUsers.find(u => u.id === userId);
     } else {
-      user = users.find(u => u.role === roleId) || USERS.find(u => u.role === roleId);
+      user = allUsers.find(u => u.role === roleId);
     }
-    const finalRole = user?.role || roleId;
+    if (!user) {
+      toast.error(`Account for ${roleId} not found.`);
+      return;
+    }
+    const finalRole = user.role;
+    const finalUserId = user.id;
+
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('ttt_auth_session', JSON.stringify({
+          userId: finalUserId,
+          role: finalRole,
+          email: user.email,
+          name: user.name,
+        }));
+      } catch (e) {}
+    }
+
     setCurrentRole(finalRole);
-    setCurrentUserId(user?.id || null);
-    toast.success(`Signed in as ${user?.name || ROLES[finalRole]?.label || finalRole}`);
+    setCurrentUserId(finalUserId);
+    setSession({ userId: finalUserId, role: finalRole });
+    toast.success(`Signed in as ${user.name}`);
   }, [users]);
 
   const logout = useCallback(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.removeItem('ttt_auth_session');
+      } catch (e) {}
+    }
     setCurrentRole(null);
     setCurrentUserId(null);
+    setSession({ userId: null, role: null });
     toast.info('Signed out successfully.');
   }, []);
 
@@ -592,6 +733,8 @@ export const AppProvider = ({ children }) => {
     cmdOpen,
     setCmdOpen,
     setSidebarCollapsed,
+    authLoading,
+    login,
     loginAs,
     logout,
     addTask,

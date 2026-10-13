@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Mail, Lock, Eye, EyeOff, MessageSquare, ChevronDown,
-  X, Shield, Zap, Sparkles
+  X, Shield, Zap, Sparkles, AlertCircle
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { ROLES } from '../data/mockData';
@@ -74,22 +74,41 @@ function NetBounceLogoHeader() {
 // MAIN SCROLL-FREE COMPACT B.WELL LOGIN COMPONENT
 // ============================================================================
 export default function Login() {
-  const { loginAs } = useApp();
+  const { login, loginAs, authLoading } = useApp();
   const navigate = useNavigate();
   const [showRoles, setShowRoles] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [email, setEmail] = useState('shashank.m@netbounceplacement.com');
-  const [password, setPassword] = useState('_Shas@061');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const pick = (roleId, userId) => {
-    loginAs(roleId, userId);
-    navigate('/dashboard');
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setErrorMessage('');
+
+    if (!email.trim() || !password) {
+      setErrorMessage('Please enter both Email/ID and Password.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await login(email.trim(), password);
+      // Validated! Navigate to permitted dashboard
+      navigate('/dashboard');
+    } catch (err) {
+      setErrorMessage(err.message || 'Invalid credentials. Please verify your Email/ID and Password.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleLogin = (e) => {
-    e.preventDefault();
-    pick('management', 'u-shashank-01');
+  const pick = (roleId, userId) => {
+    setErrorMessage('');
+    loginAs(roleId, userId);
+    navigate('/dashboard');
   };
 
   const roleCards = Object.values(ROLES);
@@ -134,21 +153,32 @@ export default function Login() {
 
             {/* Login Form */}
             <form onSubmit={handleLogin} className="mt-5 space-y-3 max-w-[380px] mx-auto w-full">
-              {/* Email Input Field */}
+              {/* Error Alert */}
+              {errorMessage && (
+                <div
+                  data-testid="login-error-alert"
+                  className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-center gap-2"
+                >
+                  <AlertCircle size={16} className="shrink-0 text-rose-600" />
+                  <span>{errorMessage}</span>
+                </div>
+              )}
+
+              {/* Email / Employee ID Input Field */}
               <div>
                 <label className="block text-xs sm:text-[13px] font-semibold text-slate-700 mb-1">
-                  Email <span className="text-red-500">*</span>
+                  Email or Employee ID <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
                     <Mail size={16} />
                   </div>
                   <input
-                    type="email"
+                    type="text"
                     data-testid="login-email"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="Enter your email"
+                    onChange={(e) => { setEmail(e.target.value); setErrorMessage(''); }}
+                    placeholder="e.g. yourname@netbounceplacement.com or TTT-NB-001"
                     required
                     className="w-full h-10 sm:h-11 pl-9 pr-3 rounded-lg border border-slate-300 focus:border-[#0B1EE6] focus:ring-2 focus:ring-[#0B1EE6]/15 text-slate-900 placeholder:text-slate-400 text-xs sm:text-sm font-normal bg-white transition-all outline-none"
                   />
@@ -165,7 +195,7 @@ export default function Login() {
                     type={showPassword ? 'text' : 'password'}
                     data-testid="login-password"
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(e) => { setPassword(e.target.value); setErrorMessage(''); }}
                     placeholder="Enter password"
                     required
                     className="w-full h-10 sm:h-11 pl-3 pr-9 rounded-lg border border-slate-300 focus:border-[#0B1EE6] focus:ring-2 focus:ring-[#0B1EE6]/15 text-slate-900 placeholder:text-slate-400 text-xs sm:text-sm font-normal bg-white transition-all outline-none"
@@ -194,16 +224,25 @@ export default function Login() {
                     Remember me
                   </span>
                 </label>
+                <button
+                  type="button"
+                  data-testid="demo-login-trigger"
+                  onClick={() => setShowRoles(true)}
+                  className="text-xs text-[#0B1EE6] hover:underline font-semibold cursor-pointer inline-flex items-center gap-1"
+                >
+                  <Zap size={12} /> Test Roles
+                </button>
               </div>
 
               {/* Log In Pill Button */}
               <div className="pt-2">
                 <button
                   type="submit"
+                  disabled={isSubmitting || authLoading}
                   data-testid="login-submit-btn"
-                  className="w-full h-11 rounded-full bg-gradient-to-r from-[#0B1EE6] to-[#0817B8] hover:from-[#0918C7] hover:to-[#061294] active:scale-[0.99] text-white font-semibold text-[15px] shadow-md shadow-[#0B1EE6]/25 hover:shadow-lg hover:shadow-[#0B1EE6]/35 transition-all flex items-center justify-center cursor-pointer"
+                  className="w-full h-11 rounded-full bg-gradient-to-r from-[#0B1EE6] to-[#0817B8] hover:from-[#0918C7] hover:to-[#061294] active:scale-[0.99] text-white font-semibold text-[15px] shadow-md shadow-[#0B1EE6]/25 hover:shadow-lg hover:shadow-[#0B1EE6]/35 transition-all flex items-center justify-center cursor-pointer disabled:opacity-70"
                 >
-                  Log in
+                  {isSubmitting || authLoading ? 'Authenticating…' : 'Log in'}
                 </button>
               </div>
             </form>
@@ -418,22 +457,30 @@ export default function Login() {
                   <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">
                     Management &amp; Leadership (Full Cross-Team Visibility)
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <button
+                      data-testid="role-pick-management-shashank"
+                      onClick={() => pick('management', 'u-shashank-01')}
+                      className="p-3 rounded-xl bg-slate-900 text-white hover:bg-slate-800 text-left transition-all cursor-pointer"
+                    >
+                      <div className="text-xs font-bold">Shashank Mishra</div>
+                      <div className="text-[11px] text-cyan-300 font-semibold">Management Lead</div>
+                    </button>
                     <button
                       data-testid="role-pick-management"
                       onClick={() => pick('management', 'u-02')}
                       className="p-3 rounded-xl bg-slate-900 text-white hover:bg-slate-800 text-left transition-all cursor-pointer"
                     >
-                      <div className="text-xs font-bold">Priya Nair (Operations)</div>
-                      <div className="text-[11px] text-cyan-300 font-semibold">Management • All Teams</div>
+                      <div className="text-xs font-bold">Priya Nair</div>
+                      <div className="text-[11px] text-cyan-300 font-semibold">Management Ops</div>
                     </button>
                     <button
                       data-testid="role-pick-upper_management"
                       onClick={() => pick('upper_management', 'u-01')}
                       className="p-3 rounded-xl bg-slate-900 text-white hover:bg-slate-800 text-left transition-all cursor-pointer"
                     >
-                      <div className="text-xs font-bold">Aarav Mehta (Executive)</div>
-                      <div className="text-[11px] text-amber-300 font-semibold">Upper Management • All Teams</div>
+                      <div className="text-xs font-bold">Aarav Mehta</div>
+                      <div className="text-[11px] text-amber-300 font-semibold">Upper Management</div>
                     </button>
                   </div>
                 </div>

@@ -25,7 +25,7 @@ const RequireAuth = ({ children, module }) => {
     if (!currentRole) navigate('/login', { replace: true });
   }, [currentRole, navigate]);
   if (!currentRole) return null;
-  if (module && !permissionsByRole[currentRole].includes(module)) {
+  if (module && (!permissionsByRole[currentRole] || !permissionsByRole[currentRole].includes(module))) {
     return <Navigate to="/dashboard" replace />;
   }
   return children;

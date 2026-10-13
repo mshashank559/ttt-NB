@@ -139,36 +139,23 @@ const User = mongoose.model('User', UserSchema);
 // -------------------------------------------------------------
 async function seedDatabaseIfEmpty() {
   try {
-    // Check if stale mock data is in DB
-    const oldUser = await User.findOne({ email: { $in: ['aarav.mehta@netbounce.io', 'amber.afreen@netbounce.io', 'admin@netbounce.io'] } });
-    const shashankExists = await User.findOne({ email: 'shashank.m@netbounceplacement.com' });
-
-    if (oldUser || !shashankExists) {
-      console.log('🧹 Purging old mock data from MongoDB Atlas and provisioning 1st member...');
-      await Task.deleteMany({});
-      await Feedback.deleteMany({});
-      await User.deleteMany({});
-
-      const initialUser = new User({
-        id: 'u-shashank-01',
-        name: 'Shashank Mishra',
-        email: 'shashank.m@netbounceplacement.com',
-        password: '_Shas@061',
-        role: 'management',
-        dept: 'Operations',
-        empId: 'TTT-NB-001',
-        tttNbId: 'TTT-NB-001',
-        joined: new Date().toISOString().slice(0, 10),
-        status: 'Active',
-        avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
-      });
-      await initialUser.save();
-      console.log('✅ 1st member provisioned in MongoDB: Shashank Mishra (TTT-NB-001)');
+    const { USERS } = await import('./src/data/mockData.js');
+    const userCount = await User.countDocuments();
+    if (userCount < USERS.length) {
+      console.log('🔄 Syncing all authorized team members into MongoDB...');
+      for (const u of USERS) {
+        await User.findOneAndUpdate(
+          { id: u.id },
+          { $set: u },
+          { upsert: true, new: true }
+        );
+      }
+      console.log(`✅ All ${USERS.length} team members verified in MongoDB.`);
     } else {
-      console.log('✅ Database is already configured with real members.');
+      console.log('✅ Database is configured with team members.');
     }
   } catch (err) {
-    console.error('⚠️ Seeding error:', err.message);
+    console.error('⚠️ Seeding check error:', err.message);
   }
 }
 
@@ -234,11 +221,89 @@ app.post('/api/seed', async (req, res) => {
 });
 
 
+// ----------------- AUTHENTICATION ENDPOINT -----------------
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { emailOrId, password } = req.body;
+    if (!emailOrId || !password) {
+      return res.status(400).json({ error: 'Please enter both Email/ID and Password.' });
+    }
+
+    const cleanInput = emailOrId.trim();
+    const cleanLower = cleanInput.toLowerCase();
+    const isDbConnected = mongoose.connection.readyState === 1;
+
+    let user = null;
+
+    // 1. Query MongoDB if connected
+    if (isDbConnected) {
+      user = await User.findOne({
+        $or: [
+          { email: cleanLower },
+          { id: cleanInput },
+          { empId: cleanInput },
+          { tttNbId: cleanInput },
+        ],
+      });
+    }
+
+    // 2. Fallback to authorized users directory if not found in MongoDB or if offline
+    if (!user) {
+      const { USERS } = await import('./src/data/mockData.js');
+      const staticUser = USERS.find(u =>
+        u.email.toLowerCase() === cleanLower ||
+        u.id.toLowerCase() === cleanLower ||
+        (u.empId && u.empId.toLowerCase() === cleanLower) ||
+        (u.tttNbId && u.tttNbId.toLowerCase() === cleanLower)
+      );
+      if (staticUser) {
+        if (isDbConnected) {
+          try {
+            user = new User(staticUser);
+            await user.save();
+          } catch (saveErr) {
+            user = staticUser;
+          }
+        } else {
+          user = staticUser;
+        }
+      }
+    }
+
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid credentials: No account found with this Email or ID.' });
+    }
+
+    if (user.status && user.status.toLowerCase() !== 'active') {
+      return res.status(403).json({ error: 'Your account is inactive. Please contact Management.' });
+    }
+
+    if (user.password && user.password !== password) {
+      return res.status(401).json({ error: 'Invalid credentials: Incorrect password.' });
+    }
+
+    const userObj = user.toObject ? user.toObject() : { ...user };
+    delete userObj.password;
+
+    res.json({
+      success: true,
+      message: `Signed in as ${userObj.name}`,
+      user: userObj,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ----------------- USERS ENDPOINTS -----------------
 app.get('/api/users', async (req, res) => {
   try {
-    const users = await User.find().sort({ createdAt: -1 });
-    res.json(users);
+    if (mongoose.connection.readyState === 1) {
+      const users = await User.find().sort({ createdAt: -1 });
+      if (users && users.length > 0) return res.json(users);
+    }
+    const { USERS } = await import('./src/data/mockData.js');
+    res.json(USERS);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -671,14 +671,17 @@ export default function Dashboard() {
     );
   }
 
-  // ---------- MARKETING TL/SR ----------
-  if (currentRole === 'marketing_tl' || currentRole === 'marketing_sr') {
+  // ---------- MARKETING TL/SR & RECRUITER (POC) ----------
+  if (currentRole === 'marketing_tl' || currentRole === 'marketing_sr' || currentRole === 'recruiter') {
     const assigned = visibleInterviews.filter(i => i.interviewerId === currentUser?.id || true).slice(0, 20);
     const evalRate = assigned.length ? Math.round((assigned.filter(i => i.feedbackSubmitted).length / assigned.length) * 100) : 0;
 
     return (
       <div className="space-y-6">
-        <PageHeader title="TSE Interview Evaluation" subtitle="Candidate identities are anonymized by policy." />
+        <PageHeader
+          title={currentRole === 'recruiter' ? 'Candidate Pipeline & Evaluation' : 'TSE Interview Evaluation'}
+          subtitle="Candidate identities are scoped according to role policy."
+        />
 
         {/* Ghulam Image 1 Style Hero Arc Gauge & Metric Cards */}
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
