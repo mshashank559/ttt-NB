@@ -52,13 +52,12 @@ const formatMessageText = (text) => {
 
 export default function NbAiPanel({ isOpen, onClose }) {
   const { tasks, visibleInterviews, interviews, users, currentUser, currentRole, feedbacks } = useApp();
-  const salutation = getSalutation(currentUser);
 
   const [messages, setMessages] = useState(() => [
     {
       id: 'welcome',
       sender: 'ai',
-      text: `Greetings ${getSalutation(currentUser)}! How may I assist you today?`,
+      text: 'Hello Shashank here, how may I assist you?',
       time: 'Just now',
     },
   ]);
@@ -66,19 +65,20 @@ export default function NbAiPanel({ isOpen, onClose }) {
   const [isThinking, setIsThinking] = useState(false);
   const messagesEndRef = useRef(null);
 
-  // Update welcome salutation if currentUser changes
+  // Update welcome greeting if currentUser changes
   useEffect(() => {
     if (messages.length === 1 && messages[0].id === 'welcome') {
+      const name = currentUser?.name ? currentUser.name.split(' ')[0] : 'Shashank';
       setMessages([
         {
           id: 'welcome',
           sender: 'ai',
-          text: `Greetings ${salutation}! How may I assist you today?`,
+          text: `Hello ${name} here, how may I assist you?`,
           time: 'Just now',
         },
       ]);
     }
-  }, [salutation]);
+  }, [currentUser]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

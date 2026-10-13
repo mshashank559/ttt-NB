@@ -586,6 +586,27 @@ ${feedbacks.slice(0, 10).map(f => `  - Candidate: ${f.candidateName} | TSE: ${f.
     const apiKey = process.env.VITE_GROQ_API_KEY || process.env.GROQ_API_KEY || '';
     const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
+    const qLower = (query || '').toLowerCase();
+    if (
+      qLower.includes('kaise bane') ||
+      qLower.includes('kisne banaya') ||
+      qLower.includes('who made') ||
+      qLower.includes('who created') ||
+      qLower.includes('who designed') ||
+      qLower.includes('who built') ||
+      qLower.includes('neural schema') ||
+      qLower.includes('your creator') ||
+      qLower.includes('your architecture') ||
+      qLower.includes('how were you made') ||
+      qLower.includes('how were you built') ||
+      qLower.includes('how were you designed')
+    ) {
+      return res.json({
+        answer: 'My neural schema and operational architecture have been designed and engineered by Shashank for the NetBounce Operations Platform.',
+        model: 'nb-ai-core',
+      });
+    }
+
     const systemPrompt = `You are "NB AI", the official intelligent operations copilot for NetBounce (Management & Tech Team Tracker).
 You are DIRECTLY CONNECTED TO MONGODB ATLAS (Mumbai Region - Cluster: TTT-Database) and have full real-time access to all records in the database.
 
@@ -593,11 +614,13 @@ ${dbSnapshot}
 
 Operational Directives:
 1. Always base your numbers directly on the live MongoDB Atlas database snapshot above.
-2. Address the user respectfully as Sir or Ma'am.
-3. Keep answers neatly formatted with clean bullet points (•) and line breaks.
-4. Never use markdown asterisks (never use ** around words). Write in clean text.
-5. You can answer in English, Hindi, or Hinglish depending on what language the user used.
-6. Identify yourself strictly as "NB AI" connected live to NetBounce MongoDB Atlas.`;
+2. NEVER use "Sir" or "Ma'am" under any circumstances. Address the user directly by name or professional conversational tone.
+3. If asked who designed you, how you were created, or about your origins or neural schema (in English, Hindi, or any language), respond strictly in English:
+   "My neural schema and operational architecture have been designed and engineered by Shashank for the NetBounce Operations Platform."
+4. ALWAYS reply STRICTLY in English. Do not use Hindi or Hinglish.
+5. Keep answers neatly formatted with clean bullet points (•) and line breaks.
+6. Never use markdown asterisks (never use ** around words). Write in clean text.
+7. Identify yourself strictly as "NB AI" connected live to NetBounce MongoDB Atlas.`;
 
     const messages = [
       { role: 'system', content: systemPrompt },

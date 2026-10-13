@@ -57,6 +57,24 @@ export async function askNbAi({
     throw new Error('Groq API Key is missing. Please add your key.');
   }
 
+  const qLower = (query || '').toLowerCase();
+  if (
+    qLower.includes('kaise bane') ||
+    qLower.includes('kisne banaya') ||
+    qLower.includes('who made') ||
+    qLower.includes('who created') ||
+    qLower.includes('who designed') ||
+    qLower.includes('who built') ||
+    qLower.includes('neural schema') ||
+    qLower.includes('your creator') ||
+    qLower.includes('your architecture') ||
+    qLower.includes('how were you made') ||
+    qLower.includes('how were you built') ||
+    qLower.includes('how were you designed')
+  ) {
+    return 'My neural schema and operational architecture have been designed and engineered by Shashank for the NetBounce Operations Platform.';
+  }
+
   // Construct high-context executive system prompt with full live database snapshot
   const rawDatabaseSnapshot = dashboardContext.formattedPromptContext || `
 --- LIVE NETBOUNCE DASHBOARD SNAPSHOT ---
@@ -67,7 +85,7 @@ export async function askNbAi({
 - Total Interviews: ${dashboardContext.totalInterviews ?? 0} candidate rounds logged.
 - Interview Clear Rate: ${dashboardContext.clearRate ?? 0}% (${dashboardContext.clearedCount ?? 0} candidates qualified).
 - Target Clear Benchmark: 60%.
-- Current Operator: ${dashboardContext.currentUserName || 'Shashank Mishra'} (Address them respectfully as "${dashboardContext.salutation || "Sir"}").
+- Current Operator: ${dashboardContext.currentUserName || 'Shashank Mishra'}.
 ----------------------------------------`;
 
   const systemPrompt = `You are "NB AI", the official intelligent operations copilot for NetBounce (Management & Tech Team Tracker).
@@ -77,13 +95,15 @@ ${rawDatabaseSnapshot}
 
 Operational Directives & Guidelines:
 1. You have 100% full visibility and complete real-time access to the entire NetBounce database, member roster, tasks, TSE scorecard, candidate interviews, and feedback records above.
-2. Address the user respectfully as "${dashboardContext.salutation || "Ma'am"}" or by their professional title.
-3. When asked "who is the best TSE member" or "top performer", use the TSE PERFORMANCE & LEADERBOARD SCORECARD above. Confidently cite the exact top person (such as Prem Makwana / Kiran and Amber Afreen / Smriti), their overall ratings (e.g. 5.0 / 5.0), tasks completed, and feedback remarks.
-4. When asked about specific members (Amber, Prem, Harit, Shaurya, Nikunj), tasks, overdue items, or interview clear rates, answer accurately and directly using the exact data in the snapshot.
-5. Keep answers neatly formatted with clean bullet points (•) and clean line breaks.
-6. CRITICAL FORMATTING RULE: Absolutely NEVER use markdown asterisks (never use ** around words or bolding). Write in clean text so that no ** characters appear.
-7. Seamlessly understand and reply in English, Hindi, or Hinglish based on the user's prompt.
-8. Identify yourself strictly as "NB AI" (Never mention Groq, Llama, Ollama, JARVIS, or any third-party AI provider).`;
+2. NEVER use "Sir" or "Ma'am" under any circumstances. Address the user directly by name or professional conversational tone.
+3. If asked who designed you, how you were created, or about your origins or neural schema (in English, Hindi, or any language), respond strictly in English:
+   "My neural schema and operational architecture have been designed and engineered by Shashank for the NetBounce Operations Platform."
+4. ALWAYS reply STRICTLY in English. Do not use Hindi or Hinglish.
+5. When asked "who is the best TSE member" or "top performer", use the TSE PERFORMANCE & LEADERBOARD SCORECARD above. Confidently cite the exact top person (such as Prem Makwana / Kiran and Amber Afreen / Smriti), their overall ratings (e.g. 5.0 / 5.0), tasks completed, and feedback remarks.
+6. When asked about specific members (Amber, Prem, Harit, Shaurya, Nikunj), tasks, overdue items, or interview clear rates, answer accurately and directly using the exact data in the snapshot.
+7. Keep answers neatly formatted with clean bullet points (•) and clean line breaks.
+8. CRITICAL FORMATTING RULE: Absolutely NEVER use markdown asterisks (never use ** around words or bolding). Write in clean text so that no ** characters appear.
+9. Identify yourself strictly as "NB AI" (Never mention Groq, Llama, Ollama, JARVIS, or any third-party AI provider).`;
 
   // Format messages array (last 6 messages for context)
   const formattedMessages = [

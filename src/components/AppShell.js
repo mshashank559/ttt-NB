@@ -473,78 +473,7 @@ const TopBar = ({ onOpenMobileNav, onOpenAvatarModal, onOpenAiPanel }) => {
             <Sliders size={14} className="mr-2 text-slate-500 dark:text-slate-400" /> Preferences
           </DropdownMenuItem>
           <DropdownMenuSeparator className="bg-slate-100 dark:bg-white/10" />
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger className="text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-white font-medium cursor-pointer">
-              <Users size={14} className="mr-2 text-blue-600" /> Switch Account / Persona
-            </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent className="bg-white dark:bg-[#111A2E] border border-slate-300 dark:border-white/15 text-slate-800 dark:text-slate-100 shadow-2xl rounded-xl w-64 p-1.5 z-50">
-              <DropdownMenuLabel className="text-[10px] text-blue-700 dark:text-blue-400 font-bold uppercase tracking-wider px-2 py-1">
-                Marketing Team Leads
-              </DropdownMenuLabel>
-              <DropdownMenuItem onClick={() => loginAs('marketing_tl', 'u-tl-mukesh')} className="cursor-pointer text-xs flex justify-between">
-                <span>Mukesh Patel</span>
-                <span className="text-[10px] text-slate-400">Team Mukesh</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => loginAs('marketing_tl', 'u-tl-shivam')} className="cursor-pointer text-xs flex justify-between">
-                <span>Shivam Gupta</span>
-                <span className="text-[10px] text-slate-400">Team Shivam</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => loginAs('marketing_tl', 'u-tl-vijesh')} className="cursor-pointer text-xs flex justify-between">
-                <span>Vijesh Kumar</span>
-                <span className="text-[10px] text-slate-400">Team Vijesh</span>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator className="my-1 bg-slate-100 dark:bg-white/10" />
-              <DropdownMenuLabel className="text-[10px] text-purple-700 dark:text-purple-400 font-bold uppercase tracking-wider px-2 py-1">
-                Recruiters / POCs
-              </DropdownMenuLabel>
-              <DropdownMenuItem onClick={() => loginAs('recruiter', 'u-poc-aditi')} className="cursor-pointer text-xs flex justify-between">
-                <span>Aditi Sharma</span>
-                <span className="text-[10px] text-slate-400">POC · Mukesh</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => loginAs('recruiter', 'u-poc-rahul')} className="cursor-pointer text-xs flex justify-between">
-                <span>Rahul Verma</span>
-                <span className="text-[10px] text-slate-400">POC · Mukesh</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => loginAs('recruiter', 'u-poc-priya')} className="cursor-pointer text-xs flex justify-between">
-                <span>Priya Singh</span>
-                <span className="text-[10px] text-slate-400">POC · Shivam</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => loginAs('recruiter', 'u-poc-sneha')} className="cursor-pointer text-xs flex justify-between">
-                <span>Sneha Joshi</span>
-                <span className="text-[10px] text-slate-400">POC · Vijesh</span>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator className="my-1 bg-slate-100 dark:bg-white/10" />
-              <DropdownMenuLabel className="text-[10px] text-emerald-700 dark:text-emerald-400 font-bold uppercase tracking-wider px-2 py-1">
-                TSEs (Only Own Candidates)
-              </DropdownMenuLabel>
-              <DropdownMenuItem onClick={() => loginAs('tse', 'u-tse-harit')} className="cursor-pointer text-xs flex justify-between">
-                <span>Harit</span>
-                <span className="text-[10px] text-slate-400">Code: Abhishek</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => loginAs('tse', 'u-tse-prem')} className="cursor-pointer text-xs flex justify-between">
-                <span>Prem</span>
-                <span className="text-[10px] text-slate-400">Code: Kiran</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => loginAs('tse', 'u-tse-amber')} className="cursor-pointer text-xs flex justify-between">
-                <span>Amber</span>
-                <span className="text-[10px] text-slate-400">Code: Smriti</span>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator className="my-1 bg-slate-100 dark:bg-white/10" />
-              <DropdownMenuLabel className="text-[10px] text-amber-700 dark:text-amber-400 font-bold uppercase tracking-wider px-2 py-1">
-                TSM & Management
-              </DropdownMenuLabel>
-              <DropdownMenuItem onClick={() => loginAs('tsm', 'u-03')} className="cursor-pointer text-xs flex justify-between">
-                <span>Rohan Kapoor</span>
-                <span className="text-[10px] text-slate-400">TSM Titan</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => loginAs('management', 'u-02')} className="cursor-pointer text-xs flex justify-between">
-                <span>Priya Nair</span>
-                <span className="text-[10px] text-slate-400">Management</span>
-              </DropdownMenuItem>
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
-          <DropdownMenuSeparator className="bg-slate-100 dark:bg-white/10" />
-          <DropdownMenuItem onClick={() => { logout(); navigate('/login'); }} data-testid="menu-logout" className="text-rose-600 focus:text-rose-700 font-medium">
+          <DropdownMenuItem onClick={() => { logout(); navigate('/login'); }} data-testid="menu-logout" className="text-rose-600 focus:text-rose-700 font-medium cursor-pointer">
             <LogOut size={14} className="mr-2" /> Log out
           </DropdownMenuItem>
         </DropdownMenuContent>

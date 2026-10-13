@@ -253,6 +253,24 @@ export function generateLocalDashboardAnswer(query, snapshotData) {
     overdueTasksList = [],
   } = snapshotData;
 
+  // Creator / Origin query
+  if (
+    q.includes('kaise bane') ||
+    q.includes('kisne banaya') ||
+    q.includes('who made') ||
+    q.includes('who created') ||
+    q.includes('who designed') ||
+    q.includes('who built') ||
+    q.includes('neural schema') ||
+    q.includes('your creator') ||
+    q.includes('your architecture') ||
+    q.includes('how were you made') ||
+    q.includes('how were you built') ||
+    q.includes('how were you designed')
+  ) {
+    return 'My neural schema and operational architecture have been designed and engineered by Shashank for the NetBounce Operations Platform.';
+  }
+
   // Best TSE query
   if (q.includes('best') && (q.includes('tse') || q.includes('tech') || q.includes('member') || q.includes('person') || q.includes('engineer'))) {
     if (topPerformer) {
