@@ -123,6 +123,21 @@ export const AppProvider = ({ children }) => {
     return () => window.removeEventListener('storage', handleStorage);
   }, []);
 
+  const currentUser = useMemo(() => (currentUserId ? (users.find(u => u.id === currentUserId) || getUserById(currentUserId)) : null), [currentUserId, users]);
+
+  // Sync feedbacks to localStorage whenever changed
+  const updateFeedbacksWithStorage = useCallback((updater) => {
+    setFeedbacks(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('ttt_feedbacks', JSON.stringify(next));
+        } catch (err) { }
+      }
+      return next;
+    });
+  }, []);
+
   const [dbConnected, setDbConnected] = useState(false);
   const [realtimeConnected, setRealtimeConnected] = useState(false);
 
@@ -322,18 +337,6 @@ export const AppProvider = ({ children }) => {
     };
   }, [currentRole, currentUserId, currentUser, fetchLiveData, updateFeedbacksWithStorage]);
 
-  // Sync feedbacks to localStorage whenever changed
-  const updateFeedbacksWithStorage = useCallback((updater) => {
-    setFeedbacks(prev => {
-      const next = typeof updater === 'function' ? updater(prev) : updater;
-      if (typeof window !== 'undefined') {
-        try {
-          localStorage.setItem('ttt_feedbacks', JSON.stringify(next));
-        } catch (err) { }
-      }
-      return next;
-    });
-  }, []);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
   const [userAvatar, setUserAvatar] = useState(() => {
@@ -513,8 +516,6 @@ export const AppProvider = ({ children }) => {
     setSession({ userId: null, role: null });
     toast.info('Signed out successfully.');
   }, []);
-
-  const currentUser = useMemo(() => (currentUserId ? (users.find(u => u.id === currentUserId) || getUserById(currentUserId)) : null), [currentUserId, users]);
 
   const addUser = useCallback((newUser) => {
     setUsers(prev => {
