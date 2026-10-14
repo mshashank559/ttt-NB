@@ -743,7 +743,19 @@ app.get('/api/tasks', async (req, res) => {
     } else if (role === 'recruiter' && userId) {
       filter = { $or: [{ pocId: userId }, { recruiterName: { $regex: new RegExp(userId, 'i') } }] };
     } else if (role === 'marketing_tl') {
-      filter = { $or: [{ teamLeadId: userId }, { teamId: teamId || 'team-mukesh' }] };
+      let resolvedTeam = teamId;
+      if (!resolvedTeam && userId) {
+        if (userId === 'u-tl-mukesh' || userId.includes('mukesh')) resolvedTeam = 'team-mukesh';
+        else if (userId === 'u-tl-shivam' || userId.includes('shivam')) resolvedTeam = 'team-shivam';
+      }
+      filter = { 
+        $or: [
+          { teamLeadId: userId }, 
+          { teamId: resolvedTeam || { $in: ['team-mukesh', 'team-shivam'] } },
+          { teamName: { $regex: new RegExp(resolvedTeam ? resolvedTeam.replace('team-', '') : 'mukesh|shivam', 'i') } },
+          { marketingTl: { $regex: new RegExp(resolvedTeam ? resolvedTeam.replace('team-', '') : 'mukesh|shivam', 'i') } }
+        ] 
+      };
     } else if (role === 'marketing_sr') {
       filter = { teamId: teamId || 'team-mukesh' };
     }
