@@ -94,7 +94,7 @@ const InteractiveStarPicker = ({ value, onChange, label }) => {
 export default function FeedbackPage() {
   const canGenerateFeedbackLink = ['marketing_sr', 'recruiter', 'marketing_tl', 'management', 'upper_management'].includes(currentRole);
   const { feedbacks, addMarketingReview, submitCandidateFeedback, currentRole, currentUser, createPendingFeedbackLink } = useApp();
-  const canViewRealName = ['upper_management', 'management'].includes(currentRole);
+  const canViewRealName = ['upper_management', 'management', 'tsm'].includes(currentRole);
 
   // Filters state
   const [search, setSearch] = useState('');

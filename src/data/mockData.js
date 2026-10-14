@@ -874,11 +874,14 @@ export const filterAuthorizedData = (items, currentUser, currentRole) => {
         // Team Lead ID match
         if (item.teamLeadId && (item.teamLeadId === currentId || item.teamLeadId === currentEmpId)) return true;
 
-        // If Mukesh: matches any task for Team Mukesh, Mukesh Chaudhary, or u-tl-mukesh
+        // If Mukesh: matches any task/feedback for Team Mukesh, Mukesh Chaudhary, or u-tl-mukesh
         if (isMukesh) {
           const itemTeam = (item.teamName || item.teamId || '').toLowerCase();
           const itemLead = (item.marketingTl || item.teamLeadName || item.teamLeadId || '').toLowerCase();
           if (itemTeam.includes('mukesh') || itemLead.includes('mukesh') || item.teamLeadId === 'u-tl-mukesh' || item.teamId === 'team-mukesh') {
+            return true;
+          }
+          if (!item.teamId || item.teamId === 'team-mukesh' || !item.teamName || item.teamName.toLowerCase().includes('mukesh')) {
             return true;
           }
         }

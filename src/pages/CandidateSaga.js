@@ -94,12 +94,61 @@ export default function CandidateSaga() {
   }, [introActive, introStage]);
 
   const { addSagaFeedback, submitCandidateFeedback } = useApp() || {};
+  const [taskMetadata, setTaskMetadata] = useState(null);
+
+  // Auto-fetch authoritative task metadata from backend to populate Senior Recruiter, Candidate, TSE & Company
+  useEffect(() => {
+    if (!paramId) return;
+    let active = true;
+
+    fetch(`/api/tasks/${encodeURIComponent(paramId)}`)
+      .then(res => res.ok ? res.json() : null)
+      .then(task => {
+        if (task && task.id) return task;
+        // Resilient fallback: Query all active tasks and resolve by id/candidateId
+        return fetch('/api/tasks')
+          .then(r => r.ok ? r.json() : [])
+          .then(list => {
+            if (!Array.isArray(list)) return null;
+            const clean = paramId.toLowerCase();
+            return list.find(t => t && (t.id === paramId || (t.id && t.id.toLowerCase() === clean) || t.candidateId === paramId));
+          });
+      })
+      .then(task => {
+        if (!active || !task) return;
+        setTaskMetadata(task);
+
+        // Determine assigned Senior Recruiter
+        let assignedSr = "Unassigned";
+        if (task.recruiterName && task.recruiterName !== "Unassigned") {
+          assignedSr = task.recruiterName;
+        } else if (task.pocId) {
+          assignedSr = task.pocId;
+        }
+
+        setFormData(prev => ({
+          ...prev,
+          recruiterName: assignedSr,
+          candidateName: task.candidateName || prev.candidateName,
+          companyName: task.companyName || prev.companyName,
+          sessionType: task.taskType || prev.sessionType,
+          tseName: task.codeName || task.techPerson || prev.tseName,
+          tseId: task.assigneeId || prev.tseId,
+          linkRecordId: task.id || prev.linkRecordId,
+        }));
+      })
+      .catch(err => {
+        console.warn("Could not auto-fetch task assignment from backend:", err);
+      });
+
+    return () => { active = false; };
+  }, [paramId]);
 
   // FORM DATA STATE (Pre-populated by default from NetBounce link params)
   const [formData, setFormData] = useState({
     candidateName: paramCandidate || '',
     candidateEmail: '',
-    recruiterName: paramRecruiter || RECRUITERS[0],
+    recruiterName: paramRecruiter && paramRecruiter !== 'Unassigned' ? paramRecruiter : 'Unassigned',
     jobRole: 'Software Engineer',
     interviewDate: new Date().toISOString().slice(0, 10),
     companyName: paramCompany || 'Client Assessment',
@@ -209,17 +258,23 @@ export default function CandidateSaga() {
         marketingReview: null,
       };
 
+      const fullSubmission = {
+        ...newFeedbackRecord,
+        recruiterName: formData.recruiterName || taskMetadata?.recruiterName || 'Unassigned',
+        pocId: taskMetadata?.pocId || '',
+        teamId: taskMetadata?.teamId || 'team-mukesh',
+        teamName: taskMetadata?.teamName || 'Team Mukesh',
+        teamLeadId: taskMetadata?.teamLeadId || 'u-tl-mukesh',
+        company: formData.companyName || taskMetadata?.companyName || 'Client Assessment',
+        techSupport: formData.tseName,
+        techSupportId: formData.tseId,
+        techSupportType: formData.sessionType || 'Interview',
+      };
+
       if (formData.linkRecordId && submitCandidateFeedback) {
-        submitCandidateFeedback(formData.linkRecordId, {
-          performanceRating: perfScore,
-          experienceRating: Number(formData.overallRating) || 5.0,
-          comments: formData.additionalFeedback || 'Support session completed.',
-          candidateName: formData.candidateName,
-          candidateEmail: formData.candidateEmail,
-          timestamp: nowFormatted,
-        });
+        submitCandidateFeedback(formData.linkRecordId, fullSubmission);
       } else if (addSagaFeedback) {
-        addSagaFeedback(newFeedbackRecord);
+        addSagaFeedback(fullSubmission);
       }
       setViewState('success');
     }
@@ -679,32 +734,21 @@ export default function CandidateSaga() {
                         )}
                       </div>
 
-                      {/* Recruiter Name */}
+                      {/* Senior Recruiter Name (Auto-fetched from Task Assignment) */}
                       <div>
                         <label className="text-xs font-semibold text-blue-100 flex items-center justify-between">
-                          <span>Your Recruiter Name <span className="text-rose-400">*</span></span>
-                          {paramRecruiter && (
-                            <span className="text-[10px] text-blue-300 flex items-center gap-1 font-normal">
-                              <Lock size={10} className="text-blue-400" /> Pre-Assigned by NetBounce
-                            </span>
-                          )}
+                          <span>Your Senior Recruiter Name <span className="text-rose-400">*</span></span>
+                          <span className="text-[10px] text-blue-300 flex items-center gap-1 font-normal">
+                            <Lock size={10} className="text-blue-400" /> Pre-Assigned by NetBounce
+                          </span>
                         </label>
-                        <select
-                          value={formData.recruiterName}
-                          onChange={e => setFormData({ ...formData, recruiterName: e.target.value })}
-                          className="mt-1.5 w-full h-11 px-4 rounded-xl bg-[#040822] border border-blue-500/30 focus:border-[#2546f0] text-sm text-white transition-all outline-none"
-                        >
-                          {formData.recruiterName && !RECRUITERS.includes(formData.recruiterName) && (
-                            <option value={formData.recruiterName} className="bg-[#070e30] text-white">
-                              {formData.recruiterName}
-                            </option>
-                          )}
-                          {RECRUITERS.map(r => (
-                            <option key={r} value={r} className="bg-[#070e30] text-white">
-                              {r}
-                            </option>
-                          ))}
-                        </select>
+                        <input
+                          type="text"
+                          readOnly
+                          value={formData.recruiterName || 'Unassigned'}
+                          className="mt-1.5 w-full h-11 px-4 rounded-xl bg-[#040822]/90 border border-blue-500/30 text-sm text-white font-medium outline-none cursor-not-allowed select-none transition-all shadow-inner"
+                          placeholder="Unassigned"
+                        />
                       </div>
                     </motion.div>
                   )}
@@ -871,7 +915,7 @@ export default function CandidateSaga() {
                           )}
                           {TECH_SUPPORT_TEAM.map(tse => (
                             <option key={tse.id} value={tse.supportName} className="bg-[#070e30] text-white">
-                              {tse.supportName} ({tse.id}) — {tse.employeeName}
+                              {tse.supportName} ({tse.id})
                             </option>
                           ))}
                         </select>

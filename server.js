@@ -765,7 +765,17 @@ app.get('/api/tasks', async (req, res) => {
     } else if (role === 'recruiter' && userId) {
       filter = { $or: [{ pocId: userId }, { recruiterName: { $regex: new RegExp(userId, 'i') } }] };
     } else if (role === 'marketing_tl') {
-      let resolvedTeam = teamId;
+      const tId = teamId || (userId === 'u-tl-shivam' ? 'team-shivam' : 'team-mukesh');
+      const teamRegex = tId === 'team-shivam' ? /shivam/i : /mukesh/i;
+      filter = {
+        $or: [
+          { teamLeadId: userId },
+          { teamId: tId },
+          { teamName: { $regex: teamRegex } },
+          { teamId: { $exists: false } },
+          { teamId: '' },
+        ]
+      };
       if (!resolvedTeam && userId) {
         if (userId === 'u-tl-mukesh' || userId.includes('mukesh')) resolvedTeam = 'team-mukesh';
         else if (userId === 'u-tl-shivam' || userId.includes('shivam')) resolvedTeam = 'team-shivam';
@@ -907,6 +917,38 @@ try { const m = await import('./src/data/mockData.js'); if (m.TECH_SUPPORT_TEAM)
     });
 
     res.status(201).json({ task, linkedFeedbackId: feedbackId });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/tasks/:id', async (req, res) => {
+  try {
+    let task = null;
+    if (mongoose.connection.readyState === 1) {
+      task = await Task.findOne({
+        $or: [
+          { id: req.params.id },
+          { id: req.params.id.toUpperCase() },
+          { id: req.params.id.toLowerCase() },
+          { candidateId: req.params.id },
+        ]
+      });
+    }
+    if (!task) {
+      task = serverTasksCache.get(req.params.id);
+    }
+    if (!task) {
+      try {
+        const mock = await import('./src/data/mockData.js');
+        task = (mock.INITIAL_TASKS || []).find(t => t.id === req.params.id || (t.id && t.id.toLowerCase() === req.params.id.toLowerCase()));
+      } catch (e) {}
+    }
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+    const payload = task.toObject ? task.toObject() : task;
+    res.json(payload);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1055,6 +1097,7 @@ app.post('/api/feedbacks', async (req, res) => {
 });
 
 // Candidate Submission from Candidate SAGA Portal
+// Candidate Submission from Candidate SAGA Portal (Auto-links with Task & team metadata)
 app.put('/api/feedbacks/:id/candidate', async (req, res) => {
   try {
     const { performanceRating, experienceRating, comments } = req.body;
@@ -1062,18 +1105,50 @@ app.put('/api/feedbacks/:id/candidate', async (req, res) => {
       day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
     });
 
+    // 1. Authoritative lookup from linked Task in MongoDB Atlas
+    let linkedTask = null;
+    if (mongoose.connection.readyState === 1) {
+      linkedTask = await Task.findOne({
+        $or: [
+          { id: req.params.id },
+          { id: req.params.id.toUpperCase() },
+          { id: req.params.id.toLowerCase() },
+          { candidateId: req.params.id },
+        ]
+      });
+    }
+
+    const candidateFeedbackData = {
+      submitted: true,
+      performanceRating: Number(performanceRating) || Number(req.body.candidateFeedback?.performanceRating) || 5.0,
+      experienceRating: Number(experienceRating) || Number(req.body.candidateFeedback?.experienceRating) || 5.0,
+      comments: comments || req.body.candidateFeedback?.comments || 'Support session completed.',
+      timestamp: nowFormatted,
+    };
+
     const updateData = {
-      'candidateFeedback.submitted': true,
-      'candidateFeedback.performanceRating': Number(performanceRating) || 5.0,
-      'candidateFeedback.experienceRating': Number(experienceRating) || 5.0,
-      'candidateFeedback.comments': comments || 'Support session completed.',
-      'candidateFeedback.timestamp': nowFormatted,
+      id: req.params.id,
+      taskId: req.params.id,
+      candidateName: req.body.candidateName || linkedTask?.candidateName || 'Candidate',
+      candidateEmail: req.body.candidateEmail || '',
+      company: req.body.company || linkedTask?.companyName || 'Client Assessment',
+      recruiterName: linkedTask?.recruiterName || req.body.recruiterName || 'Unassigned',
+      pocId: linkedTask?.pocId || req.body.pocId || '',
+      teamId: linkedTask?.teamId || req.body.teamId || 'team-mukesh',
+      teamName: linkedTask?.teamName || req.body.teamName || 'Team Mukesh',
+      teamLeadId: linkedTask?.teamLeadId || req.body.teamLeadId || 'u-tl-mukesh',
+      techSupport: req.body.techSupport || linkedTask?.codeName || linkedTask?.techPerson || 'TSE',
+      techSupportId: req.body.techSupportId || linkedTask?.assigneeId || 'TTT-NB-008',
+      techSupportType: req.body.techSupportType || linkedTask?.taskType || 'Interview',
+      date: linkedTask?.date || req.body.date || new Date().toISOString().slice(0, 10),
+      candidateFeedback: candidateFeedbackData,
+      updatedAt: new Date().toISOString(),
     };
 
     let updated;
     if (mongoose.connection.readyState === 1) {
       updated = await Feedback.findOneAndUpdate(
-        { id: req.params.id },
+        { $or: [{ id: req.params.id }, { taskId: req.params.id }] },
         { $set: updateData },
         { new: true, upsert: true }
       );
@@ -1081,8 +1156,9 @@ app.put('/api/feedbacks/:id/candidate', async (req, res) => {
       updated = { id: req.params.id, ...updateData };
     }
 
-    broadcastRealtimeEvent('candidate.feedback_submitted', updated.toObject ? updated.toObject() : updated);
-    res.json(updated);
+    const payload = updated.toObject ? updated.toObject() : updated;
+    broadcastRealtimeEvent('candidate.feedback_submitted', payload);
+    res.json(payload);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

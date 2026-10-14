@@ -311,14 +311,44 @@ if (realtimeChannel) {
         }
       }
 
+      let finalFeedbacks = null;
       if (feedbacksRes && feedbacksRes.ok) {
-        const liveFeedbacks = await feedbacksRes.json();
-        if (Array.isArray(liveFeedbacks)) {
-          setFeedbacks(liveFeedbacks);
-          try {
-            localStorage.setItem('ttt_feedbacks', JSON.stringify(liveFeedbacks));
-          } catch (e) { }
+        finalFeedbacks = await feedbacksRes.json().catch(() => null);
+      } else {
+        // Resilient fallback query without parameters if EC2 backend encounters query filter issues
+        const fallbackFb = await fetch('/api/feedbacks').catch(() => null);
+        if (fallbackFb && fallbackFb.ok) {
+          finalFeedbacks = await fallbackFb.json().catch(() => null);
         }
+      }
+
+      if (Array.isArray(finalFeedbacks)) {
+        // Enrich feedback records with linked task metadata (candidateName, company, teamId, teamName, recruiterName, techSupport)
+        const currentTasks = tasks || [];
+        const enriched = finalFeedbacks.map(fb => {
+          const tId = fb.taskId || fb.id;
+          const match = currentTasks.find(t => t && (t.id === tId || t.candidateId === tId || (t.id && t.id.toLowerCase() === (tId || '').toLowerCase())));
+          if (!match) return fb;
+          return {
+            ...fb,
+            candidateName: fb.candidateName || match.candidateName || 'Candidate',
+            company: fb.company || match.companyName || 'Client Assessment',
+            recruiterName: fb.recruiterName || match.recruiterName || 'Unassigned',
+            pocId: fb.pocId || match.pocId || '',
+            teamId: fb.teamId || match.teamId || 'team-mukesh',
+            teamName: fb.teamName || match.teamName || 'Team Mukesh',
+            teamLeadId: fb.teamLeadId || match.teamLeadId || 'u-tl-mukesh',
+            techSupport: fb.techSupport || match.codeName || match.techPerson || 'TSE',
+            techSupportId: fb.techSupportId || match.assigneeId || 'TTT-NB-008',
+            techSupportType: fb.techSupportType || match.taskType || 'Interview',
+            date: fb.date || match.date || fb.createdAt?.slice(0, 10),
+          };
+        });
+
+        setFeedbacks(enriched);
+        try {
+          localStorage.setItem('ttt_feedbacks', JSON.stringify(enriched));
+        } catch (e) { }
       }
 
       if (usersRes && usersRes.ok) {
@@ -1185,27 +1215,48 @@ if (realtimeChannel) {
   }, [currentUser, updateFeedbacksWithStorage]);
 
   const submitCandidateFeedback = useCallback((feedbackId, feedbackData) => {
-    updateFeedbacksWithStorage(prev => prev.map(item => {
-      if (item.id !== feedbackId) return item;
-      return {
-        ...item,
-        candidateFeedback: {
-          submitted: true,
-          ...feedbackData,
-          timestamp: feedbackData.timestamp || new Date().toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
-        },
-      };
-    }));
+    updateFeedbacksWithStorage(prev => {
+      const exists = prev.some(item => item && (item.id === feedbackId || item.taskId === feedbackId));
+      if (exists) {
+        return prev.map(item => {
+          if (item.id !== feedbackId && item.taskId !== feedbackId) return item;
+          return {
+            ...item,
+            ...feedbackData,
+            candidateFeedback: {
+              submitted: true,
+              ...(feedbackData.candidateFeedback || feedbackData),
+              timestamp: feedbackData.timestamp || new Date().toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+            },
+          };
+        });
+      }
+      return [feedbackData, ...prev];
+    });
 
     // Update in MongoDB Atlas
-    fetch(`/api/feedbacks/${feedbackId}/candidate`, {
+    fetch(`/api/feedbacks/${encodeURIComponent(feedbackId)}/candidate`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(feedbackData),
-    }).catch(() => { });
+    })
+      .then(() => fetchLiveData())
+      .catch(() => { });
 
-    toast.success('Candidate feedback updated successfully.');
-  }, [updateFeedbacksWithStorage]);
+    // Broadcast across tabs (0ms latency)
+    if (realtimeChannel) {
+      try {
+        realtimeChannel.postMessage({
+          type: 'FEEDBACK_SUBMITTED',
+          feedbackId,
+          feedbackData,
+          timestamp: Date.now(),
+        });
+      } catch (err) {}
+    }
+
+    toast.success('Candidate feedback submitted successfully.');
+  }, [updateFeedbacksWithStorage, fetchLiveData]);
 
   const addSagaFeedback = useCallback((newRecord) => {
     updateFeedbacksWithStorage(prev => [newRecord, ...prev]);
