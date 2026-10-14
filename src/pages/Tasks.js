@@ -339,10 +339,22 @@ const TaskDrawer = ({ task, onClose }) => {
   const [selectedSr, setSelectedSr] = useState(task?.pocId || '');
   const [showSagaModal, setShowSagaModal] = useState(false);
   const [newRemark, setNewRemark] = useState('');
+  const [currentStatus, setCurrentStatus] = useState(task?.status || 'Pending');
+
+  useEffect(() => {
+    if (task?.status) {
+      setCurrentStatus(task.status);
+    }
+  }, [task?.status]);
 
   useEffect(() => {
     setSelectedSr(task?.pocId || '');
   }, [task?.pocId]);
+
+  const handleStatusChange = (newStatus) => {
+    setCurrentStatus(newStatus);
+    changeTaskStatus(task.id, newStatus);
+  };
 
   const candidateSagaUrl = useMemo(() => {
     if (!task) return '';
@@ -391,7 +403,7 @@ const TaskDrawer = ({ task, onClose }) => {
                 </SheetTitle>
                 <div className="mt-2.5 flex items-center gap-2 flex-wrap">
                   <TaskTypeBadge value={task.taskType || task.category} />
-                  <StatusBadge value={task.status} />
+                  <StatusBadge value={currentStatus} />
                   {task.companyName && (
                     <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-100 border border-slate-200 text-slate-700 font-medium flex items-center gap-1">
                       <Building2 size={11} className="text-slate-500" />
@@ -599,7 +611,7 @@ const TaskDrawer = ({ task, onClose }) => {
               <div className="grid grid-cols-2 gap-3 p-4 rounded-xl bg-slate-50 border border-slate-200">
                 <div>
                   <label className="text-xs text-slate-600 font-semibold">Update Status</label>
-                  <Select value={task.status} onValueChange={v => changeTaskStatus(task.id, v)}>
+                  <Select value={currentStatus} onValueChange={handleStatusChange}>
                     <SelectTrigger data-testid="task-change-status" className="mt-1 bg-white border-slate-300 text-slate-900 h-9">
                       <SelectValue />
                     </SelectTrigger>
@@ -713,7 +725,11 @@ export default function Tasks() {
   const location = useLocation();
   const [filters, setFilters] = useState({ status: 'all', taskType: 'all', assignee: 'all', q: '' });
   const [createOpen, setCreateOpen] = useState(false);
-  const [activeTask, setActiveTask] = useState(null);
+  const [activeTaskId, setActiveTaskId] = useState(null);
+  const activeTask = useMemo(() => {
+    if (!activeTaskId) return null;
+    return tasks.find(t => t.id === activeTaskId || (t.id && t.id.toLowerCase() === activeTaskId.toLowerCase())) || null;
+  }, [tasks, activeTaskId]);
 
   useEffect(() => {
     if (location.search.includes('create=1')) {
@@ -857,7 +873,7 @@ export default function Tasks() {
                       animate={{ opacity: 1 }}
                       key={t.id}
                       data-testid={`task-row-${t.id}`}
-                      onClick={() => setActiveTask(t)}
+                      onClick={() => setActiveTaskId(t.id)}
                       className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer transition-colors"
                     >
                       {/* Date */}
@@ -943,7 +959,7 @@ export default function Tasks() {
       </SectionCard>
 
       <CreateTaskModal open={createOpen} onOpenChange={setCreateOpen} />
-      <TaskDrawer task={activeTask} onClose={() => setActiveTask(null)} />
+      <TaskDrawer task={activeTask} onClose={() => setActiveTaskId(null)} />
     </div>
   );
 }

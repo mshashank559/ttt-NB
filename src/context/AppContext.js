@@ -877,8 +877,11 @@ export const AppProvider = ({ children }) => {
 
   const updateTask = useCallback((id, patch, note) => {
     let patchedTask = null;
+    const cleanId = (id || '').trim().toLowerCase();
+
     updateTasksWithStorage(prev => prev.map(t => {
-      if (t.id !== id) return t;
+      const match = t.id === id || (t.id && t.id.trim().toLowerCase() === cleanId);
+      if (!match) return t;
       const updated = { ...t, ...patch };
       if (note) {
         updated.timeline = [
@@ -909,9 +912,13 @@ export const AppProvider = ({ children }) => {
         body: JSON.stringify(patchedTask),
       })
       .then(res => {
-        if (res.ok) {
-          fetchLiveData();
+        if (res.ok) return res.json();
+      })
+      .then(serverTask => {
+        if (serverTask && serverTask.id) {
+          updateTasksWithStorage(prev => prev.map(t => (t.id === serverTask.id ? { ...t, ...serverTask } : t)));
         }
+        fetchLiveData();
       })
       .catch(err => console.warn('Failed to sync task update to server:', err));
     }
