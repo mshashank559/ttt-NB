@@ -721,12 +721,25 @@ export default function Tasks() {
   const filtered = useMemo(() => {
     let base = tasks;
     if (currentRole === 'tse') {
-      base = base.filter(t => t.assigneeId === currentUser?.id || (currentUser?.name && t.techPerson?.toLowerCase() === currentUser?.name?.toLowerCase()));
+      base = base.filter(t => 
+        t.assigneeId === currentUser?.id || 
+        t.assigneeId === currentUser?.empId ||
+        (currentUser?.name && t.techPerson?.toLowerCase() === currentUser?.name?.toLowerCase()) ||
+        (currentUser?.codeName && (t.codeName?.toLowerCase() === currentUser?.codeName?.toLowerCase() || t.techPerson?.toLowerCase() === currentUser?.codeName?.toLowerCase()))
+      );
     }
+    const selectedTseObj = filters.assignee !== 'all' ? users.find(u => u.id === filters.assignee) : null;
+
     return base.filter(t => {
       const matchStatus = filters.status === 'all' || t.status === filters.status;
       const matchType = filters.taskType === 'all' || t.taskType === filters.taskType;
-      const matchAssignee = filters.assignee === 'all' || t.assigneeId === filters.assignee;
+      const matchAssignee = filters.assignee === 'all' || 
+        t.assigneeId === filters.assignee || 
+        (selectedTseObj && (
+          t.techPerson === selectedTseObj.name || 
+          t.codeName === selectedTseObj.codeName || 
+          t.techPerson === selectedTseObj.codeName
+        ));
       const query = filters.q.toLowerCase().trim();
       const matchQ = !query ||
         (t.candidateName && t.candidateName.toLowerCase().includes(query)) ||

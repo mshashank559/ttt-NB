@@ -1,3 +1,26 @@
+
+const FALLBACK_TECH_SUPPORT = [
+  { id: 'TTT-NB-008', supportName: 'Abhishek', employeeName: 'Harit Verma', email: 'nbtech1@netbounceplacement.com' },
+  { id: 'TTT-NB-009', supportName: 'Kiran', employeeName: 'Prem Makwana', email: 'nbtech3@netbounceplacement.com' },
+  { id: 'TTT-NB-010', supportName: 'Henil', employeeName: 'Shaurya Mishra', email: 'nbtech2@netbounceplacement.com' },
+  { id: 'TTT-NB-011', supportName: 'Saurav', employeeName: 'Nikunj Kataria', email: 'nbtech4@netbounceplacement.com' },
+  { id: 'TTT-NB-012', supportName: 'Divya', employeeName: 'Jindal Patel', email: 'divya.c@netbounceplacement.com' },
+  { id: 'TTT-NB-013', supportName: 'Smriti', employeeName: 'Amber Afreen', email: 'nbtech6@netbounceplacement.com' },
+  { id: 'TTT-NB-014', supportName: 'Jemimah', employeeName: 'Rashika Sharma', email: 'nbtech5@netbounceplacement.com' },
+  { id: 'TTT-NB-015', supportName: 'Shreya', employeeName: 'Aarti Vishwakarma', email: 'nbtech7@netbounceplacement.com' },
+];
+
+const FALLBACK_TSE_CODES = {
+  'Harit Verma': 'Abhishek', 'Harit': 'Abhishek', 'Abhishek': 'Abhishek',
+  'Prem Makwana': 'Kiran', 'Prem': 'Kiran', 'Kiran': 'Kiran',
+  'Shaurya Mishra': 'Henil', 'Shaurya': 'Henil', 'Henil': 'Henil',
+  'Nikunj Kataria': 'Saurav', 'Nikunj': 'Saurav', 'Saurav': 'Saurav',
+  'Jindal Patel': 'Divya', 'Jindal': 'Divya', 'Divya': 'Divya',
+  'Amber Afreen': 'Smriti', 'Amber': 'Smriti', 'Smriti': 'Smriti',
+  'Rashika Sharma': 'Jemimah', 'Rashika': 'Jemimah', 'Jemimah': 'Jemimah',
+  'Aarti Vishwakarma': 'Shreya', 'Aarti': 'Shreya', 'Shreya': 'Shreya'
+};
+
 import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
@@ -253,7 +276,8 @@ async function sanitizePayloadForClient(event, client) {
   }
 
   try {
-    const { TSE_CODE_NAMES, TSM_CODE_NAMES } = await import('./src/data/mockData.js');
+    let TSE_CODE_NAMES = FALLBACK_TSE_CODES; let TSM_CODE_NAMES = {};
+try { const m = await import('./src/data/mockData.js'); if (m.TSE_CODE_NAMES) TSE_CODE_NAMES = m.TSE_CODE_NAMES; if (m.TSM_CODE_NAMES) TSM_CODE_NAMES = m.TSM_CODE_NAMES; } catch (e) {}
     const copy = JSON.parse(JSON.stringify(event));
 
     if (copy.data) {
@@ -729,7 +753,8 @@ app.get('/api/tasks', async (req, res) => {
       tasks = await Task.find(filter).sort({ createdAt: -1 });
     }
     if (!tasks || tasks.length === 0) {
-      const { INITIAL_TASKS } = await import('./src/data/mockData.js');
+      let INITIAL_TASKS = [];
+try { const m = await import('./src/data/mockData.js'); if (m.INITIAL_TASKS) INITIAL_TASKS = m.INITIAL_TASKS; } catch (e) {}
       tasks = INITIAL_TASKS;
     }
 
@@ -790,7 +815,8 @@ app.post('/api/tasks', async (req, res) => {
     }
 
     if (!existingFeedback) {
-      const { TECH_SUPPORT_TEAM } = await import('./src/data/mockData.js');
+      let TECH_SUPPORT_TEAM = FALLBACK_TECH_SUPPORT;
+try { const m = await import('./src/data/mockData.js'); if (m.TECH_SUPPORT_TEAM) TECH_SUPPORT_TEAM = m.TECH_SUPPORT_TEAM; } catch (e) {}
       const assignedTse = TECH_SUPPORT_TEAM.find(t => 
         t.supportName.toLowerCase() === (task.techPerson || '').toLowerCase()
       ) || TECH_SUPPORT_TEAM[0];
@@ -909,13 +935,15 @@ app.get('/api/feedbacks', async (req, res) => {
       feedbacks = await Feedback.find(filter).sort({ createdAt: -1 });
     }
     if (!feedbacks || feedbacks.length === 0) {
-      const { INITIAL_FEEDBACK_RECORDS } = await import('./src/data/mockData.js');
+      let INITIAL_FEEDBACK_RECORDS = [];
+try { const m = await import('./src/data/mockData.js'); if (m.INITIAL_FEEDBACK_RECORDS) INITIAL_FEEDBACK_RECORDS = m.INITIAL_FEEDBACK_RECORDS; } catch (e) {}
       feedbacks = INITIAL_FEEDBACK_RECORDS;
     }
 
     // Sanitize identity privacy for Marketing roles
     if (role === 'marketing_tl' || role === 'marketing_sr') {
-      const { TSE_CODE_NAMES } = await import('./src/data/mockData.js');
+      let TSE_CODE_NAMES = FALLBACK_TSE_CODES;
+try { const m = await import('./src/data/mockData.js'); if (m.TSE_CODE_NAMES) TSE_CODE_NAMES = m.TSE_CODE_NAMES; } catch (e) {}
       feedbacks = feedbacks.map(fb => {
         const obj = fb.toObject ? fb.toObject() : { ...fb };
         const codeName = obj.codeName || (TSE_CODE_NAMES && TSE_CODE_NAMES[obj.techSupport]) || 'Code Name Unassigned';

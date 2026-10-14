@@ -205,10 +205,25 @@ export const AppProvider = ({ children }) => {
         }
       }
 
-      if (tasksRes && tasksRes.ok) {
+            if (tasksRes && tasksRes.ok) {
         const liveTasks = await tasksRes.json();
         if (Array.isArray(liveTasks)) {
-          setTasks(liveTasks);
+          updateTasksWithStorage(prev => {
+            const map = new Map();
+            // Preserve all locally stored/created tasks first
+            (prev || []).forEach(t => { if (t && t.id) map.set(t.id, t); });
+            // Merge in server tasks
+            liveTasks.forEach(t => {
+              if (t && t.id) {
+                const existing = map.get(t.id);
+                map.set(t.id, existing ? { ...existing, ...t } : t);
+              }
+            });
+            const merged = Array.from(map.values());
+            // Sort newest first
+            merged.sort((a, b) => new Date(b.date || b.createdAt || 0) - new Date(a.date || a.createdAt || 0));
+            return merged;
+          });
         }
       }
 
@@ -671,12 +686,13 @@ export const AppProvider = ({ children }) => {
       pocId: finalPocId,
       recruiterName: finalRecruiterName,
       assigneeId: assignee?.id || task.assigneeId,
-      createdById: creator?.id,
+      createdById: creator?.id || 'u-tsm-01',
+      createdByRole: currentRole || 'tsm',
       timeline: [
         { at: date, event: `Assigned to ${assignee?.name || 'Unassigned'} for ${taskType}`, by: creator?.name || 'TSM' },
       ],
     };
-    updateTasksWithStorage(prev => [newTask, ...prev]);
+    updateTasksWithStorage(prev => [newTask, ...prev.filter(t => t.id !== newTask.id)]);
 
     // Also auto-create linked feedback session for Marketing console
     const matchingTse = TECH_SUPPORT_TEAM.find(t =>
@@ -785,7 +801,7 @@ export const AppProvider = ({ children }) => {
     setNotifications(prev => [...newNotifications, ...prev]);
     toast.success('Task created successfully.');
     return newTask;
-  }, [tasks.length, currentUser, updateFeedbacksWithStorage]);
+  }, [tasks.length, currentUser, currentRole, users, updateFeedbacksWithStorage]);
 
   const updateTask = useCallback((id, patch, note) => {
     let patchedTask = null;
