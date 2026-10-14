@@ -571,15 +571,49 @@ app.post('/api/clean-reset-database', async (req, res) => {
   }
 });
 
-// Manual Seed Route
+// Manual Seed & Clean Route (Users 100% Preserved)
 app.post('/api/seed', async (req, res) => {
   try {
-    const { INITIAL_TASKS, INITIAL_FEEDBACK_RECORDS } = await import('./src/data/mockData.js');
-    await Task.deleteMany({});
-    await Feedback.deleteMany({});
-    if (INITIAL_TASKS.length > 0) await Task.insertMany(INITIAL_TASKS);
-    if (INITIAL_FEEDBACK_RECORDS.length > 0) await Feedback.insertMany(INITIAL_FEEDBACK_RECORDS);
-    res.json({ success: true, message: 'Database reset & seeded successfully!' });
+    let INITIAL_TASKS = [];
+    let INITIAL_FEEDBACK_RECORDS = [];
+    try {
+      const m = await import('./src/data/mockData.js');
+      if (m.INITIAL_TASKS) INITIAL_TASKS = m.INITIAL_TASKS;
+      if (m.INITIAL_FEEDBACK_RECORDS) INITIAL_FEEDBACK_RECORDS = m.INITIAL_FEEDBACK_RECORDS;
+    } catch (e) {}
+
+    if (mongoose.connection.readyState === 1) {
+      await Task.deleteMany({});
+      await Feedback.deleteMany({});
+      if (INITIAL_TASKS.length > 0) await Task.insertMany(INITIAL_TASKS);
+      if (INITIAL_FEEDBACK_RECORDS.length > 0) await Feedback.insertMany(INITIAL_FEEDBACK_RECORDS);
+    }
+    res.json({ success: true, message: 'Database test tasks and feedbacks cleared successfully. Users preserved intact.' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Clear Test Data Route (Removes test tasks and feedbacks, strictly keeps all users)
+app.post('/api/clean-test-data', async (req, res) => {
+  try {
+    let tasksDeleted = 0;
+    let feedbacksDeleted = 0;
+    if (mongoose.connection.readyState === 1) {
+      const tRes = await Task.deleteMany({});
+      const fRes = await Feedback.deleteMany({});
+      tasksDeleted = tRes.deletedCount || 0;
+      feedbacksDeleted = fRes.deletedCount || 0;
+    }
+    const userCount = await User.countDocuments();
+    broadcastRealtimeEvent('tasks.cleared', {});
+    res.json({
+      success: true,
+      message: 'Test tasks and feedbacks cleared successfully. All users preserved.',
+      tasksDeleted,
+      feedbacksDeleted,
+      usersPreserved: userCount,
+    });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -1079,6 +1113,18 @@ try { const m = await import('./src/data/mockData.js'); if (m.TSE_CODE_NAMES) TS
 
 
 // Guard Candidate SAGA Feedback link generation (Only Marketing SR, TL, Management authorized)
+app.delete('/api/feedbacks/:id', async (req, res) => {
+  try {
+    if (mongoose.connection.readyState === 1) {
+      await Feedback.findOneAndDelete({ $or: [{ id: req.params.id }, { taskId: req.params.id }, { _id: req.params.id }] });
+    }
+    broadcastRealtimeEvent('candidate.feedback_deleted', { id: req.params.id });
+    res.json({ success: true, id: req.params.id });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post('/api/feedbacks/generate-link', (req, res) => {
   const role = req.body?.role || req.headers['x-user-role'];
   const authorizedRoles = ['marketing_sr', 'recruiter', 'marketing_tl', 'management', 'upper_management'];

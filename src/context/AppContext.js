@@ -57,7 +57,13 @@ export const AppProvider = ({ children }) => {
         const saved = localStorage.getItem('ttt_tasks');
         if (saved) {
           const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+          if (Array.isArray(parsed)) {
+            const filtered = parsed.filter(t => t && !['TSK-TEST-01', 'TSK-1001', 'TSK-1002', 'TSK-1006', 'TSK-1007', 'TSK-1008', 'TSK-1009', 'TSK-1010', 'TSK-1011'].includes(t.id));
+            if (filtered.length !== parsed.length) {
+              localStorage.setItem('ttt_tasks', JSON.stringify(filtered));
+            }
+            return filtered;
+          }
         }
       } catch (e) {
         console.warn('Failed to parse saved tasks:', e);
@@ -183,16 +189,13 @@ if (realtimeChannel) {
         const saved = localStorage.getItem('ttt_feedbacks');
         if (saved) {
           const parsed = JSON.parse(saved);
-          const hasOldFake = Array.isArray(parsed) && parsed.some(f =>
-            f.id === 'fb-101' ||
-            f.candidateName === 'Candidate A' ||
-            f.candidateEmail === 'candidate.a@example.com'
-          );
-          if (hasOldFake) {
-            localStorage.setItem('ttt_feedbacks', JSON.stringify(INITIAL_FEEDBACK_RECORDS));
-            return INITIAL_FEEDBACK_RECORDS;
+          if (Array.isArray(parsed)) {
+            const filtered = parsed.filter(f => f && !['test-check-fb', 'TSK-1009', 'TSK-1010', 'TSK-1011', 'fb-101'].includes(f.id));
+            if (filtered.length !== parsed.length) {
+              localStorage.setItem('ttt_feedbacks', JSON.stringify(filtered));
+            }
+            return filtered;
           }
-          if (Array.isArray(parsed)) return parsed;
         }
       } catch (e) {
         console.warn('Failed to parse saved feedbacks:', e);
@@ -275,25 +278,21 @@ if (realtimeChannel) {
           freshLiveTasks = liveTasks;
           updateTasksWithStorage(prev => {
             const map = new Map();
-            // Preserve all locally stored/created tasks first
-            (prev || []).forEach(t => { if (t && t.id) map.set(t.id, t); });
-
-            // Timestamp-aware merge: Never let a stale server response overwrite newer local updates!
+            // Authoritative server tasks
             liveTasks.forEach(t => {
-              if (t && t.id) {
-                const existing = map.get(t.id);
-                if (!existing) {
-                  map.set(t.id, t);
-                } else {
-                  const localModTime = existing._localModifiedAt || 0;
-                  const serverModTime = new Date(t.updatedAt || t.date || 0).getTime();
+              if (t && t.id) map.set(t.id, t);
+            });
 
-                  // If local modification occurred within last 8 seconds and status differs, protect local status
-                  if (localModTime && (Date.now() - localModTime < 8000) && existing.status !== t.status) {
-                    map.set(t.id, { ...t, ...existing, status: existing.status, timeline: existing.timeline });
-                  } else {
-                    map.set(t.id, { ...existing, ...t });
-                  }
+            // Protect in-flight local modifications created in the last 6 seconds
+            (prev || []).forEach(localTask => {
+              if (!localTask || !localTask.id) return;
+              const localModTime = localTask._localModifiedAt || localTask._localCreatedAt || 0;
+              if (localModTime && (Date.now() - localModTime < 6000)) {
+                const existing = map.get(localTask.id);
+                if (!existing) {
+                  map.set(localTask.id, localTask);
+                } else if (existing.status !== localTask.status) {
+                  map.set(localTask.id, { ...existing, status: localTask.status, timeline: localTask.timeline });
                 }
               }
             });
@@ -312,9 +311,20 @@ if (realtimeChannel) {
       }
 
       if (Array.isArray(finalFeedbacks)) {
-        // Enrich feedback records with linked task metadata (candidateName, company, teamId, teamName, recruiterName, techSupport)
         const currentTasks = freshLiveTasks.length > 0 ? freshLiveTasks : (tasks || []);
-        const enriched = finalFeedbacks.map(fb => {
+        // Ignore test probe records or feedbacks from deleted test tasks
+        const validFeedbacks = finalFeedbacks.filter(fb => {
+          if (!fb || !fb.id) return false;
+          if (fb.id === 'test-check-fb') return false;
+          if (fb.id.startsWith('TSK-') || fb.taskId?.startsWith('TSK-')) {
+            const hasTask = currentTasks.some(t => t && (t.id === fb.id || t.id === fb.taskId));
+            if (!hasTask) return false;
+          }
+          return true;
+        });
+
+        // Enrich feedback records with linked task metadata (candidateName, company, teamId, teamName, recruiterName, techSupport)
+        const enriched = validFeedbacks.map(fb => {
           const tId = fb.taskId || fb.id;
           const match = currentTasks.find(t => t && (t.id === tId || t.candidateId === tId || (t.id && t.id.toLowerCase() === (tId || '').toLowerCase())));
           if (!match) return fb;
