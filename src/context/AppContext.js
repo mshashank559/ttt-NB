@@ -25,6 +25,11 @@ import { DEFAULT_AVATAR } from '../data/avatars';
 
 const AppCtx = createContext(null);
 
+// Realtime cross-tab and cross-window sync channel
+const realtimeChannel = typeof window !== 'undefined' && 'BroadcastChannel' in window
+  ? new BroadcastChannel('ttt_realtime_stream')
+  : null;
+
 export const AppProvider = ({ children }) => {
   const [session, setSession] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -61,7 +66,7 @@ export const AppProvider = ({ children }) => {
     return INITIAL_TASKS;
   });
 
-  // Cross-tab synchronization for tasks
+  // Cross-tab & multi-window instant synchronization for tasks
   React.useEffect(() => {
     const handleStorage = (e) => {
       if (e.key === 'ttt_tasks' && e.newValue) {
@@ -71,7 +76,43 @@ export const AppProvider = ({ children }) => {
       }
     };
     window.addEventListener('storage', handleStorage);
-    return () => window.removeEventListener('storage', handleStorage);
+
+    // Instant BroadcastChannel listener (0ms cross-tab latency)
+    const handleBroadcast = (e) => {
+      const data = e?.data;
+      if (!data) return;
+      if (data.type === 'TASK_UPDATED' && data.task) {
+        setTasks(prev => {
+          const idx = (prev || []).findIndex(t => t.id === data.task.id);
+          if (idx >= 0) {
+            const next = [...prev];
+            next[idx] = { ...next[idx], ...data.task };
+            try { localStorage.setItem('ttt_tasks', JSON.stringify(next)); } catch (err) {}
+            return next;
+          }
+          const next = [data.task, ...prev];
+          try { localStorage.setItem('ttt_tasks', JSON.stringify(next)); } catch (err) {}
+          return next;
+        });
+      } else if (data.type === 'TASK_CREATED' && data.task) {
+        setTasks(prev => {
+          const next = [data.task, ...(prev || []).filter(t => t.id !== data.task.id)];
+          try { localStorage.setItem('ttt_tasks', JSON.stringify(next)); } catch (err) {}
+          return next;
+        });
+      }
+    };
+
+    if (realtimeChannel) {
+      realtimeChannel.addEventListener('message', handleBroadcast);
+    }
+
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+      if (realtimeChannel) {
+        realtimeChannel.removeEventListener('message', handleBroadcast);
+      }
+    };
   }, []);
 
   const updateTasksWithStorage = useCallback((updater) => {
@@ -319,14 +360,14 @@ export const AppProvider = ({ children }) => {
             const taskData = eventPayload.data || eventPayload;
             if (!taskData || !taskData.id) return;
 
-            setTasks(prev => {
-              const existingIdx = prev.findIndex(t => t.id === taskData.id);
+            updateTasksWithStorage(prev => {
+              const existingIdx = (prev || []).findIndex(t => t.id === taskData.id);
               if (existingIdx >= 0) {
                 const nextTasks = [...prev];
                 nextTasks[existingIdx] = { ...nextTasks[existingIdx], ...taskData };
                 return nextTasks;
               }
-              return [taskData, ...prev];
+              return [taskData, ...(prev || [])];
             });
 
             // Activity feed / audit stream live sync
@@ -715,6 +756,16 @@ export const AppProvider = ({ children }) => {
     };
     updateTasksWithStorage(prev => [newTask, ...prev.filter(t => t.id !== newTask.id)]);
 
+    if (realtimeChannel) {
+      try {
+        realtimeChannel.postMessage({
+          type: 'TASK_CREATED',
+          task: newTask,
+          timestamp: Date.now(),
+        });
+      } catch (err) {}
+    }
+
     // Also auto-create linked feedback session for Marketing console
     const matchingTse = TECH_SUPPORT_TEAM.find(t =>
       t.supportName.toLowerCase() === (assignee?.name || '').toLowerCase() ||
@@ -839,17 +890,34 @@ export const AppProvider = ({ children }) => {
       return updated;
     }));
 
+    // Instant broadcast across all tabs and windows
+    if (realtimeChannel && patchedTask) {
+      try {
+        realtimeChannel.postMessage({
+          type: 'TASK_UPDATED',
+          task: patchedTask,
+          timestamp: Date.now(),
+        });
+      } catch (err) {}
+    }
+
     // Persist to backend database & trigger server-side realtime SSE broadcast
     if (patchedTask) {
       fetch(`/api/tasks/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(patchedTask),
-      }).catch(err => console.warn('Failed to sync task update to server:', err));
+      })
+      .then(res => {
+        if (res.ok) {
+          fetchLiveData();
+        }
+      })
+      .catch(err => console.warn('Failed to sync task update to server:', err));
     }
 
     toast.success(note || 'Task updated.');
-  }, [currentUser]);
+  }, [currentUser, updateTasksWithStorage, fetchLiveData]);
 
   const reassignTask = useCallback((id, newAssigneeId) => {
     const allUsers = users && users.length > 0 ? users : USERS;

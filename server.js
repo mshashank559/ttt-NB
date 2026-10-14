@@ -732,6 +732,9 @@ const VALID_POCS_BY_TEAM = {
   ],
 };
 
+// In-memory cache to guarantee real-time task sync even during DB transitions
+const serverTasksCache = new Map();
+
 // ----------------- TASKS ENDPOINTS -----------------
 app.get('/api/tasks', async (req, res) => {
   try {
@@ -739,7 +742,26 @@ app.get('/api/tasks', async (req, res) => {
     let filter = {};
 
     if (role === 'tse' && userId) {
+      let searchTerms = [userId];
+      try {
+        const mock = await import('./src/data/mockData.js');
+        const foundUser = (mock.USERS || []).find(u => u.id === userId || u.empId === userId || u.tttNbId === userId);
+        if (foundUser) {
+          if (foundUser.name) searchTerms.push(foundUser.name);
+          if (foundUser.codeName) searchTerms.push(foundUser.codeName);
+          if (foundUser.empId) searchTerms.push(foundUser.empId);
+        }
+      } catch (e) {}
+      const regexStr = searchTerms.map(s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\    if (role === 'tse' && userId) {
       filter = { $or: [{ assigneeId: userId }, { techPerson: { $regex: new RegExp(userId, 'i') } }, { codeName: { $regex: new RegExp(userId, 'i') } }] };
+    }')).join('|');
+      filter = { 
+        $or: [
+          { assigneeId: { $in: searchTerms } },
+          { techPerson: { $regex: new RegExp(regexStr, 'i') } },
+          { codeName: { $regex: new RegExp(regexStr, 'i') } }
+        ] 
+      };
     } else if (role === 'recruiter' && userId) {
       filter = { $or: [{ pocId: userId }, { recruiterName: { $regex: new RegExp(userId, 'i') } }] };
     } else if (role === 'marketing_tl') {
@@ -764,6 +786,20 @@ app.get('/api/tasks', async (req, res) => {
     if (mongoose.connection.readyState === 1) {
       tasks = await Task.find(filter).sort({ createdAt: -1 });
     }
+    // Merge any memory-cached tasks to guarantee instantaneous consistency
+    if (serverTasksCache.size > 0) {
+      const taskMap = new Map();
+      (tasks || []).forEach(t => {
+        const obj = t.toObject ? t.toObject() : t;
+        if (obj && obj.id) taskMap.set(obj.id, obj);
+      });
+      for (const [id, mTask] of serverTasksCache.entries()) {
+        const existing = taskMap.get(id);
+        taskMap.set(id, existing ? { ...existing, ...mTask } : mTask);
+      }
+      tasks = Array.from(taskMap.values());
+    }
+
     if (!tasks || tasks.length === 0) {
       let INITIAL_TASKS = [];
 try { const m = await import('./src/data/mockData.js'); if (m.INITIAL_TASKS) INITIAL_TASKS = m.INITIAL_TASKS; } catch (e) {}
@@ -864,6 +900,7 @@ try { const m = await import('./src/data/mockData.js'); if (m.TECH_SUPPORT_TEAM)
 
     // Broadcast Realtime Event
     const payload = task.toObject ? task.toObject() : task;
+    serverTasksCache.set(task.id, payload);
     broadcastRealtimeEvent('task.created', payload, {
       actorId: taskData.createdById,
       newStatus: task.status || 'Pending',
@@ -882,15 +919,23 @@ app.put('/api/tasks/:id', async (req, res) => {
 
     if (mongoose.connection.readyState === 1) {
       existing = await Task.findOne({ id: req.params.id });
-      updated = await Task.findOneAndUpdate({ id: req.params.id }, req.body, { new: true });
+      updated = await Task.findOneAndUpdate(
+        { id: req.params.id },
+        { $set: req.body },
+        { new: true, upsert: true }
+      );
     } else {
-      updated = { id: req.params.id, ...req.body };
+      const cached = serverTasksCache.get(req.params.id) || {};
+      updated = { ...cached, ...req.body, id: req.params.id };
     }
 
     if (!updated) return res.status(404).json({ error: 'Task not found' });
 
+    const payload = updated.toObject ? updated.toObject() : updated;
+    serverTasksCache.set(req.params.id, payload);
+
     const prevStatus = existing?.status;
-    const newStatus = updated.status;
+    const newStatus = payload.status;
     const isDone = newStatus === 'Done' || newStatus === 'Completed';
 
     let eventType = 'task.updated';
@@ -902,13 +947,12 @@ app.put('/api/tasks/:id', async (req, res) => {
       eventType = 'task.reassigned';
     }
 
-    const payload = updated.toObject ? updated.toObject() : updated;
     broadcastRealtimeEvent(eventType, payload, {
       previousStatus: prevStatus,
       newStatus,
     });
 
-    res.json(updated);
+    res.json(payload);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
