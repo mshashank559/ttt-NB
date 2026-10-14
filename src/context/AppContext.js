@@ -741,6 +741,44 @@ export const AppProvider = ({ children }) => {
     return newTask;
   }, [tasks.length, currentUser, updateFeedbacksWithStorage]);
 
+  const updateTask = useCallback((id, patch, note) => {
+    let patchedTask = null;
+    setTasks(prev => prev.map(t => {
+      if (t.id !== id) return t;
+      const updated = { ...t, ...patch };
+      if (note) {
+        updated.timeline = [
+          ...(t.timeline || []),
+          { at: new Date().toISOString().slice(0, 10), event: note, by: currentUser?.name || 'System' },
+        ];
+      }
+      patchedTask = updated;
+      return updated;
+    }));
+
+    // Persist to backend database & trigger server-side realtime SSE broadcast
+    if (patchedTask) {
+      fetch(`/api/tasks/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patchedTask),
+      }).catch(err => console.warn('Failed to sync task update to server:', err));
+    }
+
+    toast.success(note || 'Task updated.');
+  }, [currentUser]);
+
+  const reassignTask = useCallback((id, newAssigneeId) => {
+    const allUsers = users && users.length > 0 ? users : USERS;
+    const newUser = allUsers.find(u => u.id === newAssigneeId) || getUserById(newAssigneeId);
+    updateTask(id, {
+      assigneeId: newAssigneeId,
+      techPerson: newUser?.name || 'Unassigned',
+      codeName: newUser?.codeName || getTseCodeName(newUser?.name),
+    }, `Reassigned to ${newUser?.name}`);
+    toast.success('Task reassigned successfully.');
+  }, [updateTask, users]);
+
   const assignMarketingSr = useCallback((taskId, srId) => {
     const allUsers = users && users.length > 0 ? users : USERS;
     const sr = allUsers.find(u => u.id === srId);
@@ -782,44 +820,6 @@ export const AppProvider = ({ children }) => {
 
     toast.success(`Assigned to ${sr.name}`);
   }, [users, updateTask, currentUser, updateFeedbacksWithStorage]);
-
-  const updateTask = useCallback((id, patch, note) => {
-    let patchedTask = null;
-    setTasks(prev => prev.map(t => {
-      if (t.id !== id) return t;
-      const updated = { ...t, ...patch };
-      if (note) {
-        updated.timeline = [
-          ...(t.timeline || []),
-          { at: new Date().toISOString().slice(0, 10), event: note, by: currentUser?.name || 'System' },
-        ];
-      }
-      patchedTask = updated;
-      return updated;
-    }));
-
-    // Persist to backend database & trigger server-side realtime SSE broadcast
-    if (patchedTask) {
-      fetch(`/api/tasks/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(patchedTask),
-      }).catch(err => console.warn('Failed to sync task update to server:', err));
-    }
-
-    toast.success(note || 'Task updated.');
-  }, [currentUser]);
-
-  const reassignTask = useCallback((id, newAssigneeId) => {
-    const allUsers = users && users.length > 0 ? users : USERS;
-    const newUser = allUsers.find(u => u.id === newAssigneeId) || getUserById(newAssigneeId);
-    updateTask(id, {
-      assigneeId: newAssigneeId,
-      techPerson: newUser?.name || 'Unassigned',
-      codeName: newUser?.codeName || getTseCodeName(newUser?.name),
-    }, `Reassigned to ${newUser?.name}`);
-    toast.success('Task reassigned successfully.');
-  }, [updateTask, users]);
 
   const changeTaskStatus = useCallback((id, status) => {
     updateTask(id, { status }, `Status changed to ${status}`);
