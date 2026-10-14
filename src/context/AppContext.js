@@ -163,7 +163,26 @@ export const AppProvider = ({ children }) => {
     return () => window.removeEventListener('storage', handleStorage);
   }, []);
 
-  const currentUser = useMemo(() => (currentUserId ? (users.find(u => u.id === currentUserId) || getUserById(currentUserId)) : null), [currentUserId, users]);
+  const currentUser = useMemo(() => {
+    if (!currentUserId) return null;
+    let u = users.find(x => x.id === currentUserId) || getUserById(currentUserId);
+    if (u) {
+      if (u.role === 'marketing_tl') {
+        const lowerName = (u.name || '').toLowerCase();
+        const lowerEmail = (u.email || '').toLowerCase();
+        const isMukesh = lowerName.includes('mukesh') || lowerEmail.includes('mukesh') || u.id === 'u-tl-mukesh' || u.teamId === 'team-mukesh';
+        const isShivam = lowerName.includes('shivam') || lowerEmail.includes('shivam') || u.id === 'u-tl-shivam' || u.teamId === 'team-shivam';
+        return {
+          ...u,
+          teamId: u.teamId || (isMukesh ? 'team-mukesh' : (isShivam ? 'team-shivam' : 'team-mukesh')),
+          teamName: u.teamName || (isMukesh ? 'Team Mukesh' : (isShivam ? 'Team Shivam' : 'Team Mukesh')),
+          teamLeadId: u.teamLeadId || u.id,
+        };
+      }
+      return u;
+    }
+    return null;
+  }, [currentUserId, users]);
 
   // Sync feedbacks to localStorage whenever changed
   const updateFeedbacksWithStorage = useCallback((updater) => {
@@ -683,6 +702,8 @@ export const AppProvider = ({ children }) => {
       teamId: assignedTeam.id,
       teamName: assignedTeam.name,
       teamLeadId: assignedTeam.leadId,
+      marketingTl: assignedTeam.leadName,
+      teamLeadName: assignedTeam.leadName,
       pocId: finalPocId,
       recruiterName: finalRecruiterName,
       assigneeId: assignee?.id || task.assigneeId,

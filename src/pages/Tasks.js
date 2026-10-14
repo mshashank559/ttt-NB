@@ -34,6 +34,8 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
     teamId: defaultTeam.id,
     teamName: defaultTeam.name,
     teamLeadId: defaultTeam.leadId,
+    marketingTl: defaultTeam.leadName,
+    teamLeadName: defaultTeam.leadName,
     pocId: 'unassigned',
     recruiterName: 'Unassigned',
     remark: '',
@@ -53,6 +55,8 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
       teamId: selectedTeam.id,
       teamName: selectedTeam.name,
       teamLeadId: selectedTeam.leadId,
+      marketingTl: selectedTeam.leadName,
+      teamLeadName: selectedTeam.leadName,
       pocId: 'unassigned',
       recruiterName: 'Unassigned',
     }));

@@ -852,19 +852,52 @@ export const filterAuthorizedData = (items, currentUser, currentRole) => {
       .map(item => sanitizeForIdentityPrivacy(item, currentRole));
   }
 
-  // 4. Marketing TL (Mukesh, Shivam):
-  // Can ONLY see candidates belonging to their own team + code names only
+    // 4. Marketing TL (Mukesh, Shivam):
+  // Robust bidirectional team mapping ensuring all TSM-assigned tasks appear on the TL dashboard
   if (currentRole === 'marketing_tl') {
-    const currentTeamId = currentUser.teamId;
-    const currentUserId = currentUser.id;
-    const currentTeamName = (currentUser.teamName || '').toLowerCase();
+    const currentName = (currentUser?.name || '').toLowerCase();
+    const currentEmail = (currentUser?.email || '').toLowerCase();
+    const currentId = currentUser?.id || '';
+    const currentEmpId = currentUser?.empId || '';
+
+    // Automatically resolve team for Mukesh or Shivam
+    const isMukesh = currentName.includes('mukesh') || currentEmail.includes('mukesh') || currentId === 'u-tl-mukesh' || currentUser?.teamId === 'team-mukesh';
+    const isShivam = currentName.includes('shivam') || currentEmail.includes('shivam') || currentId === 'u-tl-shivam' || currentUser?.teamId === 'team-shivam';
+
+    const userTeamId = currentUser?.teamId || (isMukesh ? 'team-mukesh' : (isShivam ? 'team-shivam' : ''));
 
     return items
       .filter(item => {
-        const matchesTeamId = item.teamId && currentTeamId && item.teamId === currentTeamId;
-        const matchesTeamLeadId = item.teamLeadId && item.teamLeadId === currentUserId;
-        const matchesTeamName = item.teamName && currentTeamName && item.teamName.toLowerCase() === currentTeamName;
-        return matchesTeamId || matchesTeamLeadId || matchesTeamName;
+        // Direct teamId matching (case-insensitive)
+        if (userTeamId && item.teamId && item.teamId.toLowerCase() === userTeamId.toLowerCase()) return true;
+
+        // Team Lead ID match
+        if (item.teamLeadId && (item.teamLeadId === currentId || item.teamLeadId === currentEmpId)) return true;
+
+        // If Mukesh: matches any task for Team Mukesh, Mukesh Chaudhary, or u-tl-mukesh
+        if (isMukesh) {
+          const itemTeam = (item.teamName || item.teamId || '').toLowerCase();
+          const itemLead = (item.marketingTl || item.teamLeadName || item.teamLeadId || '').toLowerCase();
+          if (itemTeam.includes('mukesh') || itemLead.includes('mukesh') || item.teamLeadId === 'u-tl-mukesh' || item.teamId === 'team-mukesh') {
+            return true;
+          }
+        }
+
+        // If Shivam: matches any task for Team Shivam, Shivam Barot, or u-tl-shivam
+        if (isShivam) {
+          const itemTeam = (item.teamName || item.teamId || '').toLowerCase();
+          const itemLead = (item.marketingTl || item.teamLeadName || item.teamLeadId || '').toLowerCase();
+          if (itemTeam.includes('shivam') || itemLead.includes('shivam') || item.teamLeadId === 'u-tl-shivam' || item.teamId === 'team-shivam') {
+            return true;
+          }
+        }
+
+        // Team Name matching (case-insensitive)
+        if (currentUser?.teamName && item.teamName && currentUser.teamName.toLowerCase().trim() === item.teamName.toLowerCase().trim()) {
+          return true;
+        }
+
+        return false;
       })
       .map(item => sanitizeForIdentityPrivacy(item, currentRole));
   }
