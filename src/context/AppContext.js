@@ -82,8 +82,16 @@ export const AppProvider = ({ children }) => {
       const data = e?.data;
       if (!data) return;
       if (data.type === 'TASK_UPDATED' && data.task) {
+        const incomingId = (data.task.id || '').toString().trim().toLowerCase();
         setTasks(prev => {
-          const idx = (prev || []).findIndex(t => t.id === data.task.id);
+          const idx = (prev || []).findIndex(t => 
+            t && (
+              t.id === data.task.id || 
+              t._id === data.task.id || 
+              t.candidateId === data.task.id ||
+              (t.id && t.id.toString().trim().toLowerCase() === incomingId)
+            )
+          );
           if (idx >= 0) {
             const next = [...prev];
             next[idx] = { ...next[idx], ...data.task };
@@ -95,15 +103,17 @@ export const AppProvider = ({ children }) => {
           return next;
         });
       } else if (data.type === 'TASK_CREATED' && data.task) {
+        const incomingId = (data.task.id || '').toString().trim().toLowerCase();
         setTasks(prev => {
-          const next = [data.task, ...(prev || []).filter(t => t.id !== data.task.id)];
+          const next = [data.task, ...(prev || []).filter(t => 
+            !t || (t.id !== data.task.id && (t.id && t.id.toString().trim().toLowerCase() !== incomingId))
+          )];
           try { localStorage.setItem('ttt_tasks', JSON.stringify(next)); } catch (err) {}
           return next;
         });
       }
     };
-
-    if (realtimeChannel) {
+if (realtimeChannel) {
       realtimeChannel.addEventListener('message', handleBroadcast);
     }
 
@@ -272,13 +282,27 @@ export const AppProvider = ({ children }) => {
             const map = new Map();
             // Preserve all locally stored/created tasks first
             (prev || []).forEach(t => { if (t && t.id) map.set(t.id, t); });
-            // Merge in server tasks
+
+            // Timestamp-aware merge: Never let a stale server response overwrite newer local updates!
             liveTasks.forEach(t => {
               if (t && t.id) {
                 const existing = map.get(t.id);
-                map.set(t.id, existing ? { ...existing, ...t } : t);
+                if (!existing) {
+                  map.set(t.id, t);
+                } else {
+                  const localModTime = existing._localModifiedAt || 0;
+                  const serverModTime = new Date(t.updatedAt || t.date || 0).getTime();
+
+                  // If local modification occurred within last 8 seconds and status differs, protect local status
+                  if (localModTime && (Date.now() - localModTime < 8000) && existing.status !== t.status) {
+                    map.set(t.id, { ...t, ...existing, status: existing.status, timeline: existing.timeline });
+                  } else {
+                    map.set(t.id, { ...existing, ...t });
+                  }
+                }
               }
             });
+
             const merged = Array.from(map.values());
             // Sort newest first
             merged.sort((a, b) => new Date(b.date || b.createdAt || 0) - new Date(a.date || a.createdAt || 0));
@@ -311,8 +335,32 @@ export const AppProvider = ({ children }) => {
     }
   }, [currentRole, currentUserId, currentUser]);
 
+    // Real-Time Cross-Dashboard Synchronization Engine
   React.useEffect(() => {
+    // 1. Initial live sync
     fetchLiveData();
+
+    // 2. High-frequency background sync (every 3.5s) to guarantee real-time reflection across all dashboards
+    const interval = setInterval(() => {
+      fetchLiveData();
+    }, 3500);
+
+    // 3. Immediate sync on window focus or tab visibility
+    const handleFocus = () => fetchLiveData();
+    const handleVisibility = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        fetchLiveData();
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, [fetchLiveData]);
 
   // Live Realtime Server-Sent Events (SSE) Cross-Role Listener
@@ -875,59 +923,125 @@ export const AppProvider = ({ children }) => {
     return newTask;
   }, [tasks.length, currentUser, currentRole, users, updateFeedbacksWithStorage]);
 
-  const updateTask = useCallback((id, patch, note) => {
-    let patchedTask = null;
-    const cleanId = (id || '').trim().toLowerCase();
+  const updateTask = useCallback(async (id, patch, note) => {
+    if (!id) return;
+    const cleanId = (id || '').toString().trim().toLowerCase();
 
-    updateTasksWithStorage(prev => prev.map(t => {
-      const match = t.id === id || 
-                    t._id === id || 
-                    t.candidateId === id || 
-                    (t.id && t.id.toString().trim().toLowerCase() === cleanId);
-      if (!match) return t;
-      const updated = { ...t, ...patch };
-      if (note) {
-        updated.timeline = [
-          ...(t.timeline || []),
-          { at: new Date().toISOString().slice(0, 10), event: note, by: currentUser?.name || 'System' },
-        ];
-      }
-      patchedTask = updated;
-      return updated;
-    }));
+    // 1. Synchronously resolve current task from active tasks state or storage
+    let currentTask = (tasks || []).find(t => 
+      t && (
+        t.id === id || 
+        t._id === id || 
+        t.candidateId === id || 
+        (t.id && t.id.toString().trim().toLowerCase() === cleanId)
+      )
+    );
 
-    // Instant broadcast across all tabs and windows
-    if (realtimeChannel && patchedTask) {
+    if (!currentTask && typeof window !== 'undefined') {
+      try {
+        const saved = JSON.parse(localStorage.getItem('ttt_tasks') || '[]');
+        currentTask = saved.find(t => 
+          t && (
+            t.id === id || 
+            t._id === id || 
+            t.candidateId === id || 
+            (t.id && t.id.toString().trim().toLowerCase() === cleanId)
+          )
+        );
+      } catch (e) {}
+    }
+
+    if (!currentTask) {
+      currentTask = { id };
+    }
+
+    const previousTask = { ...currentTask };
+    const nowIso = new Date().toISOString();
+    const updatedTask = {
+      ...currentTask,
+      ...patch,
+      id: currentTask.id || id,
+      _localModifiedAt: Date.now(),
+      updatedAt: nowIso
+    };
+
+    if (note) {
+      updatedTask.timeline = [
+        ...(currentTask.timeline || []),
+        { at: nowIso.slice(0, 10), event: note, by: currentUser?.name || 'System' },
+      ];
+    }
+
+    // 2. Safe optimistic update in local state & localStorage
+    updateTasksWithStorage(prev => {
+      let matched = false;
+      const next = (prev || []).map(t => {
+        const match = t && (
+          t.id === id || 
+          t._id === id || 
+          t.candidateId === id || 
+          (t.id && t.id.toString().trim().toLowerCase() === cleanId)
+        );
+        if (!match) return t;
+        matched = true;
+        return updatedTask;
+      });
+      return matched ? next : [updatedTask, ...next];
+    });
+
+    // 3. Instant BroadcastChannel delivery across all open tabs/windows (0ms latency)
+    if (realtimeChannel) {
       try {
         realtimeChannel.postMessage({
           type: 'TASK_UPDATED',
-          task: patchedTask,
+          task: updatedTask,
           timestamp: Date.now(),
         });
       } catch (err) {}
     }
 
-    // Persist to backend database & trigger server-side realtime SSE broadcast
-    if (patchedTask) {
-      fetch(`/api/tasks/${id}`, {
+    // 4. Persist to backend and confirm database commit
+    try {
+      const sanitizedPayload = { ...updatedTask };
+      delete sanitizedPayload._id; // Prevent MongoDB immutable field error
+      delete sanitizedPayload._localModifiedAt;
+
+      const res = await fetch(`/api/tasks/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(patchedTask),
-      })
-      .then(res => {
-        if (res.ok) return res.json();
-      })
-      .then(serverTask => {
-        if (serverTask && serverTask.id) {
-          updateTasksWithStorage(prev => prev.map(t => (t.id === serverTask.id ? { ...t, ...serverTask } : t)));
-        }
-        fetchLiveData();
-      })
-      .catch(err => console.warn('Failed to sync task update to server:', err));
-    }
+        body: JSON.stringify(sanitizedPayload),
+      });
 
-    toast.success(note || 'Task updated.');
-  }, [currentUser, updateTasksWithStorage, fetchLiveData]);
+      if (!res.ok) {
+        throw new Error(`Server returned status ${res.status}`);
+      }
+
+      const serverTask = await res.json().catch(() => null);
+      if (serverTask && serverTask.id) {
+        updateTasksWithStorage(prev => prev.map(t => (t.id === serverTask.id ? { ...t, ...serverTask } : t)));
+      }
+
+      // Show confirmed success notification
+      toast.success(note || `Status changed to ${patch.status || 'Updated'}`);
+
+      // Trigger background sync to refresh all dependent analytics and views
+      fetchLiveData();
+      return updatedTask;
+    } catch (err) {
+      console.error('Failed to save task status to backend:', err);
+      // Safe rollback if server rejected update
+      if (previousTask && previousTask.id) {
+        updateTasksWithStorage(prev => prev.map(t => (t.id === previousTask.id ? previousTask : t)));
+        if (realtimeChannel) {
+          try {
+            realtimeChannel.postMessage({ type: 'TASK_UPDATED', task: previousTask, timestamp: Date.now() });
+          } catch (e) {}
+        }
+      }
+      toast.error(`Failed to update status: ${err.message || 'Database error'}. Reverted to previous status.`);
+      throw err;
+    }
+  }, [tasks, currentUser, updateTasksWithStorage, fetchLiveData]);
 
   const reassignTask = useCallback((id, newAssigneeId) => {
     const allUsers = users && users.length > 0 ? users : USERS;
