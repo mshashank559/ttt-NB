@@ -12,7 +12,7 @@ import autoTable from 'jspdf-autotable';
 
 import { useApp } from '../context/AppContext';
 import { PageHeader, SectionCard, StatusBadge } from '../components/common';
-import { calculateOverallRating, TECH_SUPPORT_TEAM, roleIsMarketing } from '../data/mockData';
+import { calculateOverallRating, TECH_SUPPORT_TEAM, roleIsMarketing, formatTseNameForRole } from '../data/mockData';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 
 // Performance Classification Utility (Configurable thresholds)

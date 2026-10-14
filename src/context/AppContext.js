@@ -265,11 +265,17 @@ export const AppProvider = ({ children }) => {
           fetchLiveData();
         };
 
+                let retryCount = 0;
         es.onerror = () => {
           setRealtimeConnected(false);
-          if (es) es.close();
-          // Safe reconnect
-          reconnectTimeout = setTimeout(connectSse, 4000);
+          if (es) {
+            es.close();
+            es = null;
+          }
+          retryCount++;
+          if (retryCount <= 2) {
+            reconnectTimeout = setTimeout(connectSse, 6000);
+          }
         };
 
         // Realtime event handlers for task/interview lifecycle

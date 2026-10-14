@@ -4,7 +4,7 @@ import { ListChecks, CheckCircle2, Clock3, AlertTriangle, UserRoundCheck, Users 
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip as RTooltip, CartesianGrid, BarChart, Bar, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 import { useApp } from '../context/AppContext';
 import { KpiCard, PageHeader, StatusBadge, TaskTypeBadge, SectionCard, EmptyState, ArcGaugeCard, NeumorphicMetricCard, CircularProgressRing } from '../components/common';
-import { ROLES, USERS, roleIsMarketing } from '../data/mockData';
+import { ROLES, USERS, roleIsMarketing, formatTseNameForRole } from '../data/mockData';
 
 const palette = ['#3B82F6', '#10B981', '#8B5CF6', '#F59E0B', '#06B6D4', '#EC4899', '#64748B'];
 

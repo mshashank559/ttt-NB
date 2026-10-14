@@ -9,7 +9,7 @@ import {
 import { toast } from 'sonner';
 import { useApp } from '../context/AppContext';
 import { PageHeader, SectionCard, StatusBadge } from '../components/common';
-import { calculateOverallRating, TECH_SUPPORT_TEAM, ROLES, roleIsMarketing } from '../data/mockData';
+import { calculateOverallRating, TECH_SUPPORT_TEAM, ROLES, roleIsMarketing, formatTseNameForRole } from '../data/mockData';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import { Textarea } from '../components/ui/textarea';
 
