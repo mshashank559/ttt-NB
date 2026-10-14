@@ -10,6 +10,11 @@ const FALLBACK_TECH_SUPPORT = [
   { id: 'TTT-NB-015', supportName: 'Shreya', employeeName: 'Aarti Vishwakarma', email: 'nbtech7@netbounceplacement.com' },
 ];
 
+const FALLBACK_TSM_CODES = {
+  'Mukesh Chaudhary': 'Mukesh',
+  'Shivam Barot': 'Shivam',
+};
+
 const FALLBACK_TSE_CODES = {
   'Harit Verma': 'Abhishek', 'Harit': 'Abhishek', 'Abhishek': 'Abhishek',
   'Prem Makwana': 'Kiran', 'Prem': 'Kiran', 'Kiran': 'Kiran',
@@ -608,7 +613,11 @@ app.post('/api/auth/login', async (req, res) => {
 
     // 2. Fallback to authorized users directory if not found in MongoDB or if offline
     if (!user) {
-      const { USERS } = await import('./src/data/mockData.js');
+      let USERS = [];
+      try {
+        const m = await import('./src/data/mockData.js');
+        if (m.USERS) USERS = m.USERS;
+      } catch (e) {}
       const staticUser = USERS.find(u =>
         u.email.toLowerCase() === cleanLower ||
         u.id.toLowerCase() === cleanLower ||
@@ -661,7 +670,11 @@ app.get('/api/users', async (req, res) => {
       const users = await User.find().sort({ createdAt: -1 });
       if (users && users.length > 0) return res.json(users);
     }
-    const { USERS } = await import('./src/data/mockData.js');
+    let USERS = [];
+    try {
+      const m = await import('./src/data/mockData.js');
+      if (m.USERS) USERS = m.USERS;
+    } catch (e) {}
     res.json(USERS);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -818,7 +831,13 @@ try { const m = await import('./src/data/mockData.js'); if (m.INITIAL_TASKS) INI
 
     // Server-side identity privacy: never expose TSE/TSM real names to Marketing roles
     if (role === 'marketing_tl' || role === 'marketing_sr') {
-      const { TSE_CODE_NAMES, TSM_CODE_NAMES } = await import('./src/data/mockData.js');
+      let TSE_CODE_NAMES = FALLBACK_TSE_CODES;
+      let TSM_CODE_NAMES = FALLBACK_TSM_CODES;
+      try {
+        const m = await import('./src/data/mockData.js');
+        if (m.TSE_CODE_NAMES) TSE_CODE_NAMES = m.TSE_CODE_NAMES;
+        if (m.TSM_CODE_NAMES) TSM_CODE_NAMES = m.TSM_CODE_NAMES;
+      } catch (e) {}
       tasks = tasks.map(t => {
         const obj = t.toObject ? t.toObject() : { ...t };
         const tseCode = obj.codeName || (TSE_CODE_NAMES && TSE_CODE_NAMES[obj.techPerson]) || 'Code Name Unassigned';
@@ -1218,10 +1237,13 @@ app.post('/api/ai/ask', async (req, res) => {
         User.find().lean(),
       ]);
     } else {
-      const mock = await import('./src/data/mockData.js');
-      tasks = mock.INITIAL_TASKS;
-      feedbacks = mock.INITIAL_FEEDBACK_RECORDS;
-      users = mock.USERS;
+      let mock = {};
+      try {
+        mock = await import('./src/data/mockData.js');
+      } catch (e) {}
+      tasks = mock.INITIAL_TASKS || [];
+      feedbacks = mock.INITIAL_FEEDBACK_RECORDS || [];
+      users = mock.USERS || [];
     }
 
     // 2. Aggregate statistics

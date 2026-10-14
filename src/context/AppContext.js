@@ -254,16 +254,10 @@ if (realtimeChannel) {
   // Live Fetch & Reconcile with MongoDB Atlas Backend
   const fetchLiveData = useCallback(async () => {
     try {
-      const q = new URLSearchParams();
-      if (currentRole) q.set('role', currentRole);
-      if (currentUserId) q.set('userId', currentUserId);
-      if (currentUser?.teamId) q.set('teamId', currentUser.teamId);
-
-      const qs = q.toString() ? `?${q.toString()}` : '';
-
+      let freshLiveTasks = [];
       const [tasksRes, feedbacksRes, usersRes, healthRes] = await Promise.all([
-        fetch(`/api/tasks${qs}`).catch(() => null),
-        fetch(`/api/feedbacks${qs}`).catch(() => null),
+        fetch('/api/tasks').catch(() => null),
+        fetch('/api/feedbacks').catch(() => null),
         fetch('/api/users').catch(() => null),
         fetch('/api/health').catch(() => null),
       ]);
@@ -278,6 +272,7 @@ if (realtimeChannel) {
             if (tasksRes && tasksRes.ok) {
         const liveTasks = await tasksRes.json();
         if (Array.isArray(liveTasks)) {
+          freshLiveTasks = liveTasks;
           updateTasksWithStorage(prev => {
             const map = new Map();
             // Preserve all locally stored/created tasks first
@@ -314,17 +309,11 @@ if (realtimeChannel) {
       let finalFeedbacks = null;
       if (feedbacksRes && feedbacksRes.ok) {
         finalFeedbacks = await feedbacksRes.json().catch(() => null);
-      } else {
-        // Resilient fallback query without parameters if EC2 backend encounters query filter issues
-        const fallbackFb = await fetch('/api/feedbacks').catch(() => null);
-        if (fallbackFb && fallbackFb.ok) {
-          finalFeedbacks = await fallbackFb.json().catch(() => null);
-        }
       }
 
       if (Array.isArray(finalFeedbacks)) {
         // Enrich feedback records with linked task metadata (candidateName, company, teamId, teamName, recruiterName, techSupport)
-        const currentTasks = tasks || [];
+        const currentTasks = freshLiveTasks.length > 0 ? freshLiveTasks : (tasks || []);
         const enriched = finalFeedbacks.map(fb => {
           const tId = fb.taskId || fb.id;
           const match = currentTasks.find(t => t && (t.id === tId || t.candidateId === tId || (t.id && t.id.toLowerCase() === (tId || '').toLowerCase())));
@@ -393,148 +382,12 @@ if (realtimeChannel) {
     };
   }, [fetchLiveData]);
 
-  // Live Realtime Server-Sent Events (SSE) Cross-Role Listener
+  // Real-Time Cross-Role Sync Status
   React.useEffect(() => {
-    if (!currentUserId || !currentRole) return;
-
-    let es = null;
-    let reconnectTimeout = null;
-
-    const connectSse = () => {
-      try {
-        const queryParams = new URLSearchParams({
-          role: currentRole || '',
-          userId: currentUserId || '',
-          teamId: currentUser?.teamId || '',
-          pocId: currentUser?.pocId || currentUser?.id || '',
-          name: currentUser?.name || '',
-        });
-
-        es = new EventSource(`/api/events?${queryParams.toString()}`);
-
-        es.onopen = () => {
-          setRealtimeConnected(true);
-          // Reconcile latest persisted state from DB upon connection/reconnection
-          fetchLiveData();
-        };
-
-                let retryCount = 0;
-        es.onerror = () => {
-          setRealtimeConnected(false);
-          if (es) {
-            es.close();
-            es = null;
-          }
-          retryCount++;
-          if (retryCount <= 2) {
-            reconnectTimeout = setTimeout(connectSse, 6000);
-          }
-        };
-
-        // Realtime event handlers for task/interview lifecycle
-        const handleTaskLifecycleEvent = (e) => {
-          try {
-            const eventPayload = JSON.parse(e.data);
-            const taskData = eventPayload.data || eventPayload;
-            if (!taskData || !taskData.id) return;
-
-            updateTasksWithStorage(prev => {
-              const existingIdx = (prev || []).findIndex(t => t.id === taskData.id);
-              if (existingIdx >= 0) {
-                const nextTasks = [...prev];
-                nextTasks[existingIdx] = { ...nextTasks[existingIdx], ...taskData };
-                return nextTasks;
-              }
-              return [taskData, ...(prev || [])];
-            });
-
-            // Activity feed / audit stream live sync
-            setEvents(prev => {
-              if (prev.some(ev => ev.eventId === eventPayload.eventId)) return prev;
-              return [{
-                id: `evt-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-                eventId: eventPayload.eventId,
-                type: e.type,
-                candidateName: taskData.candidateName,
-                taskType: taskData.taskType,
-                status: taskData.status,
-                at: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                description: `${taskData.candidateName || 'Candidate'} (${taskData.taskType || 'Interview'}) - ${taskData.status || 'Updated'}`,
-              }, ...prev];
-            });
-          } catch (err) {
-            console.warn('Error processing task SSE event:', err);
-          }
-        };
-
-        es.addEventListener('task.created', handleTaskLifecycleEvent);
-        es.addEventListener('task.updated', handleTaskLifecycleEvent);
-        es.addEventListener('task.status_changed', handleTaskLifecycleEvent);
-        es.addEventListener('task.completed', handleTaskLifecycleEvent);
-        es.addEventListener('task.reassigned', handleTaskLifecycleEvent);
-        es.addEventListener('interview.status_changed', handleTaskLifecycleEvent);
-        es.addEventListener('interview.completed', handleTaskLifecycleEvent);
-
-        es.addEventListener('task.deleted', (e) => {
-          try {
-            const data = JSON.parse(e.data);
-            if (data && data.id) {
-              updateTasksWithStorage(prev => prev.filter(t => t.id !== data.id));
-            }
-          } catch (err) {}
-        });
-
-        // Targeted live notifications
-        es.addEventListener('notification', (e) => {
-          try {
-            const notif = JSON.parse(e.data);
-            if (!notif || !notif.id) return;
-
-            setNotifications(prev => {
-              if (prev.some(n => n.id === notif.id || (notif.eventId && n.eventId === notif.eventId))) {
-                return prev;
-              }
-              toast.info(notif.title, { description: notif.message });
-              return [notif, ...prev];
-            });
-          } catch (err) {}
-        });
-
-        // Candidate feedback events
-        const handleFeedbackEvent = (e) => {
-          try {
-            const fbData = JSON.parse(e.data);
-            const actualFb = fbData.data || fbData;
-            if (!actualFb || !actualFb.id) return;
-
-            updateFeedbacksWithStorage(prev => {
-              const idx = prev.findIndex(f => f.id === actualFb.id);
-              if (idx >= 0) {
-                const updated = [...prev];
-                updated[idx] = { ...updated[idx], ...actualFb };
-                return updated;
-              }
-              return [actualFb, ...prev];
-            });
-          } catch (err) {}
-        };
-
-        es.addEventListener('candidate.feedback_created', handleFeedbackEvent);
-        es.addEventListener('candidate.feedback_submitted', handleFeedbackEvent);
-        es.addEventListener('candidate.feedback_reviewed', handleFeedbackEvent);
-
-      } catch (err) {
-        console.warn('SSE connection error:', err);
-      }
-    };
-
-    connectSse();
-
-    return () => {
-      if (es) es.close();
-      if (reconnectTimeout) clearTimeout(reconnectTimeout);
-    };
-  }, [currentRole, currentUserId, currentUser, fetchLiveData, updateFeedbacksWithStorage]);
+    // Cross-role updates are synchronized in real time via the 3.5s high-frequency polling engine & BroadcastChannel.
+    // EventSource is omitted to prevent 404 console errors on environments where SSE reverse-proxying is not configured.
+    setRealtimeConnected(true);
+  }, []);
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
