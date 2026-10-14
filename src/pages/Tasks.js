@@ -334,7 +334,20 @@ const TaskDrawer = ({ task, onClose }) => {
   const assignee = users.find(u => u.id === task?.assigneeId);
   const creator = users.find(u => u.id === task?.createdById);
   const tseUsers = users.filter(u => u.role === 'tse');
-  const canEdit = roleCanEditAny(currentRole) || task?.assigneeId === currentUser?.id;
+  const isTseOwner = currentRole === 'tse' && (
+    task?.assigneeId === currentUser?.id ||
+    task?.assigneeId === currentUser?.empId ||
+    task?.assigneeId === currentUser?.tttNbId ||
+    (currentUser?.name && task?.techPerson?.toLowerCase() === currentUser?.name?.toLowerCase()) ||
+    (currentUser?.codeName && (task?.codeName?.toLowerCase() === currentUser?.codeName?.toLowerCase() || task?.techPerson?.toLowerCase() === currentUser?.codeName?.toLowerCase())) ||
+    (task?.techPerson && currentUser?.name && currentUser?.name?.toLowerCase().includes(task?.techPerson?.toLowerCase()))
+  );
+  const isTeamLeadOwner = currentRole === 'marketing_tl' && (
+    task?.teamId === currentUser?.teamId ||
+    task?.teamLeadId === currentUser?.id ||
+    (currentUser?.name && (task?.marketingTl?.toLowerCase()?.includes(currentUser?.name?.toLowerCase()) || task?.teamLeadName?.toLowerCase()?.includes(currentUser?.name?.toLowerCase())))
+  );
+  const canEdit = roleCanEditAny(currentRole) || currentRole === 'upper_management' || isTeamLeadOwner || isTseOwner;
 
   const [selectedSr, setSelectedSr] = useState(task?.pocId || '');
   const [showSagaModal, setShowSagaModal] = useState(false);

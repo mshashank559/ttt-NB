@@ -880,7 +880,10 @@ export const AppProvider = ({ children }) => {
     const cleanId = (id || '').trim().toLowerCase();
 
     updateTasksWithStorage(prev => prev.map(t => {
-      const match = t.id === id || (t.id && t.id.trim().toLowerCase() === cleanId);
+      const match = t.id === id || 
+                    t._id === id || 
+                    t.candidateId === id || 
+                    (t.id && t.id.toString().trim().toLowerCase() === cleanId);
       if (!match) return t;
       const updated = { ...t, ...patch };
       if (note) {
