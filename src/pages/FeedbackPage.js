@@ -484,10 +484,10 @@ export default function FeedbackPage() {
                           <div>
                             <div className="font-bold text-slate-900 group-hover/btn:text-[#1416c1] transition-colors flex items-center gap-1.5">
                               {roleIsMarketing(currentRole) ? (
-                                <span className="font-mono text-[#1416c1] font-semibold">{row.techSupportId || 'TSE-ID'}</span>
+                                <span className="text-[#1416c1] font-semibold">{row.techSupport || 'Tech Support'}</span>
                               ) : (
                                 <>
-                                  <span>{row.techSupport}</span>
+                                  <span>{formatTseNameForRole(row, currentRole)}</span>
                                   {row.techSupportId && (
                                     <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-blue-50 border border-blue-200 text-[#1416c1]">
                                       {row.techSupportId}

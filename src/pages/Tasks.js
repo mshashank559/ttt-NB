@@ -5,7 +5,7 @@ import { Plus, Search, UserRound, Calendar as CalIcon, Clock, Building2, Briefca
 import { toast } from 'sonner';
 import { useApp } from '../context/AppContext';
 import { PageHeader, StatusBadge, TaskTypeBadge, SectionCard, EmptyState } from '../components/common';
-import { TASK_TYPES, TASK_STATUSES, MARKETING_TEAMS, POC_USERS_BY_TEAM, getTseCodeName, getTsmCodeName, roleIsMarketing } from '../data/mockData';
+import { TASK_TYPES, TASK_STATUSES, MARKETING_TEAMS, POC_USERS_BY_TEAM, getTseCodeName, getTsmCodeName, roleIsMarketing, formatTseNameForRole } from '../data/mockData';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
@@ -182,7 +182,7 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
               <SelectContent className="bg-white border-slate-200 text-slate-900">
                 {tseUsers.map(u => (
                   <SelectItem key={u.id} value={u.id}>
-                    {roleIsMarketing(currentRole) ? (u.empId || u.tttNbId || u.id) : `${u.name} (${u.codeName || getTseCodeName(u.name)})`}
+                    {formatTseNameForRole(u, currentRole)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -416,7 +416,7 @@ const TaskDrawer = ({ task, onClose }) => {
               </div>
               <div>
                 <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1 flex items-center gap-1.5">
-                  <UserRound size={12} className="text-blue-600" /> {roleIsMarketing(currentRole) ? 'Tech ID' : 'Tech Person (TSE)'}
+                  <UserRound size={12} className="text-blue-600" /> {roleIsMarketing(currentRole) ? 'Tech Support' : 'Tech Person (TSE)'}
                 </div>
                 <div className="text-sm font-semibold text-slate-900">
                   {roleIsMarketing(currentRole)
@@ -612,7 +612,7 @@ const TaskDrawer = ({ task, onClose }) => {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent className="bg-white border-slate-200 text-slate-900">
-                        {tseUsers.map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}
+                        {tseUsers.map(u => <SelectItem key={u.id} value={u.id}>{formatTseNameForRole(u, currentRole)}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
@@ -653,7 +653,7 @@ const TaskDrawer = ({ task, onClose }) => {
           <div className="space-y-3.5 mt-2">
             <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 text-xs space-y-1.5">
               <div className="flex justify-between"><span className="text-slate-500">Candidate:</span> <span className="font-semibold text-slate-900">{task.candidateName}</span></div>
-              <div className="flex justify-between"><span className="text-slate-500">Tech Evaluator:</span> <span className="font-semibold text-slate-900">{roleIsMarketing(currentRole) ? (task.codeName || 'TSE') : task.techPerson}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">Tech Evaluator:</span> <span className="font-semibold text-slate-900">{formatTseNameForRole(task, currentRole)}</span></div>
               <div className="flex justify-between"><span className="text-slate-500">Marketing SR:</span> <span className="font-semibold text-slate-900">{task.recruiterName || 'Unassigned'}</span></div>
               <div className="flex justify-between"><span className="text-slate-500">Team:</span> <span className="font-semibold text-slate-900">{task.teamName || 'Team Mukesh'}</span></div>
               <div className="flex justify-between"><span className="text-slate-500">Task Type:</span> <span className="font-semibold text-slate-900">{task.taskType}</span></div>
@@ -797,7 +797,7 @@ export default function Tasks() {
                 <SelectItem value="all">All Tech Persons</SelectItem>
                 {users.filter(u => u.role === 'tse').map(u => (
                   <SelectItem key={u.id} value={u.id}>
-                    {roleIsMarketing(currentRole) ? (u.empId || u.tttNbId || u.id) : u.name}
+                    {formatTseNameForRole(u, currentRole)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -816,7 +816,7 @@ export default function Tasks() {
               <thead className="sticky top-0 bg-slate-50 border-b border-slate-200 z-10">
                 <tr className="text-left text-xs text-slate-600 uppercase tracking-wider">
                   <th className="py-3 px-4 font-semibold">Date</th>
-                  <th className="py-3 px-4 font-semibold">{roleIsMarketing(currentRole) ? 'Tech ID' : 'Tech Person'}</th>
+                  <th className="py-3 px-4 font-semibold">{roleIsMarketing(currentRole) ? 'Tech Support' : 'Tech Person'}</th>
                   <th className="py-3 px-3 font-semibold">Duration</th>
                   <th className="py-3 px-3 font-semibold">Task</th>
                   <th className="py-3 px-4 font-semibold">Candidate Name</th>

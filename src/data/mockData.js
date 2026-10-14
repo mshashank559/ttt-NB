@@ -43,24 +43,39 @@ export const POC_USERS_BY_TEAM = {
 
 // Stable Code Name Lookup Mappings
 export const TSE_CODE_NAMES = {
-  'Amber': 'Smriti',
-  'Shaurya': 'Henil',
-  'Nikunj': 'Saurav',
-  'Prem': 'Kiran',
+  'Harit Verma': 'Abhishek',
   'Harit': 'Abhishek',
+  'Abhishek': 'Abhishek',
+  'Prem Makwana': 'Kiran',
+  'Prem': 'Kiran',
+  'Kiran': 'Kiran',
+  'Shaurya Mishra': 'Henil',
+  'Shaurya': 'Henil',
+  'Henil': 'Henil',
+  'Nikunj Kataria': 'Saurav',
+  'Nikunj': 'Saurav',
+  'Saurav': 'Saurav',
+  'Jindal Patel': 'Divya',
+  'Jindal': 'Divya',
+  'Divya': 'Divya',
+  'Amber Afreen': 'Smriti',
+  'Amber': 'Smriti',
+  'Smriti': 'Smriti',
+  'Rashika Sharma': 'Jemimah',
+  'Rashika': 'Jemimah',
+  'Jemimah': 'Jemimah',
+  'Aarti Vishwakarma': 'Shreya',
+  'Aarti': 'Shreya',
+  'AARTI VISHWAKARMA': 'Shreya',
+  'Shreya': 'Shreya',
   'Rahul Sharma': 'Rishi',
   'Ananya Verma': 'Aria',
   'Vikram Singh': 'Vivan',
   'Sana Qureshi': 'Sara',
-  'Smriti': 'Smriti',
-  'Henil': 'Henil',
-  'Saurav': 'Saurav',
-  'Kiran': 'Kiran',
-  'Abhishek': 'Abhishek',
   'Rishi': 'Rishi',
   'Aria': 'Aria',
   'Vivan': 'Vivan',
-  'Sara': 'Sara',
+  'Sara': 'Sara'
 };
 
 export const TSM_CODE_NAMES = {
@@ -664,14 +679,14 @@ export function calculateOverallRating(candidateFeedback, marketingReview) {
 }
 
 export const TECH_SUPPORT_TEAM = [
-  { id: 'TSE-NB-001', supportName: 'Abhishek', employeeName: 'Harit verma', email: 'nbtech1@netbounceplacement.com', role: 'Technical Support Engineer' },
-  { id: 'TSE-NB-002', supportName: 'Kiran', employeeName: 'Prem makwana', email: 'nbtech3@netbounceplacement.com', role: 'Technical Support Engineer' },
-  { id: 'TSE-NB-003', supportName: 'Henil', employeeName: 'Shaurya mishra', email: 'nbtech2@netbounceplacement.com', role: 'Technical Support Engineer' },
-  { id: 'TSE-NB-004', supportName: 'Saurav', employeeName: 'Nikunj kataria', email: 'nbtech4@netbounceplacement.com', role: 'Technical Support Engineer' },
-  { id: 'TSE-NB-005', supportName: 'Divya', employeeName: 'Jindal patel', email: 'divya.c@netbounceplacement.com', role: 'Technical Support Engineer' },
-  { id: 'TSE-NB-006', supportName: 'Smriti', employeeName: 'Amber Afreen', email: 'smriti.m@netbounceplacement.com', role: 'Technical Support Engineer' },
-  { id: 'TSE-NB-007', supportName: 'Jemimah', employeeName: 'Rashika Sharma', email: 'jemimah.r@netbounceplacement.com', role: 'Technical Support Engineer' },
-  { id: 'TSE-NB-008', supportName: 'Shreya', employeeName: 'AARTI VISHWAKARMA', email: 'shreya.p@netbounceplacement.com', role: 'Technical Support Engineer' },
+  { id: 'TTT-NB-008', supportName: 'Abhishek', employeeName: 'Harit Verma', email: 'nbtech1@netbounceplacement.com', role: 'Technical Support Engineer' },
+  { id: 'TTT-NB-009', supportName: 'Kiran', employeeName: 'Prem Makwana', email: 'nbtech3@netbounceplacement.com', role: 'Technical Support Engineer' },
+  { id: 'TTT-NB-010', supportName: 'Henil', employeeName: 'Shaurya Mishra', email: 'nbtech2@netbounceplacement.com', role: 'Technical Support Engineer' },
+  { id: 'TTT-NB-011', supportName: 'Saurav', employeeName: 'Nikunj Kataria', email: 'nbtech4@netbounceplacement.com', role: 'Technical Support Engineer' },
+  { id: 'TTT-NB-012', supportName: 'Divya', employeeName: 'Jindal Patel', email: 'divya.c@netbounceplacement.com', role: 'Technical Support Engineer' },
+  { id: 'TTT-NB-013', supportName: 'Smriti', employeeName: 'Amber Afreen', email: 'nbtech6@netbounceplacement.com', role: 'Technical Support Engineer' },
+  { id: 'TTT-NB-014', supportName: 'Jemimah', employeeName: 'Rashika Sharma', email: 'nbtech5@netbounceplacement.com', role: 'Technical Support Engineer' },
+  { id: 'TTT-NB-015', supportName: 'Shreya', employeeName: 'Aarti Vishwakarma', email: 'nbtech7@netbounceplacement.com', role: 'Technical Support Engineer' },
 ];
 
 export const INITIAL_FEEDBACK_RECORDS = [];
@@ -733,28 +748,21 @@ export const getTsmId = (name, record) => {
   return 'TTT-NB-TSM';
 };
 
-// Identity Privacy Sanitizer: Never expose TSE or TSM real names or code names to Marketing TL / SR (ONLY their IDs)
+// Identity Privacy Sanitizer: Never expose TSE real names or emails to Marketing TL / SR (ONLY their Support Name)
 export const sanitizeForIdentityPrivacy = (record, role) => {
   if (!record) return record;
   if (roleIsMarketing(role)) {
-    const tseId = getTseId(record.techPerson || record.techSupport || record.employeeName, record);
-    const tsmId = getTsmId(record.by || record.createdByName, record);
     const copy = { ...record };
-    if (copy.techPerson) copy.techPerson = tseId;
-    if (copy.techSupport) copy.techSupport = tseId;
-    if (copy.codeName) copy.codeName = tseId;
-    if (copy.techSupportId) copy.techSupportId = tseId;
-    // Strictly mask employee real name
-    if (copy.employeeName !== undefined) copy.employeeName = tseId;
-    // Mask real tech support email
-    if (copy.techSupportEmail) copy.techSupportEmail = '—';
-    if (Array.isArray(copy.timeline)) {
-      copy.timeline = copy.timeline.map(tl => ({
-        ...tl,
-        event: (tl.event || '').replace(/\b(Abhishek|Harit|Kiran|Prem|Henil|Shaurya|Saurav|Nikunj|Divya|Jindal|Smriti|Amber|Jemimah|Rashika|Shreya|Aarti)\b/gi, tseId),
-        by: tsmId,
-      }));
-    }
+    const rawTse = record.techPerson || record.techSupport || record.employeeName || record.assigneeId;
+    const supportName = (TSE_MAP && TSE_MAP[rawTse]?.supportName) || record.codeName || (TSE_CODE_NAMES && TSE_CODE_NAMES[rawTse]) || 'Tech Support';
+
+    copy.techPerson = supportName;
+    copy.techSupport = supportName;
+    copy.codeName = supportName;
+    // Strictly mask employee real name with support name
+    if (copy.employeeName !== undefined) copy.employeeName = supportName;
+    // Mask tech support email
+    if (copy.techSupportEmail) copy.techSupportEmail = 'techsupport@netbounceplacement.com';
     return copy;
   }
   return record;
@@ -891,3 +899,102 @@ export const anonymizeInterview = (interview) => ({
 });
 
 export const getUserById = (id, users = USERS) => users.find(u => u.id === id);
+
+
+export const TSE_MAP = {
+  'Harit Verma': { realName: 'Harit Verma', supportName: 'Abhishek', email: 'nbtech1@netbounceplacement.com', empId: 'TTT-NB-008', id: 'u-tse-harit' },
+  'Harit': { realName: 'Harit Verma', supportName: 'Abhishek', email: 'nbtech1@netbounceplacement.com', empId: 'TTT-NB-008', id: 'u-tse-harit' },
+  'Abhishek': { realName: 'Harit Verma', supportName: 'Abhishek', email: 'nbtech1@netbounceplacement.com', empId: 'TTT-NB-008', id: 'u-tse-harit' },
+  'u-tse-harit': { realName: 'Harit Verma', supportName: 'Abhishek', email: 'nbtech1@netbounceplacement.com', empId: 'TTT-NB-008', id: 'u-tse-harit' },
+
+  'Prem Makwana': { realName: 'Prem Makwana', supportName: 'Kiran', email: 'nbtech3@netbounceplacement.com', empId: 'TTT-NB-009', id: 'u-tse-prem' },
+  'Prem': { realName: 'Prem Makwana', supportName: 'Kiran', email: 'nbtech3@netbounceplacement.com', empId: 'TTT-NB-009', id: 'u-tse-prem' },
+  'Kiran': { realName: 'Prem Makwana', supportName: 'Kiran', email: 'nbtech3@netbounceplacement.com', empId: 'TTT-NB-009', id: 'u-tse-prem' },
+  'u-tse-prem': { realName: 'Prem Makwana', supportName: 'Kiran', email: 'nbtech3@netbounceplacement.com', empId: 'TTT-NB-009', id: 'u-tse-prem' },
+
+  'Shaurya Mishra': { realName: 'Shaurya Mishra', supportName: 'Henil', email: 'nbtech2@netbounceplacement.com', empId: 'TTT-NB-010', id: 'u-tse-shaurya' },
+  'Shaurya': { realName: 'Shaurya Mishra', supportName: 'Henil', email: 'nbtech2@netbounceplacement.com', empId: 'TTT-NB-010', id: 'u-tse-shaurya' },
+  'Henil': { realName: 'Shaurya Mishra', supportName: 'Henil', email: 'nbtech2@netbounceplacement.com', empId: 'TTT-NB-010', id: 'u-tse-shaurya' },
+  'u-tse-shaurya': { realName: 'Shaurya Mishra', supportName: 'Henil', email: 'nbtech2@netbounceplacement.com', empId: 'TTT-NB-010', id: 'u-tse-shaurya' },
+
+  'Nikunj Kataria': { realName: 'Nikunj Kataria', supportName: 'Saurav', email: 'nbtech4@netbounceplacement.com', empId: 'TTT-NB-011', id: 'u-tse-nikunj' },
+  'Nikunj': { realName: 'Nikunj Kataria', supportName: 'Saurav', email: 'nbtech4@netbounceplacement.com', empId: 'TTT-NB-011', id: 'u-tse-nikunj' },
+  'Saurav': { realName: 'Nikunj Kataria', supportName: 'Saurav', email: 'nbtech4@netbounceplacement.com', empId: 'TTT-NB-011', id: 'u-tse-nikunj' },
+  'u-tse-nikunj': { realName: 'Nikunj Kataria', supportName: 'Saurav', email: 'nbtech4@netbounceplacement.com', empId: 'TTT-NB-011', id: 'u-tse-nikunj' },
+
+  'Jindal Patel': { realName: 'Jindal Patel', supportName: 'Divya', email: 'divya.c@netbounceplacement.com', empId: 'TTT-NB-012', id: 'u-tse-jindal' },
+  'Jindal': { realName: 'Jindal Patel', supportName: 'Divya', email: 'divya.c@netbounceplacement.com', empId: 'TTT-NB-012', id: 'u-tse-jindal' },
+  'Divya': { realName: 'Jindal Patel', supportName: 'Divya', email: 'divya.c@netbounceplacement.com', empId: 'TTT-NB-012', id: 'u-tse-jindal' },
+  'u-tse-jindal': { realName: 'Jindal Patel', supportName: 'Divya', email: 'divya.c@netbounceplacement.com', empId: 'TTT-NB-012', id: 'u-tse-jindal' },
+
+  'Amber Afreen': { realName: 'Amber Afreen', supportName: 'Smriti', email: 'nbtech6@netbounceplacement.com', empId: 'TTT-NB-013', id: 'u-tse-amber' },
+  'Amber': { realName: 'Amber Afreen', supportName: 'Smriti', email: 'nbtech6@netbounceplacement.com', empId: 'TTT-NB-013', id: 'u-tse-amber' },
+  'Smriti': { realName: 'Amber Afreen', supportName: 'Smriti', email: 'nbtech6@netbounceplacement.com', empId: 'TTT-NB-013', id: 'u-tse-amber' },
+  'u-tse-amber': { realName: 'Amber Afreen', supportName: 'Smriti', email: 'nbtech6@netbounceplacement.com', empId: 'TTT-NB-013', id: 'u-tse-amber' },
+
+  'Rashika Sharma': { realName: 'Rashika Sharma', supportName: 'Jemimah', email: 'nbtech5@netbounceplacement.com', empId: 'TTT-NB-014', id: 'u-tse-rashika' },
+  'Rashika': { realName: 'Rashika Sharma', supportName: 'Jemimah', email: 'nbtech5@netbounceplacement.com', empId: 'TTT-NB-014', id: 'u-tse-rashika' },
+  'Jemimah': { realName: 'Rashika Sharma', supportName: 'Jemimah', email: 'nbtech5@netbounceplacement.com', empId: 'TTT-NB-014', id: 'u-tse-rashika' },
+  'u-tse-rashika': { realName: 'Rashika Sharma', supportName: 'Jemimah', email: 'nbtech5@netbounceplacement.com', empId: 'TTT-NB-014', id: 'u-tse-rashika' },
+
+  'Aarti Vishwakarma': { realName: 'Aarti Vishwakarma', supportName: 'Shreya', email: 'nbtech7@netbounceplacement.com', empId: 'TTT-NB-015', id: 'u-tse-aarti' },
+  'Aarti': { realName: 'Aarti Vishwakarma', supportName: 'Shreya', email: 'nbtech7@netbounceplacement.com', empId: 'TTT-NB-015', id: 'u-tse-aarti' },
+  'AARTI VISHWAKARMA': { realName: 'Aarti Vishwakarma', supportName: 'Shreya', email: 'nbtech7@netbounceplacement.com', empId: 'TTT-NB-015', id: 'u-tse-aarti' },
+  'Shreya': { realName: 'Aarti Vishwakarma', supportName: 'Shreya', email: 'nbtech7@netbounceplacement.com', empId: 'TTT-NB-015', id: 'u-tse-aarti' },
+  'u-tse-aarti': { realName: 'Aarti Vishwakarma', supportName: 'Shreya', email: 'nbtech7@netbounceplacement.com', empId: 'TTT-NB-015', id: 'u-tse-aarti' },
+
+  'TTT-NB-008': { realName: 'Harit Verma', supportName: 'Abhishek', email: 'nbtech1@netbounceplacement.com', empId: 'TTT-NB-008' },
+  'TTT-NB-009': { realName: 'Prem Makwana', supportName: 'Kiran', email: 'nbtech3@netbounceplacement.com', empId: 'TTT-NB-009' },
+  'TTT-NB-010': { realName: 'Shaurya Mishra', supportName: 'Henil', email: 'nbtech2@netbounceplacement.com', empId: 'TTT-NB-010' },
+  'TTT-NB-011': { realName: 'Nikunj Kataria', supportName: 'Saurav', email: 'nbtech4@netbounceplacement.com', empId: 'TTT-NB-011' },
+  'TTT-NB-012': { realName: 'Jindal Patel', supportName: 'Divya', email: 'divya.c@netbounceplacement.com', empId: 'TTT-NB-012' },
+  'TTT-NB-013': { realName: 'Amber Afreen', supportName: 'Smriti', email: 'nbtech6@netbounceplacement.com', empId: 'TTT-NB-013' },
+  'TTT-NB-014': { realName: 'Rashika Sharma', supportName: 'Jemimah', email: 'nbtech5@netbounceplacement.com', empId: 'TTT-NB-014' },
+  'TTT-NB-015': { realName: 'Aarti Vishwakarma', supportName: 'Shreya', email: 'nbtech7@netbounceplacement.com', empId: 'TTT-NB-015' },
+};
+
+export const formatTseNameForRole = (itemOrName, currentRole) => {
+  if (!itemOrName) return 'Unassigned';
+  let realName = '';
+  let supportName = '';
+
+  if (typeof itemOrName === 'string') {
+    const entry = TSE_MAP[itemOrName];
+    if (entry) {
+      realName = entry.realName;
+      supportName = entry.supportName;
+    } else {
+      supportName = itemOrName;
+    }
+  } else if (typeof itemOrName === 'object') {
+    const rawName = itemOrName.name || itemOrName.techPerson || itemOrName.employeeName || '';
+    const rawSupport = itemOrName.supportName || itemOrName.codeName || itemOrName.techSupport || '';
+    const lookup = TSE_MAP[rawName] || TSE_MAP[rawSupport] || TSE_MAP[itemOrName.assigneeId] || TSE_MAP[itemOrName.empId] || TSE_MAP[itemOrName.id];
+    if (lookup) {
+      realName = lookup.realName;
+      supportName = lookup.supportName;
+    } else {
+      realName = rawName;
+      supportName = rawSupport || rawName;
+    }
+  }
+
+  // Marketing TL & SR: ONLY Support Name! Under no circumstances show real name or email
+  if (roleIsMarketing(currentRole)) {
+    return supportName || 'Tech Support';
+  }
+
+  // Management and TSM: Real Name (Support Name)
+  if (['upper_management', 'management', 'tsm'].includes(currentRole)) {
+    if (realName && supportName && realName.toLowerCase() !== supportName.toLowerCase()) {
+      return `${realName} (${supportName})`;
+    }
+    return realName || supportName || 'Unassigned';
+  }
+
+  // TSE and others: Real Name (Support Name)
+  if (realName && supportName && realName.toLowerCase() !== supportName.toLowerCase()) {
+    return `${realName} (${supportName})`;
+  }
+  return realName || supportName || 'Unassigned';
+};

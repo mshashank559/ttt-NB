@@ -715,7 +715,7 @@ app.get('/api/tasks', async (req, res) => {
     let filter = {};
 
     if (role === 'tse' && userId) {
-      filter = { $or: [{ assigneeId: userId }, { techPerson: { $regex: new RegExp(userId, 'i') } }] };
+      filter = { $or: [{ assigneeId: userId }, { techPerson: { $regex: new RegExp(userId, 'i') } }, { codeName: { $regex: new RegExp(userId, 'i') } }] };
     } else if (role === 'recruiter' && userId) {
       filter = { $or: [{ pocId: userId }, { recruiterName: { $regex: new RegExp(userId, 'i') } }] };
     } else if (role === 'marketing_tl') {
@@ -930,6 +930,16 @@ app.get('/api/feedbacks', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+
+// Guard Candidate SAGA Feedback link generation
+app.post('/api/feedbacks/generate-link', (req, res) => {
+  const { role } = req.body || {};
+  if (role === 'tsm') {
+    return res.status(403).json({ error: 'TSM is not authorized to generate Candidate SAGA feedback links.' });
+  }
+  res.json({ success: true, message: 'Authorized' });
 });
 
 app.post('/api/feedbacks', async (req, res) => {

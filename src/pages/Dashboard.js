@@ -498,7 +498,13 @@ export default function Dashboard() {
         <SectionCard title="Team Workload" subtitle="Capacity across your TSEs">
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
             {myTeam.map(u => {
-              const a = tasks.filter(t => t.assigneeId === u.id || t.techPerson === u.name);
+              const a = tasks.filter(t => 
+                t.assigneeId === u.id || 
+                t.assigneeId === u.empId || 
+                t.techPerson === u.name || 
+                (u.codeName && (t.codeName === u.codeName || t.techPerson === u.codeName)) ||
+                (t.techPerson && t.techPerson.toLowerCase().includes(u.name.toLowerCase()))
+              );
               const c = a.filter(t => t.status === 'Completed' || t.status === 'Done').length;
               const p = a.filter(t => t.status === 'In Progress' || t.status === 'Pending' || t.status === 'Reschedule').length;
               const rate = a.length ? Math.round((c / a.length) * 100) : 0;
@@ -510,7 +516,7 @@ export default function Dashboard() {
                 >
                   <div className="flex items-center justify-between">
                     <div>
-                      <div className="text-sm font-bold text-slate-900 dark:text-white">{u.name}</div>
+                      <div className="text-sm font-bold text-slate-900 dark:text-white">{u.name} {u.codeName ? `(${u.codeName})` : ''}</div>
                       <div className="text-xs text-slate-500 dark:text-slate-400 font-mono">{u.empId}</div>
                     </div>
                     <CircularProgressRing percentage={rate} color="#1416c1" size={38} />
@@ -563,7 +569,7 @@ export default function Dashboard() {
               <tbody className="divide-y divide-slate-100 dark:divide-white/5">
                 {tasks.slice(0, 8).map(t => {
                   const a = users.find(u => u.id === t.assigneeId);
-                  const techName = a?.name || t.techPerson || 'Unassigned';
+                  const techName = formatTseNameForRole(a || t, currentRole);
                   return (
                     <tr
                       key={t.id}

@@ -164,7 +164,7 @@ const sessionTypeBadge = {
 
 export default function ReportsPage() {
   const { feedbacks, currentRole } = useApp();
-  const canViewRealName = ['upper_management', 'management'].includes(currentRole);
+  const canViewRealName = ['upper_management', 'management', 'tsm'].includes(currentRole);
 
   // Search & Filters State
   const [search, setSearch] = useState('');
@@ -624,7 +624,7 @@ export default function ReportsPage() {
 
       const fullTseTableRows = sortedTseList.map(t => [
         t.id,
-        canViewRealName && t.employeeName ? `${t.name} (${t.employeeName})` : t.name,
+        roleIsMarketing(currentRole) ? (t.supportName || t.name) : (canViewRealName && t.employeeName ? `${t.employeeName} (${t.supportName || t.name})` : t.name),
         t.email,
         `${t.candidatesHandled}`,
         t.candidateAvg !== null ? `${t.candidateAvg.toFixed(2)}` : '—',
@@ -859,7 +859,7 @@ export default function ReportsPage() {
         return [
           s.date,
           s.techSupportId || '—',
-          roleIsMarketing(currentRole) ? (s.techSupportId || 'TSE-ID') : s.techSupport,
+          s.techSupport || 'Tech Support',
           canViewRealName ? (s.techSupportEmail || '—') : '—',
           s.candidateName,
           s.candidateEmail || '—',
@@ -1395,7 +1395,7 @@ export default function ReportsPage() {
                         </div>
                         <div>
                           <div className="font-semibold text-slate-900 group-hover:text-blue-700 transition-colors">
-                            {roleIsMarketing(currentRole) ? (tse.id || 'TSE-ID') : tse.name}
+                            {roleIsMarketing(currentRole) ? (tse.supportName || tse.name) : (canViewRealName && tse.employeeName ? `${tse.employeeName} (${tse.supportName || tse.name})` : tse.name)}
                           </div>
                           {!roleIsMarketing(currentRole) && canViewRealName && tse.employeeName && (
                             <div className="text-[10px] text-slate-500 truncate">

@@ -14,6 +14,8 @@ import {
   roleIsMarketing,
   getTseCodeName,
   getTsmCodeName,
+  formatTseNameForRole,
+  TSE_MAP,
   filterAuthorizedData,
   sanitizeForIdentityPrivacy,
   anonymizeInterview,
@@ -44,7 +46,45 @@ export const AppProvider = ({ children }) => {
   const [currentRole, setCurrentRole] = useState(() => session.role);
   const [currentUserId, setCurrentUserId] = useState(() => session.userId);
   const [authLoading, setAuthLoading] = useState(false);
-  const [tasks, setTasks] = useState(INITIAL_TASKS);
+  const [tasks, setTasks] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('ttt_tasks');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch (e) {
+        console.warn('Failed to parse saved tasks:', e);
+      }
+    }
+    return INITIAL_TASKS;
+  });
+
+  // Cross-tab synchronization for tasks
+  React.useEffect(() => {
+    const handleStorage = (e) => {
+      if (e.key === 'ttt_tasks' && e.newValue) {
+        try {
+          setTasks(JSON.parse(e.newValue));
+        } catch (err) { }
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
+
+  const updateTasksWithStorage = useCallback((updater) => {
+    setTasks(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('ttt_tasks', JSON.stringify(next));
+        } catch (err) { }
+      }
+      return next;
+    });
+  }, []);
   const [interviews, setInterviews] = useState(INITIAL_INTERVIEWS);
   const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS);
   const [events, setEvents] = useState(INITIAL_EVENTS);
@@ -280,7 +320,7 @@ export const AppProvider = ({ children }) => {
           try {
             const data = JSON.parse(e.data);
             if (data && data.id) {
-              setTasks(prev => prev.filter(t => t.id !== data.id));
+              updateTasksWithStorage(prev => prev.filter(t => t.id !== data.id));
             }
           } catch (err) {}
         });
@@ -630,7 +670,7 @@ export const AppProvider = ({ children }) => {
         { at: date, event: `Assigned to ${assignee?.name || 'Unassigned'} for ${taskType}`, by: creator?.name || 'TSM' },
       ],
     };
-    setTasks(prev => [newTask, ...prev]);
+    updateTasksWithStorage(prev => [newTask, ...prev]);
 
     // Also auto-create linked feedback session for Marketing console
     const matchingTse = TECH_SUPPORT_TEAM.find(t =>
@@ -703,7 +743,7 @@ export const AppProvider = ({ children }) => {
         id: `n-${Date.now()}-creator`,
         type: 'task',
         title: 'Task created',
-        message: `${id}: ${candidateName} assigned to ${assignee?.name || 'TSE'}`,
+        message: `${id}: ${candidateName} assigned to ${formatTseNameForRole(assignee || task.techPerson, 'tsm')}`,
         time: 'just now',
         read: false,
         targetUserId: creator?.id,
@@ -743,7 +783,7 @@ export const AppProvider = ({ children }) => {
 
   const updateTask = useCallback((id, patch, note) => {
     let patchedTask = null;
-    setTasks(prev => prev.map(t => {
+    updateTasksWithStorage(prev => prev.map(t => {
       if (t.id !== id) return t;
       const updated = { ...t, ...patch };
       if (note) {
