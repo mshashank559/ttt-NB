@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { Star, Shield, UserRound } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { PageHeader, StatusBadge, SectionCard, EmptyState, KpiCard } from '../components/common';
-import { INTERVIEW_STATUSES, roleIsMarketing } from '../data/mockData';
+import { INTERVIEW_STATUSES, roleIsMarketing, formatTseNameForRole } from '../data/mockData';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import { Textarea } from '../components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
@@ -175,7 +175,7 @@ export default function Interviews() {
                         </div>
                         <div className="mt-1 text-xs text-slate-600">{i.position} · {i.date} {i.time}</div>
                         {interviewer && !isMk && (
-                          <div className="mt-2 text-[11px] text-slate-500 font-medium">Interviewer: {interviewer.name}</div>
+                          <div className="mt-2 text-[11px] text-slate-500 font-medium">Interviewer: {formatTseNameForRole(interviewer, currentRole)}</div>
                         )}
                       </motion.button>
                     );

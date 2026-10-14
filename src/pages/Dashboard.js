@@ -750,7 +750,7 @@ export default function Dashboard() {
                       <td className="py-3 px-4 font-bold text-slate-900">{t.candidateName || t.title}</td>
                       <td className="py-3 px-4 text-xs text-slate-600">{t.position || '—'}</td>
                       <td className="py-3 px-4 text-xs font-semibold text-slate-800">{t.companyName || '—'}</td>
-                      <td className="py-3 px-4 text-xs text-slate-700 font-medium">{t.codeName || t.techPerson}</td>
+                      <td className="py-3 px-4 text-xs text-slate-700 font-medium">{formatTseNameForRole(t, currentRole)}</td>
                       <td className="py-3 px-4">
                         <button
                           onClick={() => navigate('/tasks')}

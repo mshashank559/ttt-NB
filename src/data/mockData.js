@@ -995,17 +995,36 @@ export const formatTseNameForRole = (itemOrName, currentRole) => {
   let supportName = '';
 
   if (typeof itemOrName === 'string') {
-    const entry = TSE_MAP[itemOrName];
+    const trimmed = itemOrName.trim();
+    const entry = TSE_MAP[trimmed];
     if (entry) {
       realName = entry.realName;
       supportName = entry.supportName;
     } else {
-      supportName = itemOrName;
+      const lower = trimmed.toLowerCase();
+      const match = Object.values(TSE_MAP).find(
+        e => (e.realName && e.realName.toLowerCase() === lower) ||
+             (e.supportName && e.supportName.toLowerCase() === lower) ||
+             (e.empId && e.empId.toLowerCase() === lower) ||
+             (e.id && e.id.toLowerCase() === lower)
+      );
+      if (match) {
+        realName = match.realName;
+        supportName = match.supportName;
+      } else {
+        supportName = itemOrName;
+      }
     }
   } else if (typeof itemOrName === 'object') {
-    const rawName = itemOrName.name || itemOrName.techPerson || itemOrName.employeeName || '';
-    const rawSupport = itemOrName.supportName || itemOrName.codeName || itemOrName.techSupport || '';
-    const lookup = TSE_MAP[rawName] || TSE_MAP[rawSupport] || TSE_MAP[itemOrName.assigneeId] || TSE_MAP[itemOrName.empId] || TSE_MAP[itemOrName.id];
+    const rawName = (itemOrName.name || itemOrName.techPerson || itemOrName.employeeName || '').trim();
+    const rawSupport = (itemOrName.supportName || itemOrName.codeName || itemOrName.techSupport || '').trim();
+    const rawId = (itemOrName.assigneeId || itemOrName.empId || itemOrName.id || itemOrName.techSupportId || '').trim();
+
+    const lookup = TSE_MAP[rawName] || TSE_MAP[rawSupport] || TSE_MAP[rawId] || Object.values(TSE_MAP).find(
+      e => (rawName && e.realName.toLowerCase() === rawName.toLowerCase()) ||
+           (rawSupport && e.supportName.toLowerCase() === rawSupport.toLowerCase()) ||
+           (rawId && (e.empId.toLowerCase() === rawId.toLowerCase() || e.id.toLowerCase() === rawId.toLowerCase()))
+    );
     if (lookup) {
       realName = lookup.realName;
       supportName = lookup.supportName;
@@ -1015,12 +1034,23 @@ export const formatTseNameForRole = (itemOrName, currentRole) => {
     }
   }
 
-  // Marketing TL & SR: ONLY Support Name! Under no circumstances show real name or email
+  // Cross-lookup missing realName or supportName
+  if (!realName && supportName) {
+    const entry = TSE_MAP[supportName] || Object.values(TSE_MAP).find(e => e.supportName && e.supportName.toLowerCase() === supportName.toLowerCase());
+    if (entry) realName = entry.realName;
+  }
+  if (!supportName && realName) {
+    const entry = TSE_MAP[realName] || Object.values(TSE_MAP).find(e => e.realName && e.realName.toLowerCase() === realName.toLowerCase());
+    if (entry) supportName = entry.supportName;
+  }
+
+  // Marketing TL & SR: ONLY Support/Pseudo Name! Never leak real employee name
   if (roleIsMarketing(currentRole)) {
     return supportName || 'Tech Support';
   }
 
-  // Management and TSM: Real Name (Support Name)
+  // Management, Upper Management & TSM: Both Real Name and Pseudo Name MUST be clearly visible!
+  // Format: "Real Name (Pseudo Name)" e.g. "Harit Verma (Abhishek)"
   if (['upper_management', 'management', 'tsm'].includes(currentRole)) {
     if (realName && supportName && realName.toLowerCase() !== supportName.toLowerCase()) {
       return `${realName} (${supportName})`;
@@ -1028,7 +1058,7 @@ export const formatTseNameForRole = (itemOrName, currentRole) => {
     return realName || supportName || 'Unassigned';
   }
 
-  // TSE and others: Real Name (Support Name)
+  // TSE and other roles: Real Name (Pseudo Name)
   if (realName && supportName && realName.toLowerCase() !== supportName.toLowerCase()) {
     return `${realName} (${supportName})`;
   }

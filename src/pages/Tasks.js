@@ -453,9 +453,7 @@ const TaskDrawer = ({ task, onClose }) => {
                   <UserRound size={12} className="text-blue-600" /> {roleIsMarketing(currentRole) ? 'Tech Support' : 'Tech Person (TSE)'}
                 </div>
                 <div className="text-sm font-semibold text-slate-900">
-                  {roleIsMarketing(currentRole)
-                    ? (assignee?.empId || assignee?.tttNbId || task.techPersonId || task.assigneeId || 'TSE-ID')
-                    : (assignee?.name || task.techPerson || 'Unassigned')}
+                  {formatTseNameForRole(assignee || task, currentRole)}
                 </div>
               </div>
               <div>
@@ -882,10 +880,7 @@ export default function Tasks() {
               <tbody>
                 {filtered.map(t => {
                   const a = users.find(u => u.id === t.assigneeId);
-                  const isMarketing = roleIsMarketing(currentRole);
-                  const techName = isMarketing
-                    ? (a?.empId || a?.tttNbId || t.techPersonId || t.assigneeId || 'TSE-ID')
-                    : (a?.name || t.techPerson || 'Unassigned');
+                  const techName = formatTseNameForRole(a || t, currentRole);
                   return (
                     <motion.tr
                       initial={{ opacity: 0 }}

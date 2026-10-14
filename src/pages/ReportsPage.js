@@ -859,7 +859,7 @@ export default function ReportsPage() {
         return [
           s.date,
           s.techSupportId || '—',
-          s.techSupport || 'Tech Support',
+          formatTseNameForRole(s, currentRole),
           canViewRealName ? (s.techSupportEmail || '—') : '—',
           s.candidateName,
           s.candidateEmail || '—',
