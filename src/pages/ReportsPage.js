@@ -12,7 +12,7 @@ import autoTable from 'jspdf-autotable';
 
 import { useApp } from '../context/AppContext';
 import { PageHeader, SectionCard, StatusBadge } from '../components/common';
-import { calculateOverallRating, TECH_SUPPORT_TEAM, roleIsMarketing, formatTseNameForRole } from '../data/mockData';
+import { calculateOverallRating, TECH_SUPPORT_TEAM, roleIsMarketing, formatTseNameForRole, resolveTse } from '../data/mockData';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 
 // Performance Classification Utility (Configurable thresholds)
@@ -317,24 +317,31 @@ export default function ReportsPage() {
 
     // Populate with filtered sessions
     filteredSessions.forEach(session => {
-      const name = session.techSupport;
-      if (!name) return;
+      // Robust multi-vector resolution by ID, supportName, employeeName, or linked task
+      const tseEntry = resolveTse(session.techSupportId) ||
+                       resolveTse(session.techSupport) ||
+                       resolveTse(session.employeeName) ||
+                       resolveTse(session.assigneeId);
 
-      if (!tseMap.has(name)) {
-        tseMap.set(name, {
-          id: session.techSupportId || 'TSE-NB-999',
-          name,
-          employeeName: session.employeeName || name,
-          email: session.techSupportEmail || `${name.toLowerCase()}@netbounceplacement.com`,
+      const resolvedSupport = tseEntry ? tseEntry.supportName : (session.techSupport && session.techSupport !== 'Code Name Unassigned' ? session.techSupport : null);
+      if (!resolvedSupport) return; // Cleanly ignore stray unmapped/fake records
+
+      let tse = tseMap.get(resolvedSupport);
+      if (!tse) {
+        tse = {
+          id: tseEntry?.empId || session.techSupportId || 'TSE-NB-999',
+          name: resolvedSupport,
+          supportName: resolvedSupport,
+          employeeName: tseEntry?.realName || session.employeeName || resolvedSupport,
+          email: tseEntry?.email || session.techSupportEmail || `${resolvedSupport.toLowerCase()}@netbounceplacement.com`,
           candidatesHandled: 0,
           sessions: [],
           candidateRatings: [],
           marketingRatings: [],
           combinedScores: [],
-        });
+        };
+        tseMap.set(resolvedSupport, tse);
       }
-
-      const tse = tseMap.get(name);
       tse.candidatesHandled += 1;
       tse.sessions.push(session);
 
@@ -1395,7 +1402,7 @@ export default function ReportsPage() {
                         </div>
                         <div>
                           <div className="font-semibold text-slate-900 group-hover:text-blue-700 transition-colors">
-                            {roleIsMarketing(currentRole) ? (tse.supportName || tse.name) : (canViewRealName && tse.employeeName ? `${tse.employeeName} (${tse.supportName || tse.name})` : tse.name)}
+                            {formatTseNameForRole(tse, currentRole)}
                           </div>
                           {!roleIsMarketing(currentRole) && canViewRealName && tse.employeeName && (
                             <div className="text-[10px] text-slate-500 truncate">
@@ -1469,7 +1476,7 @@ export default function ReportsPage() {
                 <span>TSE Performance & Feedback Intelligence</span>
               </div>
               <DialogTitle className="text-2xl font-bold text-slate-900 mt-1 flex items-center gap-2.5 flex-wrap">
-                <span>{roleIsMarketing(currentRole) ? (drillDownTse?.id || 'TSE-ID') : drillDownTse?.name}</span>
+                <span>{roleIsMarketing(currentRole) ? (drillDownTse?.id || 'TSE-ID') : formatTseNameForRole(drillDownTse, currentRole)}</span>
                 <span className="text-xs font-mono px-2 py-0.5 rounded bg-blue-50 border border-blue-200 text-blue-700 font-semibold">
                   {drillDownTse?.id}
                 </span>

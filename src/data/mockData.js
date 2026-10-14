@@ -938,119 +938,122 @@ export const getUserById = (id, users = USERS) => users.find(u => u.id === id);
 
 
 export const TSE_MAP = {
-  'Harit Verma': { realName: 'Harit Verma', supportName: 'Abhishek', email: 'nbtech1@netbounceplacement.com', empId: 'TTT-NB-008', id: 'u-tse-harit' },
-  'Harit': { realName: 'Harit Verma', supportName: 'Abhishek', email: 'nbtech1@netbounceplacement.com', empId: 'TTT-NB-008', id: 'u-tse-harit' },
-  'Abhishek': { realName: 'Harit Verma', supportName: 'Abhishek', email: 'nbtech1@netbounceplacement.com', empId: 'TTT-NB-008', id: 'u-tse-harit' },
-  'u-tse-harit': { realName: 'Harit Verma', supportName: 'Abhishek', email: 'nbtech1@netbounceplacement.com', empId: 'TTT-NB-008', id: 'u-tse-harit' },
+  'Harit Verma': { realName: 'Harit Verma', supportName: 'Abhishek', email: 'nbtech1@netbounceplacement.com', empId: 'TTT-NB-008', id: 'u-1791910812799' },
+  'Harit': { realName: 'Harit Verma', supportName: 'Abhishek', email: 'nbtech1@netbounceplacement.com', empId: 'TTT-NB-008', id: 'u-1791910812799' },
+  'Abhishek': { realName: 'Harit Verma', supportName: 'Abhishek', email: 'nbtech1@netbounceplacement.com', empId: 'TTT-NB-008', id: 'u-1791910812799' },
+  'u-1791910812799': { realName: 'Harit Verma', supportName: 'Abhishek', email: 'nbtech1@netbounceplacement.com', empId: 'TTT-NB-008', id: 'u-1791910812799' },
+  'u-tse-harit': { realName: 'Harit Verma', supportName: 'Abhishek', email: 'nbtech1@netbounceplacement.com', empId: 'TTT-NB-008', id: 'u-1791910812799' },
+  'TTT-NB-008': { realName: 'Harit Verma', supportName: 'Abhishek', email: 'nbtech1@netbounceplacement.com', empId: 'TTT-NB-008', id: 'u-1791910812799' },
 
-  'Prem Makwana': { realName: 'Prem Makwana', supportName: 'Kiran', email: 'nbtech3@netbounceplacement.com', empId: 'TTT-NB-009', id: 'u-tse-prem' },
-  'Prem': { realName: 'Prem Makwana', supportName: 'Kiran', email: 'nbtech3@netbounceplacement.com', empId: 'TTT-NB-009', id: 'u-tse-prem' },
-  'Kiran': { realName: 'Prem Makwana', supportName: 'Kiran', email: 'nbtech3@netbounceplacement.com', empId: 'TTT-NB-009', id: 'u-tse-prem' },
-  'u-tse-prem': { realName: 'Prem Makwana', supportName: 'Kiran', email: 'nbtech3@netbounceplacement.com', empId: 'TTT-NB-009', id: 'u-tse-prem' },
+  'Prem Makwana': { realName: 'Prem Makwana', supportName: 'Kiran', email: 'nbtech3@netbounceplacement.com', empId: 'TTT-NB-009', id: 'u-1791910844293' },
+  'Prem': { realName: 'Prem Makwana', supportName: 'Kiran', email: 'nbtech3@netbounceplacement.com', empId: 'TTT-NB-009', id: 'u-1791910844293' },
+  'Kiran': { realName: 'Prem Makwana', supportName: 'Kiran', email: 'nbtech3@netbounceplacement.com', empId: 'TTT-NB-009', id: 'u-1791910844293' },
+  'u-1791910844293': { realName: 'Prem Makwana', supportName: 'Kiran', email: 'nbtech3@netbounceplacement.com', empId: 'TTT-NB-009', id: 'u-1791910844293' },
+  'u-tse-prem': { realName: 'Prem Makwana', supportName: 'Kiran', email: 'nbtech3@netbounceplacement.com', empId: 'TTT-NB-009', id: 'u-1791910844293' },
+  'TTT-NB-009': { realName: 'Prem Makwana', supportName: 'Kiran', email: 'nbtech3@netbounceplacement.com', empId: 'TTT-NB-009', id: 'u-1791910844293' },
 
-  'Shaurya Mishra': { realName: 'Shaurya Mishra', supportName: 'Henil', email: 'nbtech2@netbounceplacement.com', empId: 'TTT-NB-010', id: 'u-tse-shaurya' },
-  'Shaurya': { realName: 'Shaurya Mishra', supportName: 'Henil', email: 'nbtech2@netbounceplacement.com', empId: 'TTT-NB-010', id: 'u-tse-shaurya' },
-  'Henil': { realName: 'Shaurya Mishra', supportName: 'Henil', email: 'nbtech2@netbounceplacement.com', empId: 'TTT-NB-010', id: 'u-tse-shaurya' },
-  'u-tse-shaurya': { realName: 'Shaurya Mishra', supportName: 'Henil', email: 'nbtech2@netbounceplacement.com', empId: 'TTT-NB-010', id: 'u-tse-shaurya' },
+  'Shaurya Mishra': { realName: 'Shaurya Mishra', supportName: 'Henil', email: 'nbtech2@netbounceplacement.com', empId: 'TTT-NB-010', id: 'u-1791910865708' },
+  'Shaurya': { realName: 'Shaurya Mishra', supportName: 'Henil', email: 'nbtech2@netbounceplacement.com', empId: 'TTT-NB-010', id: 'u-1791910865708' },
+  'Henil': { realName: 'Shaurya Mishra', supportName: 'Henil', email: 'nbtech2@netbounceplacement.com', empId: 'TTT-NB-010', id: 'u-1791910865708' },
+  'u-1791910865708': { realName: 'Shaurya Mishra', supportName: 'Henil', email: 'nbtech2@netbounceplacement.com', empId: 'TTT-NB-010', id: 'u-1791910865708' },
+  'u-tse-shaurya': { realName: 'Shaurya Mishra', supportName: 'Henil', email: 'nbtech2@netbounceplacement.com', empId: 'TTT-NB-010', id: 'u-1791910865708' },
+  'TTT-NB-010': { realName: 'Shaurya Mishra', supportName: 'Henil', email: 'nbtech2@netbounceplacement.com', empId: 'TTT-NB-010', id: 'u-1791910865708' },
 
-  'Nikunj Kataria': { realName: 'Nikunj Kataria', supportName: 'Saurav', email: 'nbtech4@netbounceplacement.com', empId: 'TTT-NB-011', id: 'u-tse-nikunj' },
-  'Nikunj': { realName: 'Nikunj Kataria', supportName: 'Saurav', email: 'nbtech4@netbounceplacement.com', empId: 'TTT-NB-011', id: 'u-tse-nikunj' },
-  'Saurav': { realName: 'Nikunj Kataria', supportName: 'Saurav', email: 'nbtech4@netbounceplacement.com', empId: 'TTT-NB-011', id: 'u-tse-nikunj' },
-  'u-tse-nikunj': { realName: 'Nikunj Kataria', supportName: 'Saurav', email: 'nbtech4@netbounceplacement.com', empId: 'TTT-NB-011', id: 'u-tse-nikunj' },
+  'Nikunj Kataria': { realName: 'Nikunj Kataria', supportName: 'Saurav', email: 'nbtech4@netbounceplacement.com', empId: 'TTT-NB-011', id: 'u-1791910900310' },
+  'Nikunj': { realName: 'Nikunj Kataria', supportName: 'Saurav', email: 'nbtech4@netbounceplacement.com', empId: 'TTT-NB-011', id: 'u-1791910900310' },
+  'Saurav': { realName: 'Nikunj Kataria', supportName: 'Saurav', email: 'nbtech4@netbounceplacement.com', empId: 'TTT-NB-011', id: 'u-1791910900310' },
+  'u-1791910900310': { realName: 'Nikunj Kataria', supportName: 'Saurav', email: 'nbtech4@netbounceplacement.com', empId: 'TTT-NB-011', id: 'u-1791910900310' },
+  'u-tse-nikunj': { realName: 'Nikunj Kataria', supportName: 'Saurav', email: 'nbtech4@netbounceplacement.com', empId: 'TTT-NB-011', id: 'u-1791910900310' },
+  'TTT-NB-011': { realName: 'Nikunj Kataria', supportName: 'Saurav', email: 'nbtech4@netbounceplacement.com', empId: 'TTT-NB-011', id: 'u-1791910900310' },
 
-  'Jindal Patel': { realName: 'Jindal Patel', supportName: 'Divya', email: 'divya.c@netbounceplacement.com', empId: 'TTT-NB-012', id: 'u-tse-jindal' },
-  'Jindal': { realName: 'Jindal Patel', supportName: 'Divya', email: 'divya.c@netbounceplacement.com', empId: 'TTT-NB-012', id: 'u-tse-jindal' },
-  'Divya': { realName: 'Jindal Patel', supportName: 'Divya', email: 'divya.c@netbounceplacement.com', empId: 'TTT-NB-012', id: 'u-tse-jindal' },
-  'u-tse-jindal': { realName: 'Jindal Patel', supportName: 'Divya', email: 'divya.c@netbounceplacement.com', empId: 'TTT-NB-012', id: 'u-tse-jindal' },
+  'Jindal Patel': { realName: 'Jindal Patel', supportName: 'Divya', email: 'divya.c@netbounceplacement.com', empId: 'TTT-NB-012', id: 'u-1791910926064' },
+  'Jindal': { realName: 'Jindal Patel', supportName: 'Divya', email: 'divya.c@netbounceplacement.com', empId: 'TTT-NB-012', id: 'u-1791910926064' },
+  'Divya': { realName: 'Jindal Patel', supportName: 'Divya', email: 'divya.c@netbounceplacement.com', empId: 'TTT-NB-012', id: 'u-1791910926064' },
+  'u-1791910926064': { realName: 'Jindal Patel', supportName: 'Divya', email: 'divya.c@netbounceplacement.com', empId: 'TTT-NB-012', id: 'u-1791910926064' },
+  'u-tse-jindal': { realName: 'Jindal Patel', supportName: 'Divya', email: 'divya.c@netbounceplacement.com', empId: 'TTT-NB-012', id: 'u-1791910926064' },
+  'TTT-NB-012': { realName: 'Jindal Patel', supportName: 'Divya', email: 'divya.c@netbounceplacement.com', empId: 'TTT-NB-012', id: 'u-1791910926064' },
 
-  'Amber Afreen': { realName: 'Amber Afreen', supportName: 'Smriti', email: 'nbtech6@netbounceplacement.com', empId: 'TTT-NB-013', id: 'u-tse-amber' },
-  'Amber': { realName: 'Amber Afreen', supportName: 'Smriti', email: 'nbtech6@netbounceplacement.com', empId: 'TTT-NB-013', id: 'u-tse-amber' },
-  'Smriti': { realName: 'Amber Afreen', supportName: 'Smriti', email: 'nbtech6@netbounceplacement.com', empId: 'TTT-NB-013', id: 'u-tse-amber' },
-  'u-tse-amber': { realName: 'Amber Afreen', supportName: 'Smriti', email: 'nbtech6@netbounceplacement.com', empId: 'TTT-NB-013', id: 'u-tse-amber' },
+  'Amber Afreen': { realName: 'Amber Afreen', supportName: 'Smriti', email: 'nbtech6@netbounceplacement.com', empId: 'TTT-NB-013', id: 'u-1791910948923' },
+  'Amber': { realName: 'Amber Afreen', supportName: 'Smriti', email: 'nbtech6@netbounceplacement.com', empId: 'TTT-NB-013', id: 'u-1791910948923' },
+  'Smriti': { realName: 'Amber Afreen', supportName: 'Smriti', email: 'nbtech6@netbounceplacement.com', empId: 'TTT-NB-013', id: 'u-1791910948923' },
+  'u-1791910948923': { realName: 'Amber Afreen', supportName: 'Smriti', email: 'nbtech6@netbounceplacement.com', empId: 'TTT-NB-013', id: 'u-1791910948923' },
+  'u-tse-amber': { realName: 'Amber Afreen', supportName: 'Smriti', email: 'nbtech6@netbounceplacement.com', empId: 'TTT-NB-013', id: 'u-1791910948923' },
+  'TTT-NB-013': { realName: 'Amber Afreen', supportName: 'Smriti', email: 'nbtech6@netbounceplacement.com', empId: 'TTT-NB-013', id: 'u-1791910948923' },
 
-  'Rashika Sharma': { realName: 'Rashika Sharma', supportName: 'Jemimah', email: 'nbtech5@netbounceplacement.com', empId: 'TTT-NB-014', id: 'u-tse-rashika' },
-  'Rashika': { realName: 'Rashika Sharma', supportName: 'Jemimah', email: 'nbtech5@netbounceplacement.com', empId: 'TTT-NB-014', id: 'u-tse-rashika' },
-  'Jemimah': { realName: 'Rashika Sharma', supportName: 'Jemimah', email: 'nbtech5@netbounceplacement.com', empId: 'TTT-NB-014', id: 'u-tse-rashika' },
-  'u-tse-rashika': { realName: 'Rashika Sharma', supportName: 'Jemimah', email: 'nbtech5@netbounceplacement.com', empId: 'TTT-NB-014', id: 'u-tse-rashika' },
+  'Rashika Sharma': { realName: 'Rashika Sharma', supportName: 'Jemimah', email: 'nbtech5@netbounceplacement.com', empId: 'TTT-NB-014', id: 'u-1791910976518' },
+  'Rashika': { realName: 'Rashika Sharma', supportName: 'Jemimah', email: 'nbtech5@netbounceplacement.com', empId: 'TTT-NB-014', id: 'u-1791910976518' },
+  'Jemimah': { realName: 'Rashika Sharma', supportName: 'Jemimah', email: 'nbtech5@netbounceplacement.com', empId: 'TTT-NB-014', id: 'u-1791910976518' },
+  'u-1791910976518': { realName: 'Rashika Sharma', supportName: 'Jemimah', email: 'nbtech5@netbounceplacement.com', empId: 'TTT-NB-014', id: 'u-1791910976518' },
+  'u-tse-rashika': { realName: 'Rashika Sharma', supportName: 'Jemimah', email: 'nbtech5@netbounceplacement.com', empId: 'TTT-NB-014', id: 'u-1791910976518' },
+  'TTT-NB-014': { realName: 'Rashika Sharma', supportName: 'Jemimah', email: 'nbtech5@netbounceplacement.com', empId: 'TTT-NB-014', id: 'u-1791910976518' },
 
-  'Aarti Vishwakarma': { realName: 'Aarti Vishwakarma', supportName: 'Shreya', email: 'nbtech7@netbounceplacement.com', empId: 'TTT-NB-015', id: 'u-tse-aarti' },
-  'Aarti': { realName: 'Aarti Vishwakarma', supportName: 'Shreya', email: 'nbtech7@netbounceplacement.com', empId: 'TTT-NB-015', id: 'u-tse-aarti' },
-  'AARTI VISHWAKARMA': { realName: 'Aarti Vishwakarma', supportName: 'Shreya', email: 'nbtech7@netbounceplacement.com', empId: 'TTT-NB-015', id: 'u-tse-aarti' },
-  'Shreya': { realName: 'Aarti Vishwakarma', supportName: 'Shreya', email: 'nbtech7@netbounceplacement.com', empId: 'TTT-NB-015', id: 'u-tse-aarti' },
-  'u-tse-aarti': { realName: 'Aarti Vishwakarma', supportName: 'Shreya', email: 'nbtech7@netbounceplacement.com', empId: 'TTT-NB-015', id: 'u-tse-aarti' },
+  'Aarti Vishwakarma': { realName: 'Aarti Vishwakarma', supportName: 'Shreya', email: 'nbtech7@netbounceplacement.com', empId: 'TTT-NB-015', id: 'u-1791910998393' },
+  'Aarti': { realName: 'Aarti Vishwakarma', supportName: 'Shreya', email: 'nbtech7@netbounceplacement.com', empId: 'TTT-NB-015', id: 'u-1791910998393' },
+  'AARTI VISHWAKARMA': { realName: 'Aarti Vishwakarma', supportName: 'Shreya', email: 'nbtech7@netbounceplacement.com', empId: 'TTT-NB-015', id: 'u-1791910998393' },
+  'Shreya': { realName: 'Aarti Vishwakarma', supportName: 'Shreya', email: 'nbtech7@netbounceplacement.com', empId: 'TTT-NB-015', id: 'u-1791910998393' },
+  'u-1791910998393': { realName: 'Aarti Vishwakarma', supportName: 'Shreya', email: 'nbtech7@netbounceplacement.com', empId: 'TTT-NB-015', id: 'u-1791910998393' },
+  'u-tse-aarti': { realName: 'Aarti Vishwakarma', supportName: 'Shreya', email: 'nbtech7@netbounceplacement.com', empId: 'TTT-NB-015', id: 'u-1791910998393' },
+  'TTT-NB-015': { realName: 'Aarti Vishwakarma', supportName: 'Shreya', email: 'nbtech7@netbounceplacement.com', empId: 'TTT-NB-015', id: 'u-1791910998393' },
+};
 
-  'TTT-NB-008': { realName: 'Harit Verma', supportName: 'Abhishek', email: 'nbtech1@netbounceplacement.com', empId: 'TTT-NB-008' },
-  'TTT-NB-009': { realName: 'Prem Makwana', supportName: 'Kiran', email: 'nbtech3@netbounceplacement.com', empId: 'TTT-NB-009' },
-  'TTT-NB-010': { realName: 'Shaurya Mishra', supportName: 'Henil', email: 'nbtech2@netbounceplacement.com', empId: 'TTT-NB-010' },
-  'TTT-NB-011': { realName: 'Nikunj Kataria', supportName: 'Saurav', email: 'nbtech4@netbounceplacement.com', empId: 'TTT-NB-011' },
-  'TTT-NB-012': { realName: 'Jindal Patel', supportName: 'Divya', email: 'divya.c@netbounceplacement.com', empId: 'TTT-NB-012' },
-  'TTT-NB-013': { realName: 'Amber Afreen', supportName: 'Smriti', email: 'nbtech6@netbounceplacement.com', empId: 'TTT-NB-013' },
-  'TTT-NB-014': { realName: 'Rashika Sharma', supportName: 'Jemimah', email: 'nbtech5@netbounceplacement.com', empId: 'TTT-NB-014' },
-  'TTT-NB-015': { realName: 'Aarti Vishwakarma', supportName: 'Shreya', email: 'nbtech7@netbounceplacement.com', empId: 'TTT-NB-015' },
+export const resolveTse = (itemOrId) => {
+  if (!itemOrId) return null;
+  if (typeof itemOrId === 'string') {
+    const trimmed = itemOrId.trim();
+    if (!trimmed || trimmed === 'Code Name Unassigned' || trimmed === 'Unassigned') return null;
+    if (TSE_MAP[trimmed]) return TSE_MAP[trimmed];
+    const lower = trimmed.toLowerCase();
+    const found = Object.values(TSE_MAP).find(
+      e => (e.supportName && e.supportName.toLowerCase() === lower) ||
+           (e.realName && e.realName.toLowerCase() === lower) ||
+           (e.empId && e.empId.toLowerCase() === lower) ||
+           (e.id && e.id.toLowerCase() === lower)
+    );
+    if (found) return found;
+    if (lower.includes('shreya') || lower.includes('aarti') || lower.includes('015') || lower.includes('1791910998393')) return TSE_MAP['Shreya'];
+    if (lower.includes('abhishek') || lower.includes('harit') || lower.includes('008') || lower.includes('1791910812799')) return TSE_MAP['Abhishek'];
+    if (lower.includes('kiran') || lower.includes('prem') || lower.includes('009') || lower.includes('1791910844293')) return TSE_MAP['Kiran'];
+    if (lower.includes('henil') || lower.includes('shaurya') || lower.includes('010') || lower.includes('1791910865708')) return TSE_MAP['Henil'];
+    if (lower.includes('saurav') || lower.includes('nikunj') || lower.includes('011') || lower.includes('1791910900310')) return TSE_MAP['Saurav'];
+    if (lower.includes('divya') || lower.includes('jindal') || lower.includes('012') || lower.includes('1791910926064')) return TSE_MAP['Divya'];
+    if (lower.includes('smriti') || lower.includes('amber') || lower.includes('013') || lower.includes('1791910948923')) return TSE_MAP['Smriti'];
+    if (lower.includes('jemimah') || lower.includes('rashika') || lower.includes('014') || lower.includes('1791910976518')) return TSE_MAP['Jemimah'];
+    return null;
+  }
+  if (typeof itemOrId === 'object') {
+    const rawId = (itemOrId.assigneeId || itemOrId.techSupportId || itemOrId.empId || itemOrId.id || '').trim();
+    const rawSupport = (itemOrId.supportName || itemOrId.codeName || itemOrId.techSupport || '').trim();
+    const rawName = (itemOrId.name || itemOrId.techPerson || itemOrId.employeeName || '').trim();
+
+    if (rawId && rawId !== 'Code Name Unassigned') {
+      const res = resolveTse(rawId);
+      if (res) return res;
+    }
+    if (rawSupport && rawSupport !== 'Code Name Unassigned') {
+      const res = resolveTse(rawSupport);
+      if (res) return res;
+    }
+    if (rawName && rawName !== 'Code Name Unassigned') {
+      const res = resolveTse(rawName);
+      if (res) return res;
+    }
+  }
+  return null;
 };
 
 export const formatTseNameForRole = (itemOrName, currentRole) => {
   if (!itemOrName) return 'Unassigned';
-  let realName = '';
-  let supportName = '';
+  const resolved = resolveTse(itemOrName);
+  const realName = resolved?.realName || (typeof itemOrName === 'object' ? (itemOrName.employeeName || itemOrName.name) : itemOrName);
+  const supportName = resolved?.supportName || (typeof itemOrName === 'object' ? (itemOrName.supportName || itemOrName.codeName || itemOrName.techSupport) : itemOrName);
 
-  if (typeof itemOrName === 'string') {
-    const trimmed = itemOrName.trim();
-    const entry = TSE_MAP[trimmed];
-    if (entry) {
-      realName = entry.realName;
-      supportName = entry.supportName;
-    } else {
-      const lower = trimmed.toLowerCase();
-      const match = Object.values(TSE_MAP).find(
-        e => (e.realName && e.realName.toLowerCase() === lower) ||
-             (e.supportName && e.supportName.toLowerCase() === lower) ||
-             (e.empId && e.empId.toLowerCase() === lower) ||
-             (e.id && e.id.toLowerCase() === lower)
-      );
-      if (match) {
-        realName = match.realName;
-        supportName = match.supportName;
-      } else {
-        supportName = itemOrName;
-      }
-    }
-  } else if (typeof itemOrName === 'object') {
-    const rawName = (itemOrName.name || itemOrName.techPerson || itemOrName.employeeName || '').trim();
-    const rawSupport = (itemOrName.supportName || itemOrName.codeName || itemOrName.techSupport || '').trim();
-    const rawId = (itemOrName.assigneeId || itemOrName.empId || itemOrName.id || itemOrName.techSupportId || '').trim();
-
-    const lookup = TSE_MAP[rawName] || TSE_MAP[rawSupport] || TSE_MAP[rawId] || Object.values(TSE_MAP).find(
-      e => (rawName && e.realName.toLowerCase() === rawName.toLowerCase()) ||
-           (rawSupport && e.supportName.toLowerCase() === rawSupport.toLowerCase()) ||
-           (rawId && (e.empId.toLowerCase() === rawId.toLowerCase() || e.id.toLowerCase() === rawId.toLowerCase()))
-    );
-    if (lookup) {
-      realName = lookup.realName;
-      supportName = lookup.supportName;
-    } else {
-      realName = rawName;
-      supportName = rawSupport || rawName;
-    }
-  }
-
-  // Cross-lookup missing realName or supportName
-  if (!realName && supportName) {
-    const entry = TSE_MAP[supportName] || Object.values(TSE_MAP).find(e => e.supportName && e.supportName.toLowerCase() === supportName.toLowerCase());
-    if (entry) realName = entry.realName;
-  }
-  if (!supportName && realName) {
-    const entry = TSE_MAP[realName] || Object.values(TSE_MAP).find(e => e.realName && e.realName.toLowerCase() === realName.toLowerCase());
-    if (entry) supportName = entry.supportName;
-  }
-
-  // Marketing TL & SR: ONLY Support/Pseudo Name! Never leak real employee name
+  // Marketing TL & SR: ONLY Support/Pseudo Name! Under no circumstances show real name or email
   if (roleIsMarketing(currentRole)) {
     return supportName || 'Tech Support';
   }
 
   // Management, Upper Management & TSM: Both Real Name and Pseudo Name MUST be clearly visible!
-  // Format: "Real Name (Pseudo Name)" e.g. "Harit Verma (Abhishek)"
+  // Format: "Real Name (Pseudo Name)" e.g. "Aarti Vishwakarma (Shreya)"
   if (['upper_management', 'management', 'tsm'].includes(currentRole)) {
     if (realName && supportName && realName.toLowerCase() !== supportName.toLowerCase()) {
       return `${realName} (${supportName})`;
