@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Plus, Search, UserRound, Calendar as CalIcon, Clock, Building2, Briefcase, FileText, StickyNote, MessageSquare, ShieldAlert } from 'lucide-react';
+import { Plus, Search, UserRound, Calendar as CalIcon, Clock, Building2, Briefcase, FileText, StickyNote, MessageSquare, ShieldAlert, Link2, Copy, ExternalLink, Check, ShieldCheck } from 'lucide-react';
+import { toast } from 'sonner';
 import { useApp } from '../context/AppContext';
 import { PageHeader, StatusBadge, TaskTypeBadge, SectionCard, EmptyState } from '../components/common';
 import { TASK_TYPES, TASK_STATUSES, MARKETING_TEAMS, POC_USERS_BY_TEAM, getTseCodeName, getTsmCodeName, roleIsMarketing } from '../data/mockData';
@@ -20,7 +21,6 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
   const todayStr = new Date().toISOString().slice(0, 10);
 
   const defaultTeam = MARKETING_TEAMS[0];
-  const defaultPocs = POC_USERS_BY_TEAM[defaultTeam.id] || [];
 
   const [form, setForm] = useState({
     date: todayStr,
@@ -34,8 +34,8 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
     teamId: defaultTeam.id,
     teamName: defaultTeam.name,
     teamLeadId: defaultTeam.leadId,
-    pocId: defaultPocs[0]?.id || '',
-    recruiterName: defaultPocs[0]?.name || '',
+    pocId: 'unassigned',
+    recruiterName: 'Unassigned',
     remark: '',
     description: '',
     notes: '',
@@ -48,31 +48,39 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
 
   const handleTeamChange = (teamId) => {
     const selectedTeam = MARKETING_TEAMS.find(t => t.id === teamId) || MARKETING_TEAMS[0];
-    const pocs = POC_USERS_BY_TEAM[selectedTeam.id] || [];
     setForm(prev => ({
       ...prev,
       teamId: selectedTeam.id,
       teamName: selectedTeam.name,
       teamLeadId: selectedTeam.leadId,
-      pocId: pocs[0]?.id || '',
-      recruiterName: pocs[0]?.name || '',
+      pocId: 'unassigned',
+      recruiterName: 'Unassigned',
     }));
   };
 
   const handlePocChange = (pocId) => {
+    if (pocId === 'unassigned') {
+      setForm(prev => ({ ...prev, pocId: 'unassigned', recruiterName: 'Unassigned' }));
+      return;
+    }
     const selectedPoc = eligiblePocs.find(p => p.id === pocId);
     setForm(prev => ({
       ...prev,
       pocId,
-      recruiterName: selectedPoc?.name || '',
+      recruiterName: selectedPoc?.name || 'Unassigned',
     }));
   };
 
   const submit = () => {
     if (!form.candidateName.trim()) return;
     const selectedTse = tseUsers.find(u => u.id === form.assigneeId);
+    const finalPocId = form.pocId === 'unassigned' ? '' : form.pocId;
+    const finalRecruiterName = form.pocId === 'unassigned' ? 'Unassigned' : form.recruiterName;
+
     addTask({
       ...form,
+      pocId: finalPocId,
+      recruiterName: finalRecruiterName,
       techPerson: selectedTse?.name || 'Unassigned',
       codeName: selectedTse?.codeName || getTseCodeName(selectedTse?.name),
       title: `${form.candidateName} — ${form.taskType} (${form.companyName})`,
@@ -92,8 +100,8 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
       teamId: defaultTeam.id,
       teamName: defaultTeam.name,
       teamLeadId: defaultTeam.leadId,
-      pocId: defaultPocs[0]?.id || '',
-      recruiterName: defaultPocs[0]?.name || '',
+      pocId: 'unassigned',
+      recruiterName: 'Unassigned',
       remark: '',
       description: '',
       notes: '',
@@ -131,17 +139,18 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
             </Select>
           </div>
 
-          {/* Step 2: Recruiter / POC (Filtered dynamically to selected team) */}
+          {/* Step 2: Marketing SR / Recruiter (Filtered dynamically to selected team) */}
           <div className="md:col-span-1">
             <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-              <span>Recruiter / POC</span>
-              <span className="text-rose-500">*</span>
+              <span>Marketing SR / Recruiter</span>
+              <span className="text-slate-400 font-normal lowercase">(optional — TL will assign)</span>
             </label>
             <Select value={form.pocId} onValueChange={handlePocChange}>
               <SelectTrigger data-testid="task-form-recruiter" className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white">
-                <SelectValue placeholder="Select Assigned POC" />
+                <SelectValue placeholder="Select Assigned SR" />
               </SelectTrigger>
               <SelectContent className="bg-white border-slate-200 text-slate-900">
+                <SelectItem value="unassigned">-- Unassigned (Marketing TL will assign) --</SelectItem>
                 {eligiblePocs.map(poc => (
                   <SelectItem key={poc.id} value={poc.id}>
                     {poc.name}
@@ -316,163 +325,381 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
     </Dialog>
   );
 };
-
 const TaskDrawer = ({ task, onClose }) => {
-  const { users, reassignTask, changeTaskStatus, currentRole, currentUser } = useApp();
+  const { users, reassignTask, assignMarketingSr, changeTaskStatus, updateTask, currentRole, currentUser } = useApp();
   const assignee = users.find(u => u.id === task?.assigneeId);
   const creator = users.find(u => u.id === task?.createdById);
   const tseUsers = users.filter(u => u.role === 'tse');
   const canEdit = roleCanEditAny(currentRole) || task?.assigneeId === currentUser?.id;
 
+  const [selectedSr, setSelectedSr] = useState(task?.pocId || '');
+  const [showSagaModal, setShowSagaModal] = useState(false);
+  const [newRemark, setNewRemark] = useState('');
+
+  useEffect(() => {
+    setSelectedSr(task?.pocId || '');
+  }, [task?.pocId]);
+
+  const candidateSagaUrl = useMemo(() => {
+    if (!task) return '';
+    const origin = window.location.origin;
+    const pathname = window.location.pathname;
+    const recruiter = task.recruiterName || 'Unassigned';
+    const tseId = task.assigneeId || 'TSE-ID';
+    const tseName = roleIsMarketing(currentRole) ? (task.codeName || 'TSE') : (task.techPerson || 'TSE');
+    return `${origin}${pathname}#/candidate-saga?id=${task.id}&recruiter=${encodeURIComponent(recruiter)}&tseId=${encodeURIComponent(tseId)}&tseName=${encodeURIComponent(tseName)}&candidate=${encodeURIComponent(task.candidateName || '')}&company=${encodeURIComponent(task.companyName || '')}&type=${encodeURIComponent(task.taskType || 'Interview')}`;
+  }, [task, currentRole]);
+
+  const handleCopyCandidateLink = () => {
+    try {
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(candidateSagaUrl);
+      }
+      toast.success('Candidate SAGA feedback link copied to clipboard!');
+    } catch (e) {
+      toast.error('Failed to copy link');
+    }
+  };
+
+  const handleAssignSr = () => {
+    if (!selectedSr) return;
+    assignMarketingSr(task.id, selectedSr);
+  };
+
+  const handleAddRemark = () => {
+    if (!newRemark.trim()) return;
+    updateTask(task.id, { remark: newRemark.trim() }, `Remark added: ${newRemark.trim()}`);
+    setNewRemark('');
+  };
+
   if (!task) return null;
 
   return (
-    <Sheet open={!!task} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent side="right" className="bg-white border-l border-slate-200 text-slate-900 w-full sm:max-w-xl p-0 shadow-2xl" data-testid="task-drawer">
-        <SheetHeader className="p-5 border-b border-slate-200 bg-slate-50/60">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <div className="mono text-xs text-blue-600 font-semibold">{task.id}</div>
-              <SheetTitle className="text-slate-900 mt-1 text-lg font-bold leading-tight">
-                {task.candidateName || task.title}
-              </SheetTitle>
-              <div className="mt-2.5 flex items-center gap-2 flex-wrap">
-                <TaskTypeBadge value={task.taskType || task.category} />
-                <StatusBadge value={task.status} />
-                {task.companyName && (
-                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-100 border border-slate-200 text-slate-700 font-medium flex items-center gap-1">
-                    <Building2 size={11} className="text-slate-500" />
-                    {task.companyName}
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-        </SheetHeader>
-
-        <div className="p-5 space-y-5 overflow-y-auto h-[calc(100vh-140px)]">
-          {/* Quick info grid */}
-          <div className="grid grid-cols-2 gap-3.5 p-4 rounded-xl bg-slate-50 border border-slate-200">
-            <div>
-              <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1 flex items-center gap-1.5">
-                <CalIcon size={12} className="text-blue-600" /> Date
-              </div>
-              <div className="text-sm font-semibold text-slate-900 mono">{task.date || task.dueDate}</div>
-            </div>
-            <div>
-              <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1 flex items-center gap-1.5">
-                <Clock size={12} className="text-blue-600" /> Duration
-              </div>
-              <div className="text-sm font-semibold text-slate-900">{task.duration || '—'}</div>
-            </div>
-            <div>
-              <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1 flex items-center gap-1.5">
-                <UserRound size={12} className="text-blue-600" /> {roleIsMarketing(currentRole) ? 'Tech ID' : 'Tech Person (TSE)'}
-              </div>
-              <div className="text-sm font-semibold text-slate-900">
-                {roleIsMarketing(currentRole)
-                  ? (assignee?.empId || assignee?.tttNbId || task.techPersonId || task.assigneeId || 'TSE-ID')
-                  : (assignee?.name || task.techPerson || 'Unassigned')}
-              </div>
-            </div>
-            <div>
-              <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1 flex items-center gap-1.5">
-                <Briefcase size={12} className="text-blue-600" /> Position
-              </div>
-              <div className="text-sm font-semibold text-slate-900">{task.position || '—'}</div>
-            </div>
-            <div>
-              <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1 flex items-center gap-1.5">
-                <Building2 size={12} className="text-blue-600" /> Company
-              </div>
-              <div className="text-sm font-semibold text-slate-900">{task.companyName || '—'}</div>
-            </div>
-            <div>
-              <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1 flex items-center gap-1.5">
-                <UserRound size={12} className="text-blue-600" /> Created By
-              </div>
-              <div className="text-sm font-semibold text-slate-900">
-                {roleIsMarketing(currentRole) ? (creator?.empId || creator?.tttNbId || 'TSM-ID') : (creator?.name || 'TSM')}
-              </div>
-            </div>
-          </div>
-
-          {/* Remark */}
-          {task.remark && (
-            <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200">
-              <div className="text-xs font-semibold text-amber-800 flex items-center gap-1.5 mb-1">
-                <MessageSquare size={13} className="text-amber-600" /> Remark
-              </div>
-              <p className="text-xs text-amber-900 leading-relaxed font-medium">{task.remark}</p>
-            </div>
-          )}
-
-          {/* Description */}
-          <div>
-            <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1.5 flex items-center gap-1.5">
-              <FileText size={13} className="text-slate-500" /> Description
-            </div>
-            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">
-              {task.description || 'No description provided.'}
-            </div>
-          </div>
-
-          {/* Additional Notes */}
-          <div>
-            <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1.5 flex items-center gap-1.5">
-              <StickyNote size={13} className="text-slate-500" /> Additional Note
-            </div>
-            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">
-              {task.notes || 'No additional notes recorded.'}
-            </div>
-          </div>
-
-          {/* Status & Assignee Controls */}
-          {canEdit && (
-            <div className="grid grid-cols-2 gap-3 p-4 rounded-xl bg-slate-50 border border-slate-200">
+    <>
+      <Sheet open={!!task} onOpenChange={(o) => !o && onClose()}>
+        <SheetContent side="right" className="bg-white border-l border-slate-200 text-slate-900 w-full sm:max-w-xl p-0 shadow-2xl" data-testid="task-drawer">
+          <SheetHeader className="p-5 border-b border-slate-200 bg-slate-50/60">
+            <div className="flex items-start justify-between gap-3">
               <div>
-                <label className="text-xs text-slate-600 font-semibold">Update Status</label>
-                <Select value={task.status} onValueChange={v => changeTaskStatus(task.id, v)}>
-                  <SelectTrigger data-testid="task-change-status" className="mt-1 bg-white border-slate-300 text-slate-900 h-9">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-white border-slate-200 text-slate-900">
-                    {TASK_STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <div className="mono text-xs text-blue-600 font-semibold">{task.id}</div>
+                <SheetTitle className="text-slate-900 mt-1 text-lg font-bold leading-tight">
+                  {task.candidateName || task.title}
+                </SheetTitle>
+                <div className="mt-2.5 flex items-center gap-2 flex-wrap">
+                  <TaskTypeBadge value={task.taskType || task.category} />
+                  <StatusBadge value={task.status} />
+                  {task.companyName && (
+                    <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-100 border border-slate-200 text-slate-700 font-medium flex items-center gap-1">
+                      <Building2 size={11} className="text-slate-500" />
+                      {task.companyName}
+                    </span>
+                  )}
+                </div>
               </div>
-              {roleCanEditAny(currentRole) && (
+            </div>
+          </SheetHeader>
+
+          <div className="p-5 space-y-5 overflow-y-auto h-[calc(100vh-140px)]">
+            {/* Quick info grid */}
+            <div className="grid grid-cols-2 gap-3.5 p-4 rounded-xl bg-slate-50 border border-slate-200">
+              <div>
+                <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1 flex items-center gap-1.5">
+                  <CalIcon size={12} className="text-blue-600" /> Date
+                </div>
+                <div className="text-sm font-semibold text-slate-900 mono">{task.date || task.dueDate}</div>
+              </div>
+              <div>
+                <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1 flex items-center gap-1.5">
+                  <Clock size={12} className="text-blue-600" /> Duration
+                </div>
+                <div className="text-sm font-semibold text-slate-900">{task.duration || '—'}</div>
+              </div>
+              <div>
+                <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1 flex items-center gap-1.5">
+                  <UserRound size={12} className="text-blue-600" /> {roleIsMarketing(currentRole) ? 'Tech ID' : 'Tech Person (TSE)'}
+                </div>
+                <div className="text-sm font-semibold text-slate-900">
+                  {roleIsMarketing(currentRole)
+                    ? (assignee?.empId || assignee?.tttNbId || task.techPersonId || task.assigneeId || 'TSE-ID')
+                    : (assignee?.name || task.techPerson || 'Unassigned')}
+                </div>
+              </div>
+              <div>
+                <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1 flex items-center gap-1.5">
+                  <Briefcase size={12} className="text-blue-600" /> Position
+                </div>
+                <div className="text-sm font-semibold text-slate-900">{task.position || '—'}</div>
+              </div>
+              <div>
+                <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1 flex items-center gap-1.5">
+                  <Building2 size={12} className="text-blue-600" /> Marketing Team
+                </div>
+                <div className="text-sm font-semibold text-slate-900">{task.teamName || 'Team Mukesh'}</div>
+              </div>
+              <div>
+                <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1 flex items-center gap-1.5">
+                  <UserRound size={12} className="text-blue-600" /> Assigned SR
+                </div>
+                <div className="text-sm font-semibold text-slate-900">
+                  {task.recruiterName && task.recruiterName !== 'Unassigned' ? (
+                    <span className="text-purple-700 font-bold">{task.recruiterName}</span>
+                  ) : (
+                    <span className="text-amber-600 italic font-medium">Unassigned</span>
+                  )}
+                </div>
+              </div>
+              <div>
+                <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1 flex items-center gap-1.5">
+                  <Building2 size={12} className="text-blue-600" /> Company
+                </div>
+                <div className="text-sm font-semibold text-slate-900">{task.companyName || '—'}</div>
+              </div>
+              <div>
+                <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1 flex items-center gap-1.5">
+                  <UserRound size={12} className="text-blue-600" /> Created By
+                </div>
+                <div className="text-sm font-semibold text-slate-900">
+                  {roleIsMarketing(currentRole) ? (creator?.empId || creator?.tttNbId || 'TSM-ID') : (creator?.name || 'TSM')}
+                </div>
+              </div>
+            </div>
+
+            {/* Candidate SAGA Integration: Available once task reaches Done */}
+            {(task.status === 'Done' || task.status === 'Completed') && (
+              <div className="p-4 rounded-xl bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 border border-blue-200/90 space-y-3 shadow-xs">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <div className="text-xs font-bold text-blue-900 uppercase tracking-wider flex items-center gap-1.5">
+                      <ExternalLink size={13} className="text-blue-600" />
+                      <span>Candidate SAGA Feedback Form</span>
+                    </div>
+                    <p className="text-xs text-blue-700 mt-1">
+                      Assessment marked Done. Share this unique feedback form with the candidate or recruiter.
+                    </p>
+                  </div>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 shrink-0">
+                    Ready for Feedback
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowSagaModal(true)}
+                    className="flex-1 h-9 px-3.5 rounded-lg text-xs font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                  >
+                    <Link2 size={13} />
+                    <span>Generate Candidate SAGA Feedback Link</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCopyCandidateLink}
+                    className="h-9 px-3 rounded-lg text-xs font-semibold bg-white hover:bg-slate-50 text-blue-700 border border-blue-300 flex items-center gap-1.5 shadow-xs transition-colors shrink-0 cursor-pointer"
+                    title="Copy direct candidate feedback link"
+                  >
+                    <Copy size={13} />
+                    <span>Copy</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Marketing SR Assignment (For Marketing TL and Management) */}
+            {(currentRole === 'marketing_tl' || currentRole === 'management' || currentRole === 'upper_management') && (
+              <div className="p-4 rounded-xl bg-purple-50/70 border border-purple-200">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-bold text-purple-900 uppercase tracking-wider flex items-center gap-1.5">
+                    <UserRound size={13} className="text-purple-600" />
+                    <span>Assign Marketing SR ({task.teamName || 'Team'})</span>
+                  </label>
+                  <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${task.pocId ? 'bg-purple-100 text-purple-800 border border-purple-200' : 'bg-amber-100 text-amber-800 border border-amber-200'}`}>
+                    {task.pocId ? `Assigned: ${task.recruiterName}` : 'Awaiting SR Assignment'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 mt-2">
+                  <Select value={selectedSr} onValueChange={setSelectedSr}>
+                    <SelectTrigger className="bg-white border-purple-300 text-slate-900 text-xs h-9">
+                      <SelectValue placeholder="Select verified SR from team" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-white border-slate-200 text-slate-900">
+                      {(POC_USERS_BY_TEAM[task.teamId] || []).map(sr => (
+                        <SelectItem key={sr.id} value={sr.id}>{sr.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <button
+                    type="button"
+                    onClick={handleAssignSr}
+                    disabled={!selectedSr || selectedSr === task.pocId}
+                    className="h-9 px-3.5 rounded-lg text-xs font-semibold bg-purple-600 hover:bg-purple-700 text-white disabled:opacity-50 transition-colors shrink-0 cursor-pointer"
+                  >
+                    Assign SR
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Remark */}
+            {task.remark && (
+              <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200">
+                <div className="text-xs font-semibold text-amber-800 flex items-center gap-1.5 mb-1">
+                  <MessageSquare size={13} className="text-amber-600" /> Remark
+                </div>
+                <p className="text-xs text-amber-900 leading-relaxed font-medium">{task.remark}</p>
+              </div>
+            )}
+
+            {/* Add Remark Input */}
+            {canEdit && (
+              <div className="flex items-center gap-2">
+                <Input
+                  value={newRemark}
+                  onChange={e => setNewRemark(e.target.value)}
+                  placeholder="Add a remark / candidate update..."
+                  className="bg-white border-slate-300 text-slate-900 text-xs h-9"
+                  onKeyDown={e => { if (e.key === 'Enter') handleAddRemark(); }}
+                />
+                <button
+                  type="button"
+                  onClick={handleAddRemark}
+                  disabled={!newRemark.trim()}
+                  className="h-9 px-3 rounded-lg text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition-colors shrink-0 disabled:opacity-50 cursor-pointer"
+                >
+                  Post
+                </button>
+              </div>
+            )}
+
+            {/* Description */}
+            <div>
+              <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1.5 flex items-center gap-1.5">
+                <FileText size={13} className="text-slate-500" /> Description
+              </div>
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">
+                {task.description || 'No description provided.'}
+              </div>
+            </div>
+
+            {/* Additional Notes */}
+            <div>
+              <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1.5 flex items-center gap-1.5">
+                <StickyNote size={13} className="text-slate-500" /> Additional Note
+              </div>
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">
+                {task.notes || 'No additional notes recorded.'}
+              </div>
+            </div>
+
+            {/* Status & Assignee Controls */}
+            {canEdit && (
+              <div className="grid grid-cols-2 gap-3 p-4 rounded-xl bg-slate-50 border border-slate-200">
                 <div>
-                  <label className="text-xs text-slate-600 font-semibold">Reassign TSE</label>
-                  <Select value={task.assigneeId} onValueChange={v => reassignTask(task.id, v)}>
-                    <SelectTrigger data-testid="task-reassign" className="mt-1 bg-white border-slate-300 text-slate-900 h-9">
+                  <label className="text-xs text-slate-600 font-semibold">Update Status</label>
+                  <Select value={task.status} onValueChange={v => changeTaskStatus(task.id, v)}>
+                    <SelectTrigger data-testid="task-change-status" className="mt-1 bg-white border-slate-300 text-slate-900 h-9">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="bg-white border-slate-200 text-slate-900">
-                      {tseUsers.map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}
+                      {TASK_STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
-              )}
-            </div>
-          )}
+                {roleCanEditAny(currentRole) && (
+                  <div>
+                    <label className="text-xs text-slate-600 font-semibold">Reassign TSE</label>
+                    <Select value={task.assigneeId} onValueChange={v => reassignTask(task.id, v)}>
+                      <SelectTrigger data-testid="task-reassign" className="mt-1 bg-white border-slate-300 text-slate-900 h-9">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-white border-slate-200 text-slate-900">
+                        {tseUsers.map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
+            )}
 
-          {/* Activity Timeline */}
-          <div>
-            <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-3">Activity timeline</div>
-            <ol className="space-y-3 relative pl-4 border-l border-slate-200">
-              {task.timeline?.map((ev, idx) => (
-                <li key={idx} className="relative">
-                  <span className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full bg-blue-600 border-2 border-white" />
-                  <div className="text-sm font-medium text-slate-800">{ev.event}</div>
-                  <div className="text-xs text-slate-500">{ev.by} · {ev.at}</div>
-                </li>
-              ))}
-            </ol>
+            {/* Activity Timeline */}
+            <div>
+              <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-3">Activity timeline</div>
+              <ol className="space-y-3 relative pl-4 border-l border-slate-200">
+                {task.timeline?.map((ev, idx) => (
+                  <li key={idx} className="relative">
+                    <span className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full bg-blue-600 border-2 border-white" />
+                    <div className="text-sm font-medium text-slate-800">{ev.event}</div>
+                    <div className="text-xs text-slate-500">{ev.by} · {ev.at}</div>
+                  </li>
+                ))}
+              </ol>
+            </div>
           </div>
-        </div>
-      </SheetContent>
-    </Sheet>
+        </SheetContent>
+      </Sheet>
+
+      {/* Candidate SAGA Link Modal */}
+      <Dialog open={showSagaModal} onOpenChange={setShowSagaModal}>
+        <DialogContent className="bg-white border border-slate-200 text-slate-900 max-w-lg shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-slate-900 text-lg flex items-center gap-2">
+              <ExternalLink size={18} className="text-blue-600" />
+              <span>Candidate SAGA Feedback Link</span>
+            </DialogTitle>
+            <DialogDescription className="text-slate-500 text-xs">
+              Pre-filled feedback URL linked to {task.candidateName} and {task.techPerson}.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3.5 mt-2">
+            <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 text-xs space-y-1.5">
+              <div className="flex justify-between"><span className="text-slate-500">Candidate:</span> <span className="font-semibold text-slate-900">{task.candidateName}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">Tech Evaluator:</span> <span className="font-semibold text-slate-900">{roleIsMarketing(currentRole) ? (task.codeName || 'TSE') : task.techPerson}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">Marketing SR:</span> <span className="font-semibold text-slate-900">{task.recruiterName || 'Unassigned'}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">Team:</span> <span className="font-semibold text-slate-900">{task.teamName || 'Team Mukesh'}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">Task Type:</span> <span className="font-semibold text-slate-900">{task.taskType}</span></div>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Direct Feedback URL</label>
+              <div className="flex items-center gap-2 mt-1.5">
+                <input
+                  readOnly
+                  value={candidateSagaUrl}
+                  className="w-full text-xs font-mono bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-800 select-all"
+                />
+                <button
+                  type="button"
+                  onClick={handleCopyCandidateLink}
+                  className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shrink-0 flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Copy size={13} />
+                  <span>Copy</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setShowSagaModal(false)}
+                className="px-3.5 py-1.5 rounded-lg text-xs font-medium bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors cursor-pointer"
+              >
+                Close
+              </button>
+              <a
+                href={candidateSagaUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5 transition-colors"
+              >
+                <ExternalLink size={13} />
+                <span>Open Candidate Form</span>
+              </a>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 };
 
@@ -595,6 +822,7 @@ export default function Tasks() {
                   <th className="py-3 px-4 font-semibold">Candidate Name</th>
                   <th className="py-3 px-4 font-semibold">Position</th>
                   <th className="py-3 px-4 font-semibold">Company name</th>
+                  <th className="py-3 px-4 font-semibold">Marketing SR</th>
                   <th className="py-3 px-4 font-semibold">Status</th>
                   <th className="py-3 px-4 font-semibold">Remark</th>
                 </tr>
@@ -656,9 +884,28 @@ export default function Tasks() {
                         {t.companyName || '—'}
                       </td>
 
+                      {/* Marketing SR */}
+                      <td className="py-3 px-4 text-xs whitespace-nowrap">
+                        {t.recruiterName && t.recruiterName !== 'Unassigned' ? (
+                          <span className="px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200 font-semibold">
+                            {t.recruiterName}
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 font-medium text-[11px]">
+                            Awaiting SR
+                          </span>
+                        )}
+                      </td>
+
                       {/* Status */}
                       <td className="py-3 px-4 whitespace-nowrap">
                         <StatusBadge value={t.status} />
+                        {(t.status === 'Done' || t.status === 'Completed') && (
+                          <div className="mt-1 flex items-center gap-1 text-[10px] text-blue-600 font-semibold">
+                            <Link2 size={10} />
+                            <span>SAGA Link Ready</span>
+                          </div>
+                        )}
                       </td>
 
                       {/* Remark */}

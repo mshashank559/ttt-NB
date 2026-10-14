@@ -594,7 +594,10 @@ export const AppProvider = ({ children }) => {
     const date = task.date || new Date().toISOString().slice(0, 10);
     const assignedTeam = MARKETING_TEAMS.find(t => t.id === task.teamId || t.name === task.teamName) || MARKETING_TEAMS[0];
     const teamPocs = POC_USERS_BY_TEAM[assignedTeam.id] || [];
-    const assignedPoc = teamPocs.find(p => p.id === task.pocId || p.name === task.recruiterName) || teamPocs[0];
+    const hasExplicitPoc = task.pocId && task.pocId !== 'unassigned' && task.pocId !== '';
+    const assignedPoc = hasExplicitPoc ? (teamPocs.find(p => p.id === task.pocId || p.name === task.recruiterName) || { id: task.pocId, name: task.recruiterName }) : null;
+    const finalPocId = assignedPoc?.id || (hasExplicitPoc ? task.pocId : '');
+    const finalRecruiterName = assignedPoc?.name || (hasExplicitPoc ? task.recruiterName : 'Unassigned');
     const codeName = assignee?.codeName || getTseCodeName(assignee?.name);
 
     const newTask = {
@@ -619,8 +622,8 @@ export const AppProvider = ({ children }) => {
       teamId: assignedTeam.id,
       teamName: assignedTeam.name,
       teamLeadId: assignedTeam.leadId,
-      pocId: assignedPoc?.id || task.pocId || 'u-poc-aditi',
-      recruiterName: assignedPoc?.name || task.recruiterName || 'Aditi Sharma',
+      pocId: finalPocId,
+      recruiterName: finalRecruiterName,
       assigneeId: assignee?.id || task.assigneeId,
       createdById: creator?.id,
       timeline: [
@@ -645,8 +648,8 @@ export const AppProvider = ({ children }) => {
       employeeName: assignee?.name || matchingTse.employeeName,
       candidateName,
       candidateEmail: task.candidateEmail || '',
-      recruiterName: assignedPoc?.name || task.recruiterName || 'Aditi Sharma',
-      pocId: assignedPoc?.id || task.pocId || 'u-poc-aditi',
+      recruiterName: finalRecruiterName,
+      pocId: finalPocId,
       teamId: assignedTeam.id,
       teamLeadId: assignedTeam.leadId,
       teamName: assignedTeam.name,
@@ -686,7 +689,7 @@ export const AppProvider = ({ children }) => {
       })
       .catch(() => { });
 
-    setNotifications(prev => [
+    const newNotifications = [
       {
         id: `n-${Date.now()}-tse`,
         type: 'task',
@@ -705,11 +708,80 @@ export const AppProvider = ({ children }) => {
         read: false,
         targetUserId: creator?.id,
       },
-      ...prev
-    ]);
+    ];
+
+    if (assignedTeam?.leadId) {
+      newNotifications.push({
+        id: `n-${Date.now()}-tl`,
+        type: 'task',
+        title: 'New task for your team',
+        message: finalPocId
+          ? `${id}: ${candidateName} (${taskType}) assigned to ${finalRecruiterName}`
+          : `${id}: ${candidateName} (${taskType}) awaits Marketing SR assignment`,
+        time: 'just now',
+        read: false,
+        targetUserId: assignedTeam.leadId,
+      });
+    }
+
+    if (finalPocId) {
+      newNotifications.push({
+        id: `n-${Date.now()}-sr`,
+        type: 'task',
+        title: 'New candidate assigned',
+        message: `${id}: ${candidateName} (${taskType}) assigned to you`,
+        time: 'just now',
+        read: false,
+        targetUserId: finalPocId,
+      });
+    }
+
+    setNotifications(prev => [...newNotifications, ...prev]);
     toast.success('Task created successfully.');
     return newTask;
   }, [tasks.length, currentUser, updateFeedbacksWithStorage]);
+
+  const assignMarketingSr = useCallback((taskId, srId) => {
+    const allUsers = users && users.length > 0 ? users : USERS;
+    const sr = allUsers.find(u => u.id === srId);
+    if (!sr) {
+      toast.error('Selected Marketing SR not found.');
+      return;
+    }
+
+    updateTask(taskId, {
+      pocId: sr.id,
+      recruiterName: sr.name,
+    }, `Marketing SR assigned: ${sr.name}`);
+
+    // Update linked feedback session
+    updateFeedbacksWithStorage(prev => prev.map(f => {
+      if (f.taskId === taskId) {
+        return {
+          ...f,
+          pocId: sr.id,
+          recruiterName: sr.name,
+        };
+      }
+      return f;
+    }));
+
+    // Notify the Marketing SR
+    setNotifications(prev => [
+      {
+        id: `n-${Date.now()}-sr-assign`,
+        type: 'task',
+        title: 'New candidate assigned to you',
+        message: `Task ${taskId} assigned to you by ${currentUser?.name || 'Marketing TL'}`,
+        time: 'just now',
+        read: false,
+        targetUserId: sr.id,
+      },
+      ...prev
+    ]);
+
+    toast.success(`Assigned to ${sr.name}`);
+  }, [users, updateTask, currentUser, updateFeedbacksWithStorage]);
 
   const updateTask = useCallback((id, patch, note) => {
     let patchedTask = null;
@@ -947,6 +1019,7 @@ export const AppProvider = ({ children }) => {
     addTask,
     updateTask,
     reassignTask,
+    assignMarketingSr,
     changeTaskStatus,
     submitInterviewFeedback,
     updateInterviewStatus,

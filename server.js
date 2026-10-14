@@ -420,6 +420,20 @@ async function handleAutomatedNotifications(eventType, payload, meta, eventId) {
         read: false,
       });
     }
+    // Notify Marketing TL that a new task has arrived for their team
+    if (payload.teamLeadId) {
+      sendDirectNotification({
+        id: `notif-${Date.now()}-newtl`,
+        eventId,
+        targetUserId: payload.teamLeadId,
+        teamId: payload.teamId,
+        type: 'task',
+        title: 'New Candidate Task for Team',
+        message: `New task for ${payload.candidateName || 'Candidate'} (${payload.taskType || 'Interview'}). Please assign an SR.`,
+        time: timeFormatted,
+        read: false,
+      });
+    }
   }
 }
 
@@ -681,12 +695,17 @@ app.delete('/api/users/:id', async (req, res) => {
   }
 });
 
-// Valid Marketing Teams & POC assignment boundaries
-const VALID_TEAMS = ['team-mukesh', 'team-shivam', 'team-vijesh'];
+// Valid Marketing Teams & POC assignment boundaries (Team Mukesh & Team Shivam)
+const VALID_TEAMS = ['team-mukesh', 'team-shivam'];
 const VALID_POCS_BY_TEAM = {
-  'team-mukesh': ['u-poc-aditi', 'u-poc-rahul'],
-  'team-shivam': ['u-poc-priya', 'u-poc-amit'],
-  'team-vijesh': ['u-poc-sneha', 'u-poc-vikas'],
+  'team-mukesh': [
+    'u-sr-snehal', 'u-sr-ritik', 'u-sr-ausafkhan', 'u-sr-chimanshu', 'u-sr-deepkumar', 'u-sr-rohan', 'u-sr-mukesh-sr',
+    'u-poc-aditi', 'u-poc-rahul'
+  ],
+  'team-shivam': [
+    'u-sr-vishal', 'u-sr-riyen', 'u-sr-smit', 'u-sr-rehan', 'u-sr-bhimanshu', 'u-sr-yug', 'u-sr-jinesh',
+    'u-poc-priya', 'u-poc-amit'
+  ],
 };
 
 // ----------------- TASKS ENDPOINTS -----------------

@@ -1,10 +1,10 @@
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ListChecks, CheckCircle2, Clock3, AlertTriangle, UserRoundCheck, Users as UsersIcon, Target, PieChart as PieIcon, Plus, ArrowUpRight, UserPlus } from 'lucide-react';
+import { ListChecks, CheckCircle2, Clock3, AlertTriangle, UserRoundCheck, Users as UsersIcon, Target, PieChart as PieIcon, Plus, ArrowUpRight, UserPlus, ExternalLink, Link2, Copy, ShieldCheck, Check } from 'lucide-react';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip as RTooltip, CartesianGrid, BarChart, Bar, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 import { useApp } from '../context/AppContext';
 import { KpiCard, PageHeader, StatusBadge, TaskTypeBadge, SectionCard, EmptyState, ArcGaugeCard, NeumorphicMetricCard, CircularProgressRing } from '../components/common';
-import { ROLES, USERS } from '../data/mockData';
+import { ROLES, USERS, roleIsMarketing } from '../data/mockData';
 
 const palette = ['#3B82F6', '#10B981', '#8B5CF6', '#F59E0B', '#06B6D4', '#EC4899', '#64748B'];
 
@@ -671,24 +671,31 @@ export default function Dashboard() {
     );
   }
 
-  // ---------- MARKETING TL/SR & RECRUITER (POC) ----------
-  if (currentRole === 'marketing_tl' || currentRole === 'marketing_sr' || currentRole === 'recruiter') {
-    const assigned = visibleInterviews.filter(i => i.interviewerId === currentUser?.id || true).slice(0, 20);
+  // ---------- MARKETING TEAM LEAD ----------
+  if (currentRole === 'marketing_tl') {
     const candidateTasks = tasks;
-    const completedCandidateInterviews = candidateTasks.filter(t => t.status === 'Done' || t.status === 'Completed').length;
-    const pendingCandidateInterviews = candidateTasks.filter(t => t.status === 'Pending' || t.status === 'In Progress' || t.status === 'Reschedule').length;
-    const totalPool = candidateTasks.length > 0 ? candidateTasks.length : assigned.length;
-    const completedTotal = candidateTasks.length > 0 ? completedCandidateInterviews : assigned.filter(i => i.status === 'Interview Completed' || i.status === 'Done').length;
-    const evalRate = totalPool ? Math.round((completedTotal / totalPool) * 100) : 0;
+    const pendingSrTasks = candidateTasks.filter(t => !t.pocId || t.recruiterName === 'Unassigned');
+    const completedTasks = candidateTasks.filter(t => t.status === 'Done' || t.status === 'Completed');
+    const inProgressTasks = candidateTasks.filter(t => t.status === 'In Progress' || t.status === 'Pending' || t.status === 'Reschedule');
+    const totalPool = candidateTasks.length;
+    const evalRate = totalPool ? Math.round((completedTasks.length / totalPool) * 100) : 0;
 
     return (
       <div className="space-y-6">
         <PageHeader
-          title={currentRole === 'recruiter' ? 'Candidate Pipeline & Evaluation' : 'Team Candidates & Evaluation'}
-          subtitle={`Scoped to authorized team and candidate boundaries (${currentUser?.name})`}
+          title={`Marketing Operations Console — ${currentUser?.name || 'Team Lead'}`}
+          subtitle={`Operational pipeline for ${currentUser?.dept || 'Marketing Team'} · Verified SR management & Candidate SAGA sync`}
+          actions={
+            <button
+              onClick={() => navigate('/tasks')}
+              className="btn-primary h-9 px-4 rounded-lg text-xs font-semibold flex items-center gap-2 cursor-pointer"
+            >
+              <ListChecks size={14} /> Open Task Management
+            </button>
+          }
         />
 
-        {/* Ghulam Image 1 Style Hero Arc Gauge & Metric Cards */}
+        {/* Hero Gauge & KPIs */}
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
           <ArcGaugeCard
             className="xl:col-span-1"
@@ -699,51 +706,232 @@ export default function Dashboard() {
             meterLabel="Clear Rate"
             secondaryLabel="Target Benchmark"
             secondaryValue="60%"
-            stat1Label="Interview Rounds"
-            stat1Value={`${totalRoundsConducted} Evaluated`}
-            stat2Label="Candidates Cleared"
+            stat1Label="Evaluated"
+            stat1Value={`${totalRoundsConducted} Conducted`}
+            stat2Label="Cleared"
             stat2Value={`${ivTotals.cleared} Qualified`}
           />
           <div className="xl:col-span-2 grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <NeumorphicMetricCard testid="kpi-assigned" label="Assigned" value={totalPool} subValue="In Pool" percentage={totalPool > 0 ? 100 : 0} ringColor="#1416c1" />
-            <NeumorphicMetricCard testid="kpi-completed" label="Completed" value={completedTotal} subValue="Conducted" percentage={evalRate} ringColor="#10b981" />
-            <NeumorphicMetricCard testid="kpi-feedback" label="Pending / Queue" value={candidateTasks.length > 0 ? pendingCandidateInterviews : assigned.filter(i => i.status === 'Feedback Pending').length} subValue="Action Needed" percentage={totalPool > 0 ? Math.round(((candidateTasks.length > 0 ? pendingCandidateInterviews : assigned.filter(i => i.status === 'Feedback Pending').length) / totalPool) * 100) : 0} ringColor="#f59e0b" />
-            <NeumorphicMetricCard testid="kpi-evaluated" label="Evaluated" value={assigned.filter(i => i.feedbackSubmitted).length || completedTotal} subValue="Scorecard Done" percentage={evalRate} ringColor="#8b5cf6" />
+            <NeumorphicMetricCard testid="kpi-assigned" label="Team Pool" value={totalPool} subValue="Candidates" percentage={totalPool > 0 ? 100 : 0} ringColor="#1416c1" />
+            <NeumorphicMetricCard testid="kpi-completed" label="Completed" value={completedTasks.length} subValue="Done by TSE" percentage={evalRate} ringColor="#10b981" />
+            <NeumorphicMetricCard testid="kpi-pending-sr" label="Awaiting SR" value={pendingSrTasks.length} subValue="Action Required" percentage={totalPool > 0 ? Math.round((pendingSrTasks.length / totalPool) * 100) : 0} ringColor="#ef4444" />
+            <NeumorphicMetricCard testid="kpi-feedback" label="SAGA Ready" value={completedTasks.length} subValue="Feedback Forms" percentage={evalRate} ringColor="#8b5cf6" />
           </div>
         </div>
 
-        <SectionCard title="Evaluation Queue" subtitle="Pending reviews awaiting your scorecard">
-          <div className="overflow-x-auto">
+        {/* Action Priority Queue: Pending SR Assignment */}
+        {pendingSrTasks.length > 0 && (
+          <SectionCard
+            title="Pending SR Assignment Queue"
+            subtitle={`${pendingSrTasks.length} assessment tasks awaiting verified Marketing SR allocation`}
+          >
+            <div className="overflow-x-auto -mx-5 md:-mx-6">
+              <table className="w-full text-sm">
+                <thead className="bg-amber-50/70 border-b border-amber-200 text-amber-900 text-xs uppercase tracking-wider font-semibold">
+                  <tr>
+                    <th className="py-2.5 px-4 text-left">Task ID</th>
+                    <th className="py-2.5 px-4 text-left">Candidate Name</th>
+                    <th className="py-2.5 px-4 text-left">Position</th>
+                    <th className="py-2.5 px-4 text-left">Company</th>
+                    <th className="py-2.5 px-4 text-left">Tech Support</th>
+                    <th className="py-2.5 px-4 text-left">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {pendingSrTasks.map(t => (
+                    <tr key={t.id} className="hover:bg-amber-50/40 transition-colors">
+                      <td className="py-3 px-4 mono text-xs text-blue-600 font-semibold">{t.id}</td>
+                      <td className="py-3 px-4 font-bold text-slate-900">{t.candidateName || t.title}</td>
+                      <td className="py-3 px-4 text-xs text-slate-600">{t.position || '—'}</td>
+                      <td className="py-3 px-4 text-xs font-semibold text-slate-800">{t.companyName || '—'}</td>
+                      <td className="py-3 px-4 text-xs text-slate-700 font-medium">{t.codeName || t.techPerson}</td>
+                      <td className="py-3 px-4">
+                        <button
+                          onClick={() => navigate('/tasks')}
+                          className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-purple-600 hover:bg-purple-700 text-white shadow-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                        >
+                          <UserPlus size={12} />
+                          <span>Assign SR →</span>
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </SectionCard>
+        )}
+
+        {/* Team Candidate Assessment Stream */}
+        <SectionCard
+          title="Team Candidate Pipeline & SAGA Feedback Status"
+          subtitle="Real-time synchronized candidate records across your team"
+          actions={
+            <button onClick={() => navigate('/tasks')} className="text-xs text-blue-600 hover:underline font-bold">
+              View all team tasks →
+            </button>
+          }
+        >
+          <div className="overflow-x-auto -mx-5 md:-mx-6">
             <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-white/10">
-                  <th className="py-2.5 font-bold">Interview ID</th>
-                  <th className="font-bold">Position</th>
-                  <th className="font-bold">Date</th>
-                  <th className="font-bold">Status</th>
-                  <th className="font-bold">Action</th>
+              <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 text-xs uppercase tracking-wider font-semibold">
+                <tr>
+                  <th className="py-3 px-4 text-left">Date</th>
+                  <th className="py-3 px-4 text-left">Candidate Name</th>
+                  <th className="py-3 px-4 text-left">Position & Company</th>
+                  <th className="py-3 px-4 text-left">Tech ID</th>
+                  <th className="py-3 px-4 text-left">Assigned SR</th>
+                  <th className="py-3 px-4 text-left">Status</th>
+                  <th className="py-3 px-4 text-right">Feedback Form</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-white/5">
-                {assigned.slice(0, 10).map(i => (
-                  <tr key={i.id} className="border-b border-slate-100 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
-                    <td className="py-2.5 mono text-xs text-blue-700 dark:text-blue-400 font-bold">{i.id}</td>
-                    <td className="text-slate-900 dark:text-white font-medium">{i.position}</td>
-                    <td className="text-slate-600 dark:text-slate-400 text-xs">{i.date} · {i.time}</td>
-                    <td><StatusBadge value={i.status} /></td>
-                    <td>
-                      <button
-                        onClick={() => navigate('/interviews')}
-                        className="text-xs text-blue-600 dark:text-blue-400 hover:underline font-bold cursor-pointer"
-                      >
-                        Evaluate →
-                      </button>
+              <tbody className="divide-y divide-slate-100">
+                {candidateTasks.slice(0, 10).map(t => (
+                  <tr key={t.id} className="hover:bg-slate-50 transition-colors">
+                    <td className="py-3 px-4 mono text-xs text-slate-600 whitespace-nowrap">{t.date || t.dueDate}</td>
+                    <td className="py-3 px-4">
+                      <div className="font-bold text-slate-900">{t.candidateName || t.title}</div>
+                      <div className="mono text-[10px] text-blue-600 font-medium">{t.id}</div>
+                    </td>
+                    <td className="py-3 px-4 text-xs text-slate-600">
+                      <div>{t.position || '—'}</div>
+                      <div className="font-semibold text-slate-800">{t.companyName || '—'}</div>
+                    </td>
+                    <td className="py-3 px-4 text-xs font-mono font-semibold text-blue-700">
+                      {t.codeName || t.techPersonId || 'TSE-ID'}
+                    </td>
+                    <td className="py-3 px-4 text-xs">
+                      {t.recruiterName && t.recruiterName !== 'Unassigned' ? (
+                        <span className="px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200 font-semibold">
+                          {t.recruiterName}
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 font-medium text-[11px]">
+                          Unassigned
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-3 px-4 whitespace-nowrap">
+                      <StatusBadge value={t.status} />
+                    </td>
+                    <td className="py-3 px-4 text-right whitespace-nowrap">
+                      {t.status === 'Done' || t.status === 'Completed' ? (
+                        <button
+                          onClick={() => navigate('/feedback')}
+                          className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-xs flex items-center gap-1.5 ml-auto hover:opacity-90 cursor-pointer"
+                        >
+                          <Link2 size={12} />
+                          <span>Generate Link</span>
+                        </button>
+                      ) : (
+                        <span className="text-xs text-slate-400 italic">Assessment In Progress</span>
+                      )}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+        </SectionCard>
+      </div>
+    );
+  }
+
+  // ---------- MARKETING SR & RECRUITER (STRICT DATA ISOLATION) ----------
+  if (currentRole === 'marketing_sr' || currentRole === 'recruiter') {
+    const candidateTasks = tasks;
+    const completedTasks = candidateTasks.filter(t => t.status === 'Done' || t.status === 'Completed');
+    const inProgressTasks = candidateTasks.filter(t => t.status === 'In Progress' || t.status === 'Pending' || t.status === 'Reschedule');
+    const totalPool = candidateTasks.length;
+    const evalRate = totalPool ? Math.round((completedTasks.length / totalPool) * 100) : 0;
+
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          title={`Marketing SR Workspace — ${currentUser?.name}`}
+          subtitle="Your private candidate assessments, interview clearances, and Candidate SAGA links"
+        />
+
+        {/* Hero Gauge & Metric Cards */}
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+          <ArcGaugeCard
+            className="xl:col-span-1"
+            title="Interview Clear Rate"
+            subtitle="Candidate qualification & clearance ratio"
+            percentage={interviewClearRate}
+            primaryMetric={`${interviewClearRate}%`}
+            meterLabel="Clear Rate"
+            secondaryLabel="Target Benchmark"
+            secondaryValue="60%"
+            stat1Label="Conducted"
+            stat1Value={`${totalRoundsConducted} Sessions`}
+            stat2Label="Cleared"
+            stat2Value={`${ivTotals.cleared} Passed`}
+          />
+          <div className="xl:col-span-2 grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <NeumorphicMetricCard testid="kpi-assigned" label="My Candidates" value={totalPool} subValue="Allocated" percentage={totalPool > 0 ? 100 : 0} ringColor="#1416c1" />
+            <NeumorphicMetricCard testid="kpi-completed" label="Completed" value={completedTasks.length} subValue="Assessed by TSE" percentage={evalRate} ringColor="#10b981" />
+            <NeumorphicMetricCard testid="kpi-in-prog" label="Underway" value={inProgressTasks.length} subValue="In Pipeline" percentage={totalPool > 0 ? Math.round((inProgressTasks.length / totalPool) * 100) : 0} ringColor="#f59e0b" />
+            <NeumorphicMetricCard testid="kpi-feedback-ready" label="SAGA Ready" value={completedTasks.length} subValue="Forms Ready" percentage={evalRate} ringColor="#8b5cf6" />
+          </div>
+        </div>
+
+        {/* My Candidate Roster */}
+        <SectionCard
+          title="My Candidate Assessments"
+          subtitle="Scoped exclusively to candidates assigned to your ownership"
+        >
+          {candidateTasks.length === 0 ? (
+            <EmptyState title="No candidates assigned yet" description="Your Marketing Team Lead will allocate upcoming assessments to you." />
+          ) : (
+            <div className="overflow-x-auto -mx-5 md:-mx-6">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 text-xs uppercase tracking-wider font-semibold">
+                  <tr>
+                    <th className="py-3 px-4 text-left">Date</th>
+                    <th className="py-3 px-4 text-left">Candidate Name</th>
+                    <th className="py-3 px-4 text-left">Position</th>
+                    <th className="py-3 px-4 text-left">Company</th>
+                    <th className="py-3 px-4 text-left">Tech ID</th>
+                    <th className="py-3 px-4 text-left">Status</th>
+                    <th className="py-3 px-4 text-right">Candidate SAGA</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {candidateTasks.map(t => (
+                    <tr key={t.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="py-3 px-4 mono text-xs text-slate-600 whitespace-nowrap">{t.date || t.dueDate}</td>
+                      <td className="py-3 px-4">
+                        <div className="font-bold text-slate-900">{t.candidateName || t.title}</div>
+                        <div className="mono text-[10px] text-blue-600 font-medium">{t.id}</div>
+                      </td>
+                      <td className="py-3 px-4 text-xs text-slate-600">{t.position || '—'}</td>
+                      <td className="py-3 px-4 text-xs font-semibold text-slate-800">{t.companyName || '—'}</td>
+                      <td className="py-3 px-4 text-xs font-mono font-semibold text-blue-700">
+                        {t.codeName || t.techPersonId || 'TSE-ID'}
+                      </td>
+                      <td className="py-3 px-4 whitespace-nowrap">
+                        <StatusBadge value={t.status} />
+                      </td>
+                      <td className="py-3 px-4 text-right whitespace-nowrap">
+                        {t.status === 'Done' || t.status === 'Completed' ? (
+                          <button
+                            onClick={() => navigate('/feedback')}
+                            className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-xs flex items-center gap-1.5 ml-auto hover:opacity-90 cursor-pointer"
+                          >
+                            <Link2 size={12} />
+                            <span>Generate Link</span>
+                          </button>
+                        ) : (
+                          <span className="text-xs text-slate-400 italic">Assessment In Progress</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </SectionCard>
       </div>
     );
