@@ -824,7 +824,7 @@ export const filterAuthorizedData = (items, currentUser, currentRole) => {
     const currentEmpId = currentUser.empId || '';
 
     return items.filter(item => {
-      const isAssigneeId = item.assigneeId === currentId || item.techSupportId === currentId || item.techSupportId === currentEmpId;
+      const isAssigneeId = item.assigneeId === currentId || item.assigneeId === currentEmpId || (currentUser?.tttNbId && item.assigneeId === currentUser.tttNbId) || item.techSupportId === currentId || item.techSupportId === currentEmpId;
       const isTechPersonName = item.techPerson && (
         item.techPerson.toLowerCase() === currentName ||
         (currentCode && item.techPerson.toLowerCase() === currentCode)

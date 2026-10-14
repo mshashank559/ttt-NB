@@ -331,6 +331,7 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
 };
 const TaskDrawer = ({ task, onClose }) => {
   const { users, reassignTask, assignMarketingSr, changeTaskStatus, updateTask, currentRole, currentUser } = useApp();
+  const canGenerateSagaLink = ['marketing_sr', 'recruiter', 'marketing_tl', 'management', 'upper_management'].includes(currentRole);
   const assignee = users.find(u => u.id === task?.assigneeId);
   const creator = users.find(u => u.id === task?.createdById);
   const tseUsers = users.filter(u => u.role === 'tse');
@@ -380,6 +381,10 @@ const TaskDrawer = ({ task, onClose }) => {
   }, [task, currentRole]);
 
   const handleCopyCandidateLink = () => {
+    if (!canGenerateSagaLink) {
+      toast.error('You are not authorized to generate or copy candidate feedback links.');
+      return;
+    }
     try {
       if (navigator.clipboard) {
         navigator.clipboard.writeText(candidateSagaUrl);
@@ -493,8 +498,8 @@ const TaskDrawer = ({ task, onClose }) => {
               </div>
             </div>
 
-            {/* Candidate SAGA Integration: Available once task reaches Done */}
-            {(task.status === 'Done' || task.status === 'Completed') && (
+            {/* Candidate SAGA Integration: Available only for authorized roles (Marketing SR, TL, Management) */}
+            {canGenerateSagaLink && (task.status === 'Done' || task.status === 'Completed') && (
               <div className="p-4 rounded-xl bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 border border-blue-200/90 space-y-3 shadow-xs">
                 <div className="flex items-start justify-between">
                   <div>
@@ -667,7 +672,7 @@ const TaskDrawer = ({ task, onClose }) => {
       </Sheet>
 
       {/* Candidate SAGA Link Modal */}
-      <Dialog open={showSagaModal} onOpenChange={setShowSagaModal}>
+      <Dialog open={canGenerateSagaLink && showSagaModal} onOpenChange={setShowSagaModal}>
         <DialogContent className="bg-white border border-slate-200 text-slate-900 max-w-lg shadow-2xl">
           <DialogHeader>
             <DialogTitle className="text-slate-900 text-lg flex items-center gap-2">
@@ -734,6 +739,7 @@ const TaskDrawer = ({ task, onClose }) => {
 
 export default function Tasks() {
   const { tasks, users, currentRole, currentUser } = useApp();
+  const canGenerateSagaLink = ['marketing_sr', 'recruiter', 'marketing_tl', 'management', 'upper_management'].includes(currentRole);
   const navigate = useNavigate();
   const location = useLocation();
   const [filters, setFilters] = useState({ status: 'all', taskType: 'all', assignee: 'all', q: '' });
@@ -946,7 +952,7 @@ export default function Tasks() {
                       {/* Status */}
                       <td className="py-3 px-4 whitespace-nowrap">
                         <StatusBadge value={t.status} />
-                        {(t.status === 'Done' || t.status === 'Completed') && (
+                        {canGenerateSagaLink && (t.status === 'Done' || t.status === 'Completed') && (
                           <div className="mt-1 flex items-center gap-1 text-[10px] text-blue-600 font-semibold">
                             <Link2 size={10} />
                             <span>SAGA Link Ready</span>

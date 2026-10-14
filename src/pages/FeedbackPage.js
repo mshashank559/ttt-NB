@@ -92,6 +92,7 @@ const InteractiveStarPicker = ({ value, onChange, label }) => {
 };
 
 export default function FeedbackPage() {
+  const canGenerateFeedbackLink = ['marketing_sr', 'recruiter', 'marketing_tl', 'management', 'upper_management'].includes(currentRole);
   const { feedbacks, addMarketingReview, submitCandidateFeedback, currentRole, currentUser, createPendingFeedbackLink } = useApp();
   const canViewRealName = ['upper_management', 'management'].includes(currentRole);
 
@@ -142,6 +143,10 @@ export default function FeedbackPage() {
 
   // 1-Click: Fetches DB details (recruiter name, TSE name & ID, candidate, company) directly from the row and generates link
   const handleGenerateAndCopyRowLink = (row) => {
+    if (!canGenerateFeedbackLink) {
+      toast.error('You are not authorized to generate candidate feedback links.');
+      return;
+    }
     const selectedTse = TECH_SUPPORT_TEAM.find(t => 
       t.supportName.toLowerCase() === (row.techSupport || '').toLowerCase() ||
       t.id === row.techSupportId
@@ -571,16 +576,18 @@ export default function FeedbackPage() {
                       {/* Column 5: Actions (Generate Link + Log TSE Review) */}
                       <td className="py-3.5 px-4 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-2">
-                          {/* Generate Link Button for SR / TL right next to TSE review */}
-                          <button
-                            type="button"
-                            onClick={() => handleGenerateAndCopyRowLink(row)}
-                            className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-sm shadow-blue-600/25 flex items-center gap-1.5 transition-all hover:scale-[1.02] active:scale-[0.98]"
-                            title="Fetch details from DB and copy candidate feedback link"
-                          >
-                            <Link2 size={12} />
-                            <span>Generate Link</span>
-                          </button>
+                          {/* Generate Link Button for authorized roles (SR / TL / Management) */}
+                          {canGenerateFeedbackLink && (
+                            <button
+                              type="button"
+                              onClick={() => handleGenerateAndCopyRowLink(row)}
+                              className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-sm shadow-blue-600/25 flex items-center gap-1.5 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                              title="Fetch details from DB and copy candidate feedback link"
+                            >
+                              <Link2 size={12} />
+                              <span>Generate Link</span>
+                            </button>
+                          )}
 
                           {/* TSE Review Button */}
                           {row.marketingReview?.reviewed ? (

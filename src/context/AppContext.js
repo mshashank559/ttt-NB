@@ -1221,17 +1221,26 @@ if (realtimeChannel) {
   }, [updateFeedbacksWithStorage]);
 
   const createPendingFeedbackLink = useCallback((newRecord) => {
+    const authorizedRoles = ['marketing_sr', 'recruiter', 'marketing_tl', 'management', 'upper_management'];
+    if (!authorizedRoles.includes(currentRole)) {
+      toast.error('You are not authorized to generate candidate feedback links.');
+      return;
+    }
+
     updateFeedbacksWithStorage(prev => [newRecord, ...prev]);
 
     // Save in MongoDB Atlas
     fetch('/api/feedbacks', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newRecord),
+      headers: { 
+        'Content-Type': 'application/json',
+        'x-user-role': currentRole || '',
+      },
+      body: JSON.stringify({ ...newRecord, role: currentRole }),
     }).catch(() => { });
 
     toast.success(`Feedback link created for ${newRecord.candidateName || 'Candidate'}`);
-  }, [updateFeedbacksWithStorage]);
+  }, [currentRole, updateFeedbacksWithStorage]);
 
   // Centrally Scoped Datasets Enforcing Role-Based Visibility, Team Isolation & Identity Privacy
   const scopedTasks = useMemo(() => {

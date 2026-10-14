@@ -1017,17 +1017,29 @@ try { const m = await import('./src/data/mockData.js'); if (m.TSE_CODE_NAMES) TS
 });
 
 
-// Guard Candidate SAGA Feedback link generation
+// Guard Candidate SAGA Feedback link generation (Only Marketing SR, TL, Management authorized)
 app.post('/api/feedbacks/generate-link', (req, res) => {
-  const { role } = req.body || {};
+  const role = req.body?.role || req.headers['x-user-role'];
+  const authorizedRoles = ['marketing_sr', 'recruiter', 'marketing_tl', 'management', 'upper_management'];
+
+  if (role === 'tse') {
+    return res.status(403).json({ error: 'TSE is not authorized to generate Candidate SAGA feedback links.' });
+  }
   if (role === 'tsm') {
     return res.status(403).json({ error: 'TSM is not authorized to generate Candidate SAGA feedback links.' });
+  }
+  if (role && !authorizedRoles.includes(role)) {
+    return res.status(403).json({ error: 'Your role is not authorized to generate Candidate SAGA feedback links.' });
   }
   res.json({ success: true, message: 'Authorized' });
 });
 
 app.post('/api/feedbacks', async (req, res) => {
   try {
+    const callerRole = req.body?.role || req.headers['x-user-role'];
+    if (callerRole === 'tse' || callerRole === 'tsm') {
+      return res.status(403).json({ error: `${callerRole.toUpperCase()} is not authorized to generate feedback links or initialize feedback records.` });
+    }
     let feedback;
     if (mongoose.connection.readyState === 1) {
       feedback = new Feedback(req.body);

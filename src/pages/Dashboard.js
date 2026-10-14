@@ -414,7 +414,7 @@ export default function Dashboard() {
               <tbody className="divide-y divide-slate-100 dark:divide-white/5">
                 {users.filter(u => u.role === 'tse').map(u => {
                   const a = tasks.filter(t => t.assigneeId === u.id);
-                  const c = a.filter(t => t.status === 'Completed').length;
+                  const c = a.filter(t => t.status === 'Completed' || t.status === 'Done').length;
                   const p = a.filter(t => t.status === 'Pending').length;
                   const rate = a.length ? Math.round((c / a.length) * 100) : 0;
                   return (
