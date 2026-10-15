@@ -354,6 +354,8 @@ const TaskDrawer = ({ task, onClose }) => {
     return getEligibleSrsForTeam(users, task?.teamId);
   }, [users, task?.teamId]);
 
+  const [isEditingCompany, setIsEditingCompany] = useState(false);
+  const [editedCompany, setEditedCompany] = useState('');
   const [selectedSr, setSelectedSr] = useState(task?.pocId || '');
   const [showSagaModal, setShowSagaModal] = useState(false);
   const [newRemark, setNewRemark] = useState('');
