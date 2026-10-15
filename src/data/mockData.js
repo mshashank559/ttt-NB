@@ -17,28 +17,8 @@ export const MARKETING_TEAMS = [
 ];
 
 export const POC_USERS_BY_TEAM = {
-  'team-mukesh': [
-    { id: 'u-sr-snehal', name: 'Prajapati Snehal Vijaykumar', email: 'snehal.p@netbounceplacement.com', teamId: 'team-mukesh', teamLeadId: 'u-tl-mukesh', teamName: 'Team Mukesh' },
-    { id: 'u-sr-ritik', name: 'Ritik Kumar Gupta', email: 'ritik.g@netbounceplacement.com', teamId: 'team-mukesh', teamLeadId: 'u-tl-mukesh', teamName: 'Team Mukesh' },
-    { id: 'u-sr-ausafkhan', name: 'Ausafkhan Yasinkhan Pathan', email: 'ausafkhan.p@netbounceplacement.com', teamId: 'team-mukesh', teamLeadId: 'u-tl-mukesh', teamName: 'Team Mukesh' },
-    { id: 'u-sr-chimanshu', name: 'Chaudhari Himanshu', email: 'himanshu.c@netbounceplacement.com', teamId: 'team-mukesh', teamLeadId: 'u-tl-mukesh', teamName: 'Team Mukesh' },
-    { id: 'u-sr-deepkumar', name: 'Vaidh Deepkumar Janakkumar', email: 'deepkumar.v@netbounceplacement.com', teamId: 'team-mukesh', teamLeadId: 'u-tl-mukesh', teamName: 'Team Mukesh' },
-    { id: 'u-sr-rohan', name: 'Rohan N Soni', email: 'rohan.s@netbounceplacement.com', teamId: 'team-mukesh', teamLeadId: 'u-tl-mukesh', teamName: 'Team Mukesh' },
-    { id: 'u-sr-mukesh-sr', name: 'Mukesh Chaudhary SR', email: 'mukesh.sr@netbounceplacement.com', teamId: 'team-mukesh', teamLeadId: 'u-tl-mukesh', teamName: 'Team Mukesh' },
-    { id: 'u-poc-aditi', name: 'Aditi Sharma', email: 'aditi.sharma@netbounce.io', teamId: 'team-mukesh', teamLeadId: 'u-tl-mukesh', teamName: 'Team Mukesh' },
-    { id: 'u-poc-rahul', name: 'Rahul Verma', email: 'rahul.verma@netbounce.io', teamId: 'team-mukesh', teamLeadId: 'u-tl-mukesh', teamName: 'Team Mukesh' },
-  ],
-  'team-shivam': [
-    { id: 'u-sr-vishal', name: 'Vishal Suthar', email: 'vishal.s@netbounceplacement.com', teamId: 'team-shivam', teamLeadId: 'u-tl-shivam', teamName: 'Team Shivam' },
-    { id: 'u-sr-riyen', name: 'Riyen Sukhadiya', email: 'riyen.s@netbounceplacement.com', teamId: 'team-shivam', teamLeadId: 'u-tl-shivam', teamName: 'Team Shivam' },
-    { id: 'u-sr-smit', name: 'Smit H Patel', email: 'smit.p@netbounceplacement.com', teamId: 'team-shivam', teamLeadId: 'u-tl-shivam', teamName: 'Team Shivam' },
-    { id: 'u-sr-rehan', name: 'Mohammed Rehan Shaikh', email: 'rehan.s@netbounceplacement.com', teamId: 'team-shivam', teamLeadId: 'u-tl-shivam', teamName: 'Team Shivam' },
-    { id: 'u-sr-bhimanshu', name: 'Himanshu Barot', email: 'himanshu.b@netbounceplacement.com', teamId: 'team-shivam', teamLeadId: 'u-tl-shivam', teamName: 'Team Shivam' },
-    { id: 'u-sr-yug', name: 'Yug Patel', email: 'yug.p@netbounceplacement.com', teamId: 'team-shivam', teamLeadId: 'u-tl-shivam', teamName: 'Team Shivam' },
-    { id: 'u-sr-jinesh', name: 'Jinesh Pandya', email: 'jinesh.p@netbounceplacement.com', teamId: 'team-shivam', teamLeadId: 'u-tl-shivam', teamName: 'Team Shivam' },
-    { id: 'u-poc-priya', name: 'Priya Singh', email: 'priya.singh@netbounce.io', teamId: 'team-shivam', teamLeadId: 'u-tl-shivam', teamName: 'Team Shivam' },
-    { id: 'u-poc-amit', name: 'Amit Mishra', email: 'amit.mishra@netbounce.io', teamId: 'team-shivam', teamLeadId: 'u-tl-shivam', teamName: 'Team Shivam' },
-  ],
+  'team-mukesh': [],
+  'team-shivam': [],
 };
 
 // Stable Code Name Lookup Mappings
@@ -131,60 +111,32 @@ export const resolveSr = (itemOrId, usersList = []) => {
 
 // Dynamic Senior Recruiter (SR) Dropdown List Provider
 export const getEligibleSrsForTeam = (usersList = [], teamId) => {
-  const list = (usersList && usersList.length > 0) ? usersList : (typeof USERS !== 'undefined' ? USERS : []);
+  const list = Array.isArray(usersList) ? usersList : [];
+  if (!list.length) return [];
 
   const srUsers = list.filter(u => {
+    if (!u) return false;
     const isSrRole = u.role === 'marketing_sr' || u.role === 'recruiter';
     const isActive = !u.status || u.status === 'Active';
-    return isSrRole && isActive;
+    const matchesTeam = !teamId || u.teamId === teamId;
+    return isSrRole && isActive && matchesTeam;
   });
 
   const resultMap = new Map();
-
-  // 1. Authoritative dynamic users from DB / state
   srUsers.forEach(u => {
-    const matchesTeam = !teamId || !u.teamId || u.teamId === teamId;
-    if (matchesTeam) {
-      const dedupKey = (u.id || u.email || u.name).toLowerCase();
-      resultMap.set(dedupKey, {
-        id: u.id,
-        name: u.name,
-        email: u.email,
-        teamId: u.teamId || teamId,
-        teamName: u.teamName || (teamId === 'team-shivam' ? 'Team Shivam' : 'Team Mukesh'),
-        empId: u.empId || u.tttNbId,
-        role: u.role,
-      });
-    }
+    if (!u.id) return;
+    resultMap.set(u.id, {
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      teamId: u.teamId,
+      teamName: u.teamName || (u.teamId === 'team-shivam' ? 'Team Shivam' : 'Team Mukesh'),
+      empId: u.empId || u.tttNbId,
+      role: u.role,
+    });
   });
 
-  // 2. Seamlessly resolve and merge legacy mock records without duplicating existing users
-  if (teamId && POC_USERS_BY_TEAM[teamId]) {
-    POC_USERS_BY_TEAM[teamId].forEach(mockSr => {
-      const resolved = resolveSr(mockSr, list);
-      if (resolved) {
-        const dedupKey = (resolved.id || resolved.email || resolved.name).toLowerCase();
-        if (!resultMap.has(dedupKey)) {
-          resultMap.set(dedupKey, {
-            id: resolved.id,
-            name: resolved.name,
-            email: resolved.email,
-            teamId: resolved.teamId || teamId,
-            teamName: resolved.teamName || (teamId === 'team-shivam' ? 'Team Shivam' : 'Team Mukesh'),
-            empId: resolved.empId || resolved.tttNbId,
-            role: resolved.role,
-          });
-        }
-      } else {
-        const existingByName = Array.from(resultMap.values()).some(e => e.name.toLowerCase() === mockSr.name.toLowerCase());
-        if (!existingByName) {
-          resultMap.set(mockSr.id.toLowerCase(), mockSr);
-        }
-      }
-    });
-  }
-
-  return Array.from(resultMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+  return Array.from(resultMap.values()).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 };
 
 export const TSE_CODE_NAMES = {
@@ -381,296 +333,6 @@ export const USERS = [
     joined: new Date().toISOString().slice(0, 10),
     status: 'Active',
     avatar: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=200&auto=format&fit=crop&q=80',
-  },
-  {
-    id: 'u-msr-kavita',
-    name: 'Kavita Rao',
-    email: 'kavita.rao@netbounceplacement.com',
-    password: 'NetBounce@2026',
-    role: 'marketing_sr',
-    teamId: 'team-mukesh',
-    teamName: 'Team Mukesh',
-    dept: 'Marketing',
-    empId: 'TTT-NB-016',
-    tttNbId: 'TTT-NB-016',
-    joined: new Date().toISOString().slice(0, 10),
-    status: 'Active',
-    avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=200&auto=format&fit=crop&q=80',
-  },
-  // --- Verified Marketing SRs: Team Mukesh ---
-  {
-    id: 'u-sr-snehal',
-    name: 'Prajapati Snehal Vijaykumar',
-    email: 'snehal.p@netbounceplacement.com',
-    password: 'NetBounce@2026',
-    role: 'marketing_sr',
-    teamId: 'team-mukesh',
-    teamName: 'Team Mukesh',
-    teamLeadId: 'u-tl-mukesh',
-    dept: 'Marketing / Recruitment',
-    empId: 'TTT-NB-MSR01',
-    tttNbId: 'TTT-NB-MSR01',
-    joined: new Date().toISOString().slice(0, 10),
-    status: 'Active',
-    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
-  },
-  {
-    id: 'u-sr-ritik',
-    name: 'Ritik Kumar Gupta',
-    email: 'ritik.g@netbounceplacement.com',
-    password: 'NetBounce@2026',
-    role: 'marketing_sr',
-    teamId: 'team-mukesh',
-    teamName: 'Team Mukesh',
-    teamLeadId: 'u-tl-mukesh',
-    dept: 'Marketing / Recruitment',
-    empId: 'TTT-NB-MSR02',
-    tttNbId: 'TTT-NB-MSR02',
-    joined: new Date().toISOString().slice(0, 10),
-    status: 'Active',
-    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&auto=format&fit=crop&q=80',
-  },
-  {
-    id: 'u-sr-ausafkhan',
-    name: 'Ausafkhan Yasinkhan Pathan',
-    email: 'ausafkhan.p@netbounceplacement.com',
-    password: 'NetBounce@2026',
-    role: 'marketing_sr',
-    teamId: 'team-mukesh',
-    teamName: 'Team Mukesh',
-    teamLeadId: 'u-tl-mukesh',
-    dept: 'Marketing / Recruitment',
-    empId: 'TTT-NB-MSR03',
-    tttNbId: 'TTT-NB-MSR03',
-    joined: new Date().toISOString().slice(0, 10),
-    status: 'Active',
-    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&auto=format&fit=crop&q=80',
-  },
-  {
-    id: 'u-sr-chimanshu',
-    name: 'Chaudhari Himanshu',
-    email: 'himanshu.c@netbounceplacement.com',
-    password: 'NetBounce@2026',
-    role: 'marketing_sr',
-    teamId: 'team-mukesh',
-    teamName: 'Team Mukesh',
-    teamLeadId: 'u-tl-mukesh',
-    dept: 'Marketing / Recruitment',
-    empId: 'TTT-NB-MSR04',
-    tttNbId: 'TTT-NB-MSR04',
-    joined: new Date().toISOString().slice(0, 10),
-    status: 'Active',
-    avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&auto=format&fit=crop&q=80',
-  },
-  {
-    id: 'u-sr-deepkumar',
-    name: 'Vaidh Deepkumar Janakkumar',
-    email: 'deepkumar.v@netbounceplacement.com',
-    password: 'NetBounce@2026',
-    role: 'marketing_sr',
-    teamId: 'team-mukesh',
-    teamName: 'Team Mukesh',
-    teamLeadId: 'u-tl-mukesh',
-    dept: 'Marketing / Recruitment',
-    empId: 'TTT-NB-MSR05',
-    tttNbId: 'TTT-NB-MSR05',
-    joined: new Date().toISOString().slice(0, 10),
-    status: 'Active',
-    avatar: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=200&auto=format&fit=crop&q=80',
-  },
-  {
-    id: 'u-sr-rohan',
-    name: 'Rohan N Soni',
-    email: 'rohan.s@netbounceplacement.com',
-    password: 'NetBounce@2026',
-    role: 'marketing_sr',
-    teamId: 'team-mukesh',
-    teamName: 'Team Mukesh',
-    teamLeadId: 'u-tl-mukesh',
-    dept: 'Marketing / Recruitment',
-    empId: 'TTT-NB-MSR06',
-    tttNbId: 'TTT-NB-MSR06',
-    joined: new Date().toISOString().slice(0, 10),
-    status: 'Active',
-    avatar: 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=200&auto=format&fit=crop&q=80',
-  },
-  {
-    id: 'u-sr-mukesh-sr',
-    name: 'Mukesh Chaudhary SR',
-    email: 'mukesh.sr@netbounceplacement.com',
-    password: 'NetBounce@2026',
-    role: 'marketing_sr',
-    teamId: 'team-mukesh',
-    teamName: 'Team Mukesh',
-    teamLeadId: 'u-tl-mukesh',
-    dept: 'Marketing / Recruitment',
-    empId: 'TTT-NB-MSR07',
-    tttNbId: 'TTT-NB-MSR07',
-    joined: new Date().toISOString().slice(0, 10),
-    status: 'Active',
-    avatar: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=200&auto=format&fit=crop&q=80',
-  },
-
-  // --- Verified Marketing SRs: Team Shivam ---
-  {
-    id: 'u-sr-vishal',
-    name: 'Vishal Suthar',
-    email: 'vishal.s@netbounceplacement.com',
-    password: 'NetBounce@2026',
-    role: 'marketing_sr',
-    teamId: 'team-shivam',
-    teamName: 'Team Shivam',
-    teamLeadId: 'u-tl-shivam',
-    dept: 'Marketing / Recruitment',
-    empId: 'TTT-NB-MSR08',
-    tttNbId: 'TTT-NB-MSR08',
-    joined: new Date().toISOString().slice(0, 10),
-    status: 'Active',
-    avatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=200&auto=format&fit=crop&q=80',
-  },
-  {
-    id: 'u-sr-riyen',
-    name: 'Riyen Sukhadiya',
-    email: 'riyen.s@netbounceplacement.com',
-    password: 'NetBounce@2026',
-    role: 'marketing_sr',
-    teamId: 'team-shivam',
-    teamName: 'Team Shivam',
-    teamLeadId: 'u-tl-shivam',
-    dept: 'Marketing / Recruitment',
-    empId: 'TTT-NB-MSR09',
-    tttNbId: 'TTT-NB-MSR09',
-    joined: new Date().toISOString().slice(0, 10),
-    status: 'Active',
-    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&auto=format&fit=crop&q=80',
-  },
-  {
-    id: 'u-sr-smit',
-    name: 'Smit H Patel',
-    email: 'smit.p@netbounceplacement.com',
-    password: 'NetBounce@2026',
-    role: 'marketing_sr',
-    teamId: 'team-shivam',
-    teamName: 'Team Shivam',
-    teamLeadId: 'u-tl-shivam',
-    dept: 'Marketing / Recruitment',
-    empId: 'TTT-NB-MSR10',
-    tttNbId: 'TTT-NB-MSR10',
-    joined: new Date().toISOString().slice(0, 10),
-    status: 'Active',
-    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&auto=format&fit=crop&q=80',
-  },
-  {
-    id: 'u-sr-rehan',
-    name: 'Mohammed Rehan Shaikh',
-    email: 'rehan.s@netbounceplacement.com',
-    password: 'NetBounce@2026',
-    role: 'marketing_sr',
-    teamId: 'team-shivam',
-    teamName: 'Team Shivam',
-    teamLeadId: 'u-tl-shivam',
-    dept: 'Marketing / Recruitment',
-    empId: 'TTT-NB-MSR11',
-    tttNbId: 'TTT-NB-MSR11',
-    joined: new Date().toISOString().slice(0, 10),
-    status: 'Active',
-    avatar: 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=200&auto=format&fit=crop&q=80',
-  },
-  {
-    id: 'u-sr-bhimanshu',
-    name: 'Himanshu Barot',
-    email: 'himanshu.b@netbounceplacement.com',
-    password: 'NetBounce@2026',
-    role: 'marketing_sr',
-    teamId: 'team-shivam',
-    teamName: 'Team Shivam',
-    teamLeadId: 'u-tl-shivam',
-    dept: 'Marketing / Recruitment',
-    empId: 'TTT-NB-MSR12',
-    tttNbId: 'TTT-NB-MSR12',
-    joined: new Date().toISOString().slice(0, 10),
-    status: 'Active',
-    avatar: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=200&auto=format&fit=crop&q=80',
-  },
-  {
-    id: 'u-sr-yug',
-    name: 'Yug Patel',
-    email: 'yug.p@netbounceplacement.com',
-    password: 'NetBounce@2026',
-    role: 'marketing_sr',
-    teamId: 'team-shivam',
-    teamName: 'Team Shivam',
-    teamLeadId: 'u-tl-shivam',
-    dept: 'Marketing / Recruitment',
-    empId: 'TTT-NB-MSR13',
-    tttNbId: 'TTT-NB-MSR13',
-    joined: new Date().toISOString().slice(0, 10),
-    status: 'Active',
-    avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&auto=format&fit=crop&q=80',
-  },
-  {
-    id: 'u-sr-jinesh',
-    name: 'Jinesh Pandya',
-    email: 'jinesh.p@netbounceplacement.com',
-    password: 'NetBounce@2026',
-    role: 'marketing_sr',
-    teamId: 'team-shivam',
-    teamName: 'Team Shivam',
-    teamLeadId: 'u-tl-shivam',
-    dept: 'Marketing / Recruitment',
-    empId: 'TTT-NB-MSR14',
-    tttNbId: 'TTT-NB-MSR14',
-    joined: new Date().toISOString().slice(0, 10),
-    status: 'Active',
-    avatar: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=200&auto=format&fit=crop&q=80',
-  },
-  {
-    id: 'u-poc-aditi',
-    name: 'Aditi Sharma',
-    email: 'aditi.sharma@netbounce.io',
-    password: 'NetBounce@2026',
-    role: 'marketing_sr',
-    teamId: 'team-mukesh',
-    teamName: 'Team Mukesh',
-    teamLeadId: 'u-tl-mukesh',
-    dept: 'Recruitment',
-    empId: 'TTT-NB-017',
-    tttNbId: 'TTT-NB-017',
-    joined: new Date().toISOString().slice(0, 10),
-    status: 'Active',
-    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
-  },
-  {
-    id: 'u-poc-priya',
-    name: 'Priya Singh',
-    email: 'priya.singh@netbounce.io',
-    password: 'NetBounce@2026',
-    role: 'recruiter',
-    teamId: 'team-shivam',
-    teamName: 'Team Shivam',
-    teamLeadId: 'u-tl-shivam',
-    dept: 'Recruitment',
-    empId: 'TTT-NB-019',
-    tttNbId: 'TTT-NB-019',
-    joined: new Date().toISOString().slice(0, 10),
-    status: 'Active',
-    avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=200&auto=format&fit=crop&q=80',
-  },
-  {
-    id: 'u-poc-sneha',
-    name: 'Sneha Joshi',
-    email: 'sneha.joshi@netbounce.io',
-    password: 'NetBounce@2026',
-    role: 'recruiter',
-    teamId: 'team-vijesh',
-    teamName: 'Team Vijesh',
-    teamLeadId: 'u-tl-vijesh',
-    dept: 'Recruitment',
-    empId: 'TTT-NB-021',
-    tttNbId: 'TTT-NB-021',
-    joined: new Date().toISOString().slice(0, 10),
-    status: 'Active',
-    avatar: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=200&auto=format&fit=crop&q=80',
   },
   {
     id: 'u-tse-harit',

@@ -29,7 +29,7 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
     taskType: 'Interview',
     candidateName: '',
     position: 'Software Engineer',
-    companyName: 'Amazon',
+    companyName: '',
     status: 'Pending',
     teamId: defaultTeam.id,
     teamName: defaultTeam.name,
@@ -99,7 +99,7 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
       taskType: 'Interview',
       candidateName: '',
       position: 'Software Engineer',
-      companyName: 'Amazon',
+      companyName: '',
       status: 'Pending',
       teamId: defaultTeam.id,
       teamName: defaultTeam.name,
@@ -488,10 +488,48 @@ const TaskDrawer = ({ task, onClose }) => {
                 </div>
               </div>
               <div>
-                <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1 flex items-center gap-1.5">
-                  <Building2 size={12} className="text-blue-600" /> Company
+                <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5"><Building2 size={12} className="text-blue-600" /> Company</span>
+                  {canEdit && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (isEditingCompany) {
+                          setIsEditingCompany(false);
+                        } else {
+                          setEditedCompany(task.companyName || task.company || '');
+                          setIsEditingCompany(true);
+                        }
+                      }}
+                      className="text-[10px] text-blue-600 hover:underline font-semibold cursor-pointer"
+                    >
+                      {isEditingCompany ? 'Cancel' : 'Edit'}
+                    </button>
+                  )}
                 </div>
-                <div className="text-sm font-semibold text-slate-900">{task.companyName || '—'}</div>
+                {isEditingCompany ? (
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <Input
+                      value={editedCompany}
+                      onChange={e => setEditedCompany(e.target.value)}
+                      placeholder="Company name..."
+                      className="h-8 text-xs bg-white border-blue-300 text-slate-900"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const comp = editedCompany.trim();
+                        updateTask(task.id, { companyName: comp, company: comp }, `Company updated to ${comp || 'Unspecified'}`);
+                        setIsEditingCompany(false);
+                      }}
+                      className="h-8 px-2.5 rounded-lg text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 cursor-pointer shrink-0"
+                    >
+                      Save
+                    </button>
+                  </div>
+                ) : (
+                  <div className="text-sm font-semibold text-slate-900">{task.companyName || task.company || '—'}</div>
+                )}
               </div>
               <div>
                 <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1 flex items-center gap-1.5">
@@ -561,9 +599,16 @@ const TaskDrawer = ({ task, onClose }) => {
                       <SelectValue placeholder="Select verified SR from team" />
                     </SelectTrigger>
                     <SelectContent className="bg-white border-slate-200 text-slate-900">
-                      {eligibleSrs.map(sr => (
-                        <SelectItem key={sr.id} value={sr.id}>{sr.name}</SelectItem>
-                      ))}
+                      {eligibleSrs.length === 0 ? (
+                        <div className="p-2.5 text-xs text-amber-700 bg-amber-50 rounded-md font-medium text-center">
+                          No SRs created for {task?.teamName || 'this team'} yet.<br />
+                          <span className="text-[10px] text-slate-500">Go to Settings &gt; User Management to create one.</span>
+                        </div>
+                      ) : (
+                        eligibleSrs.map(sr => (
+                          <SelectItem key={sr.id} value={sr.id}>{sr.name}</SelectItem>
+                        ))
+                      )}
                     </SelectContent>
                   </Select>
                   <button

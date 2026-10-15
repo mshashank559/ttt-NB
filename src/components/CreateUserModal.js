@@ -299,26 +299,62 @@ export default function CreateUserModal({ open, onOpenChange }) {
 
             {/* Marketing Team Assignment (For Marketing SR and TL) */}
             {(role === 'marketing_sr' || role === 'marketing_tl') && (
-              <div className="p-3.5 rounded-2xl bg-purple-50/70 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800/50 space-y-2">
-                <label className="block text-xs font-bold text-purple-900 dark:text-purple-300">
-                  Marketing Team Assignment <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={teamId}
-                  onChange={(e) => {
-                    const tId = e.target.value;
-                    setTeamId(tId);
-                    const selected = (MARKETING_TEAMS || []).find(t => t.id === tId) || { id: 'team-mukesh', name: 'Team Mukesh', leadId: 'u-1791911058812' };
-                    setTeamName(selected.name);
-                    setTeamLeadId(selected.leadId);
-                  }}
-                  className="w-full h-10 px-3 rounded-xl border border-purple-300 dark:border-purple-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-sm focus:border-purple-600 focus:ring-2 focus:ring-purple-600/15 outline-none transition-all cursor-pointer font-medium"
-                >
-                  <option value="team-mukesh">Team Mukesh (Lead: Mukesh Chaudhary)</option>
-                  <option value="team-shivam">Team Shivam (Lead: Shivam Barot)</option>
-                </select>
-                <p className="text-[11px] text-purple-700 dark:text-purple-400">
-                  Senior Recruiter will automatically be selectable in all task & candidate dropdowns for this team.
+              <div className="p-4 rounded-2xl bg-purple-50/80 dark:bg-purple-950/30 border-2 border-purple-300 dark:border-purple-700 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-purple-950 dark:text-purple-200 uppercase tracking-wide">
+                    Choose Marketing Team <span className="text-red-500">*</span>
+                  </label>
+                  <span className="text-[10px] font-semibold text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/50 px-2 py-0.5 rounded-full">
+                    Required for SR Allocation
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTeamId('team-mukesh');
+                      setTeamName('Team Mukesh');
+                      setTeamLeadId('u-1791911058812');
+                    }}
+                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                      teamId === 'team-mukesh'
+                        ? 'border-purple-600 bg-white dark:bg-purple-900/40 ring-2 ring-purple-600/20 shadow-xs'
+                        : 'border-slate-200 dark:border-white/10 hover:border-purple-300 bg-white/70 dark:bg-slate-900'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-sm text-slate-900 dark:text-white">Team Mukesh</span>
+                      <span className="text-xs font-bold text-purple-700 dark:text-purple-300">TL: Mukesh</span>
+                    </div>
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                      Lead: Mukesh Chaudhary
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTeamId('team-shivam');
+                      setTeamName('Team Shivam');
+                      setTeamLeadId('u-1791911115518');
+                    }}
+                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                      teamId === 'team-shivam'
+                        ? 'border-purple-600 bg-white dark:bg-purple-900/40 ring-2 ring-purple-600/20 shadow-xs'
+                        : 'border-slate-200 dark:border-white/10 hover:border-purple-300 bg-white/70 dark:bg-slate-900'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-sm text-slate-900 dark:text-white">Team Shivam</span>
+                      <span className="text-xs font-bold text-purple-700 dark:text-purple-300">TL: Shivam</span>
+                    </div>
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                      Lead: Shivam Barot
+                    </span>
+                  </button>
+                </div>
+                <p className="text-[11px] text-purple-800 dark:text-purple-300 font-medium">
+                  o" This Senior Recruiter will immediately appear in {teamId === 'team-shivam' ? 'Shivam Barot' : 'Mukesh Chaudhary'}'s TL dashboard and task dropdowns.
                 </p>
               </div>
             )}

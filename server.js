@@ -769,15 +769,8 @@ app.delete('/api/users/:id', async (req, res) => {
 // Valid Marketing Teams & POC assignment boundaries (Team Mukesh & Team Shivam)
 const VALID_TEAMS = ['team-mukesh', 'team-shivam'];
 const VALID_POCS_BY_TEAM = {
-  'team-mukesh': [
-    'u-1792013349220', 'u-1791911172764',
-    'u-sr-snehal', 'u-sr-ritik', 'u-sr-ausafkhan', 'u-sr-chimanshu', 'u-sr-deepkumar', 'u-sr-rohan', 'u-sr-mukesh-sr',
-    'u-poc-aditi', 'u-poc-rahul'
-  ],
-  'team-shivam': [
-    'u-sr-vishal', 'u-sr-riyen', 'u-sr-smit', 'u-sr-rehan', 'u-sr-bhimanshu', 'u-sr-yug', 'u-sr-jinesh',
-    'u-poc-priya', 'u-poc-amit'
-  ],
+  'team-mukesh': [],
+  'team-shivam': [],
 };
 
 // In-memory cache to guarantee real-time task sync even during DB transitions
