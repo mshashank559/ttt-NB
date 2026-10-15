@@ -770,6 +770,7 @@ app.delete('/api/users/:id', async (req, res) => {
 const VALID_TEAMS = ['team-mukesh', 'team-shivam'];
 const VALID_POCS_BY_TEAM = {
   'team-mukesh': [
+    'u-1792013349220', 'u-1791911172764',
     'u-sr-snehal', 'u-sr-ritik', 'u-sr-ausafkhan', 'u-sr-chimanshu', 'u-sr-deepkumar', 'u-sr-rohan', 'u-sr-mukesh-sr',
     'u-poc-aditi', 'u-poc-rahul'
   ],
@@ -901,9 +902,30 @@ app.post('/api/tasks', async (req, res) => {
       return res.status(400).json({ error: 'Candidate name is required.' });
     }
 
-    // Strict server-side validation: reject invalid or mismatched team/POC combinations
-    if (teamId && pocId && VALID_POCS_BY_TEAM[teamId]) {
-      if (!VALID_POCS_BY_TEAM[teamId].includes(pocId)) {
+    // Dynamic server-side validation: allow valid team POCs, dynamic DB users with role marketing_sr/recruiter
+    if (teamId && pocId && pocId !== 'unassigned') {
+      const isLegacyWhitelisted = VALID_POCS_BY_TEAM[teamId] && VALID_POCS_BY_TEAM[teamId].includes(pocId);
+      let isValidUser = isLegacyWhitelisted;
+      if (!isValidUser && mongoose.connection.readyState === 1) {
+        const userDoc = await User.findOne({
+          $or: [{ id: pocId }, { empId: pocId }, { tttNbId: pocId }]
+        });
+        if (userDoc && (userDoc.role === 'marketing_sr' || userDoc.role === 'recruiter' || userDoc.role === 'marketing_tl')) {
+          if (!userDoc.teamId || userDoc.teamId === teamId) {
+            isValidUser = true;
+          }
+        }
+      }
+      if (!isValidUser && !isLegacyWhitelisted) {
+        try {
+          const mock = await import('./src/data/mockData.js');
+          if (mock.resolveSr) {
+            const resolved = mock.resolveSr(pocId);
+            if (resolved) isValidUser = true;
+          }
+        } catch (e) {}
+      }
+      if (!isValidUser && VALID_POCS_BY_TEAM[teamId]) {
         return res.status(400).json({
           error: 'Unauthorized assignment: Recruiter / POC does not belong to the selected Marketing Team.',
         });

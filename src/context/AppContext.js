@@ -14,7 +14,7 @@ import {
   roleIsMarketing,
   getTseCodeName,
   getTsmCodeName,
-  formatTseNameForRole, resolveTse,
+  formatTseNameForRole, resolveTse, resolveSr, getEligibleSrsForTeam,
   TSE_MAP,
   filterAuthorizedData,
   sanitizeForIdentityPrivacy,
@@ -656,9 +656,8 @@ if (realtimeChannel) {
     const taskType = task.taskType || 'Interview';
     const date = task.date || new Date().toISOString().slice(0, 10);
     const assignedTeam = MARKETING_TEAMS.find(t => t.id === task.teamId || t.name === task.teamName) || MARKETING_TEAMS[0];
-    const teamPocs = POC_USERS_BY_TEAM[assignedTeam.id] || [];
     const hasExplicitPoc = task.pocId && task.pocId !== 'unassigned' && task.pocId !== '';
-    const assignedPoc = hasExplicitPoc ? (teamPocs.find(p => p.id === task.pocId || p.name === task.recruiterName) || { id: task.pocId, name: task.recruiterName }) : null;
+    const assignedPoc = hasExplicitPoc ? (resolveSr(task.pocId || task.recruiterName, users) || { id: task.pocId, name: task.recruiterName }) : null;
     const finalPocId = assignedPoc?.id || (hasExplicitPoc ? task.pocId : '');
     const finalRecruiterName = assignedPoc?.name || (hasExplicitPoc ? task.recruiterName : 'Unassigned');
     const codeName = assignee?.codeName || getTseCodeName(assignee?.name);
@@ -950,7 +949,7 @@ if (realtimeChannel) {
 
   const assignMarketingSr = useCallback((taskId, srId) => {
     const allUsers = users && users.length > 0 ? users : USERS;
-    const sr = allUsers.find(u => u.id === srId);
+    const sr = allUsers.find(u => u.id === srId || u.empId === srId || u.tttNbId === srId) || resolveSr(srId, allUsers);
     if (!sr) {
       toast.error('Selected Marketing SR not found.');
       return;

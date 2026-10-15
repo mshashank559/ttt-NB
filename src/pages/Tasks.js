@@ -5,7 +5,7 @@ import { Plus, Search, UserRound, Calendar as CalIcon, Clock, Building2, Briefca
 import { toast } from 'sonner';
 import { useApp } from '../context/AppContext';
 import { PageHeader, StatusBadge, TaskTypeBadge, SectionCard, EmptyState } from '../components/common';
-import { TASK_TYPES, TASK_STATUSES, MARKETING_TEAMS, POC_USERS_BY_TEAM, getTseCodeName, getTsmCodeName, roleIsMarketing, formatTseNameForRole } from '../data/mockData';
+import { TASK_TYPES, TASK_STATUSES, MARKETING_TEAMS, POC_USERS_BY_TEAM, getTseCodeName, getTsmCodeName, roleIsMarketing, formatTseNameForRole, getEligibleSrsForTeam, resolveSr } from '../data/mockData';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
@@ -43,10 +43,10 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
     notes: '',
   });
 
-  // Eligible POCs dynamically scoped to currently selected team
+  // Eligible POCs dynamically scoped to currently selected team from dynamic user accounts
   const eligiblePocs = useMemo(() => {
-    return POC_USERS_BY_TEAM[form.teamId] || [];
-  }, [form.teamId]);
+    return getEligibleSrsForTeam(users, form.teamId);
+  }, [users, form.teamId]);
 
   const handleTeamChange = (teamId) => {
     const selectedTeam = MARKETING_TEAMS.find(t => t.id === teamId) || MARKETING_TEAMS[0];
@@ -67,10 +67,10 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
       setForm(prev => ({ ...prev, pocId: 'unassigned', recruiterName: 'Unassigned' }));
       return;
     }
-    const selectedPoc = eligiblePocs.find(p => p.id === pocId);
+    const selectedPoc = eligiblePocs.find(p => p.id === pocId) || resolveSr(pocId, users);
     setForm(prev => ({
       ...prev,
-      pocId,
+      pocId: selectedPoc?.id || pocId,
       recruiterName: selectedPoc?.name || 'Unassigned',
     }));
   };
@@ -350,6 +350,10 @@ const TaskDrawer = ({ task, onClose }) => {
   );
   const canEdit = roleCanEditAny(currentRole) || currentRole === 'upper_management' || isTeamLeadOwner || isTseOwner;
 
+  const eligibleSrs = useMemo(() => {
+    return getEligibleSrsForTeam(users, task?.teamId);
+  }, [users, task?.teamId]);
+
   const [selectedSr, setSelectedSr] = useState(task?.pocId || '');
   const [showSagaModal, setShowSagaModal] = useState(false);
   const [newRemark, setNewRemark] = useState('');
@@ -362,8 +366,11 @@ const TaskDrawer = ({ task, onClose }) => {
   }, [task?.status]);
 
   useEffect(() => {
-    setSelectedSr(task?.pocId || '');
-  }, [task?.pocId]);
+    if (task) {
+      const resolved = resolveSr(task.pocId || task.recruiterName, users);
+      setSelectedSr(resolved?.id || task.pocId || '');
+    }
+  }, [task?.pocId, task?.recruiterName, users]);
 
   const handleStatusChange = (newStatus) => {
     setCurrentStatus(newStatus);
@@ -554,7 +561,7 @@ const TaskDrawer = ({ task, onClose }) => {
                       <SelectValue placeholder="Select verified SR from team" />
                     </SelectTrigger>
                     <SelectContent className="bg-white border-slate-200 text-slate-900">
-                      {(POC_USERS_BY_TEAM[task.teamId] || []).map(sr => (
+                      {eligibleSrs.map(sr => (
                         <SelectItem key={sr.id} value={sr.id}>{sr.name}</SelectItem>
                       ))}
                     </SelectContent>

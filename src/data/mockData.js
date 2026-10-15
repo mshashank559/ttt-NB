@@ -42,6 +42,151 @@ export const POC_USERS_BY_TEAM = {
 };
 
 // Stable Code Name Lookup Mappings
+
+// Universal Dynamic Senior Recruiter (SR) Identity Resolution
+export const resolveSr = (itemOrId, usersList = []) => {
+  if (!itemOrId) return null;
+  const rawId = typeof itemOrId === 'string' ? itemOrId.trim() : (itemOrId.id || itemOrId.pocId || itemOrId.empId || itemOrId.tttNbId || '').trim();
+  const rawName = typeof itemOrId === 'string' ? itemOrId.trim() : (itemOrId.name || itemOrId.recruiterName || '').trim();
+  const rawEmail = typeof itemOrId === 'object' ? (itemOrId.email || '').trim().toLowerCase() : '';
+
+  const list = (usersList && usersList.length > 0) ? usersList : (typeof USERS !== 'undefined' ? USERS : []);
+
+  // 1. Direct ID match
+  if (rawId && rawId !== 'unassigned' && rawId !== 'Unassigned') {
+    const byId = list.find(u => u.id === rawId || u.empId === rawId || u.tttNbId === rawId);
+    if (byId) return byId;
+  }
+
+  // 2. Exact email match
+  if (rawEmail) {
+    const byEmail = list.find(u => u.email && u.email.toLowerCase() === rawEmail);
+    if (byEmail) return byEmail;
+  }
+
+  // 3. Name match
+  if (rawName && rawName !== 'unassigned' && rawName !== 'Unassigned') {
+    const cleanName = rawName.toLowerCase();
+    const byName = list.find(u => u.name && u.name.toLowerCase() === cleanName);
+    if (byName) return byName;
+    const byPartial = list.find(u => u.name && (u.name.toLowerCase().includes(cleanName) || cleanName.includes(u.name.toLowerCase())));
+    if (byPartial) return byPartial;
+  }
+
+  // 4. Legacy Mock ID Bridge
+  if (rawId) {
+    const idLower = rawId.toLowerCase();
+    if (idLower.includes('ritik')) {
+      const match = list.find(u => u.name && u.name.toLowerCase().includes('ritik'));
+      if (match) return match;
+    }
+    if (idLower.includes('snehal')) {
+      const match = list.find(u => u.name && u.name.toLowerCase().includes('snehal'));
+      if (match) return match;
+    }
+    if (idLower.includes('ausafkhan')) {
+      const match = list.find(u => u.name && u.name.toLowerCase().includes('ausafkhan'));
+      if (match) return match;
+    }
+    if (idLower.includes('chimanshu') || idLower.includes('himanshu')) {
+      const match = list.find(u => u.name && u.name.toLowerCase().includes('himanshu'));
+      if (match) return match;
+    }
+    if (idLower.includes('deepkumar')) {
+      const match = list.find(u => u.name && u.name.toLowerCase().includes('deepkumar'));
+      if (match) return match;
+    }
+    if (idLower.includes('rohan')) {
+      const match = list.find(u => u.name && u.name.toLowerCase().includes('rohan'));
+      if (match) return match;
+    }
+    if (idLower.includes('vishal')) {
+      const match = list.find(u => u.name && u.name.toLowerCase().includes('vishal'));
+      if (match) return match;
+    }
+    if (idLower.includes('riyen')) {
+      const match = list.find(u => u.name && u.name.toLowerCase().includes('riyen'));
+      if (match) return match;
+    }
+    if (idLower.includes('smit')) {
+      const match = list.find(u => u.name && u.name.toLowerCase().includes('smit'));
+      if (match) return match;
+    }
+    if (idLower.includes('rehan')) {
+      const match = list.find(u => u.name && u.name.toLowerCase().includes('rehan'));
+      if (match) return match;
+    }
+    if (idLower.includes('yug')) {
+      const match = list.find(u => u.name && u.name.toLowerCase().includes('yug'));
+      if (match) return match;
+    }
+    if (idLower.includes('jinesh')) {
+      const match = list.find(u => u.name && u.name.toLowerCase().includes('jinesh'));
+      if (match) return match;
+    }
+  }
+
+  return null;
+};
+
+// Dynamic Senior Recruiter (SR) Dropdown List Provider
+export const getEligibleSrsForTeam = (usersList = [], teamId) => {
+  const list = (usersList && usersList.length > 0) ? usersList : (typeof USERS !== 'undefined' ? USERS : []);
+
+  const srUsers = list.filter(u => {
+    const isSrRole = u.role === 'marketing_sr' || u.role === 'recruiter';
+    const isActive = !u.status || u.status === 'Active';
+    return isSrRole && isActive;
+  });
+
+  const resultMap = new Map();
+
+  // 1. Authoritative dynamic users from DB / state
+  srUsers.forEach(u => {
+    const matchesTeam = !teamId || !u.teamId || u.teamId === teamId;
+    if (matchesTeam) {
+      const dedupKey = (u.id || u.email || u.name).toLowerCase();
+      resultMap.set(dedupKey, {
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        teamId: u.teamId || teamId,
+        teamName: u.teamName || (teamId === 'team-shivam' ? 'Team Shivam' : 'Team Mukesh'),
+        empId: u.empId || u.tttNbId,
+        role: u.role,
+      });
+    }
+  });
+
+  // 2. Seamlessly resolve and merge legacy mock records without duplicating existing users
+  if (teamId && POC_USERS_BY_TEAM[teamId]) {
+    POC_USERS_BY_TEAM[teamId].forEach(mockSr => {
+      const resolved = resolveSr(mockSr, list);
+      if (resolved) {
+        const dedupKey = (resolved.id || resolved.email || resolved.name).toLowerCase();
+        if (!resultMap.has(dedupKey)) {
+          resultMap.set(dedupKey, {
+            id: resolved.id,
+            name: resolved.name,
+            email: resolved.email,
+            teamId: resolved.teamId || teamId,
+            teamName: resolved.teamName || (teamId === 'team-shivam' ? 'Team Shivam' : 'Team Mukesh'),
+            empId: resolved.empId || resolved.tttNbId,
+            role: resolved.role,
+          });
+        }
+      } else {
+        const existingByName = Array.from(resultMap.values()).some(e => e.name.toLowerCase() === mockSr.name.toLowerCase());
+        if (!existingByName) {
+          resultMap.set(mockSr.id.toLowerCase(), mockSr);
+        }
+      }
+    });
+  }
+
+  return Array.from(resultMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+};
+
 export const TSE_CODE_NAMES = {
   'Harit Verma': 'Abhishek',
   'Harit': 'Abhishek',
@@ -841,13 +986,16 @@ export const filterAuthorizedData = (items, currentUser, currentRole) => {
   // 3. Recruiter & Marketing SR: Can ONLY see their own assigned candidates (Strict SR-level isolation)
   if (currentRole === 'recruiter' || currentRole === 'marketing_sr') {
     const currentId = currentUser.id;
+    const currentEmpId = currentUser.empId || '';
     const currentName = (currentUser.name || '').toLowerCase();
 
     return items
       .filter(item => {
-        const isPocId = item.pocId === currentId;
+        const isPocId = item.pocId === currentId || (currentEmpId && item.pocId === currentEmpId);
         const isRecruiterName = item.recruiterName && item.recruiterName.toLowerCase() === currentName;
-        return isPocId || isRecruiterName;
+        const resolved = resolveSr(item.pocId, [currentUser]);
+        const isResolved = resolved && (resolved.id === currentId || resolved.empId === currentEmpId);
+        return isPocId || isRecruiterName || isResolved;
       })
       .map(item => sanitizeForIdentityPrivacy(item, currentRole));
   }

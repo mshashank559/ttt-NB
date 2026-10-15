@@ -4,6 +4,7 @@ import { useApp } from '../context/AppContext';
 import { ALL_AVATARS, DEFAULT_AVATAR } from '../data/avatars';
 import { UserPlus, Sparkles, Shuffle, ShieldCheck, Mail, User, Briefcase, Hash, Lock, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
+import { MARKETING_TEAMS } from '../data/mockData';
 
 export const ASSIGNABLE_ROLES = [
   { id: 'upper_management', label: 'Upper Management', short: 'UM', defaultDept: 'Executive', color: 'text-purple-600 bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800' },
@@ -295,6 +296,32 @@ export default function CreateUserModal({ open, onOpenChange }) {
                 })}
               </div>
             </div>
+
+            {/* Marketing Team Assignment (For Marketing SR and TL) */}
+            {(role === 'marketing_sr' || role === 'marketing_tl') && (
+              <div className="p-3.5 rounded-2xl bg-purple-50/70 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800/50 space-y-2">
+                <label className="block text-xs font-bold text-purple-900 dark:text-purple-300">
+                  Marketing Team Assignment <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={teamId}
+                  onChange={(e) => {
+                    const tId = e.target.value;
+                    setTeamId(tId);
+                    const selected = (MARKETING_TEAMS || []).find(t => t.id === tId) || { id: 'team-mukesh', name: 'Team Mukesh', leadId: 'u-1791911058812' };
+                    setTeamName(selected.name);
+                    setTeamLeadId(selected.leadId);
+                  }}
+                  className="w-full h-10 px-3 rounded-xl border border-purple-300 dark:border-purple-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-sm focus:border-purple-600 focus:ring-2 focus:ring-purple-600/15 outline-none transition-all cursor-pointer font-medium"
+                >
+                  <option value="team-mukesh">Team Mukesh (Lead: Mukesh Chaudhary)</option>
+                  <option value="team-shivam">Team Shivam (Lead: Shivam Barot)</option>
+                </select>
+                <p className="text-[11px] text-purple-700 dark:text-purple-400">
+                  Senior Recruiter will automatically be selectable in all task & candidate dropdowns for this team.
+                </p>
+              </div>
+            )}
 
             {/* Department & Employee ID Row */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">

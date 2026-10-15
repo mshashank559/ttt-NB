@@ -124,7 +124,7 @@ export default function FeedbackPage() {
   const buildCandidateLink = (record) => {
     const origin = window.location.origin;
     const pathname = window.location.pathname;
-    const recruiter = record.recruiterName || 'Aditi Sharma';
+    const recruiter = record.recruiterName || 'Unassigned';
     const tseId = record.techSupportId || 'TSE-NB-001';
     const tseName = record.techSupport || 'Abhishek';
     return `${origin}${pathname}#/candidate-saga?id=${record.id}&recruiter=${encodeURIComponent(recruiter)}&tseId=${encodeURIComponent(tseId)}&tseName=${encodeURIComponent(tseName)}&candidate=${encodeURIComponent(record.candidateName || '')}&company=${encodeURIComponent(record.company || '')}&type=${encodeURIComponent(record.techSupportType || 'TQC')}`;
@@ -152,7 +152,7 @@ export default function FeedbackPage() {
       t.id === row.techSupportId
     ) || TECH_SUPPORT_TEAM[0];
 
-    const recruiter = row.recruiterName || 'Aditi Sharma';
+    const recruiter = row.recruiterName || 'Unassigned';
     const team = row.teamName || 'Team Mukesh';
     const tseId = row.techSupportId || selectedTse.id;
     const tseName = row.techSupport || selectedTse.supportName;
@@ -529,7 +529,7 @@ export default function FeedbackPage() {
                         {/* Recruiter & Team Badges */}
                         <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
                           <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-50 text-purple-700 border border-purple-200">
-                            Recruiter: {row.recruiterName || 'Aditi Sharma'}
+                            Recruiter: {row.recruiterName || 'Unassigned'}
                           </span>
                           <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
                             {row.teamName || 'Team Mukesh'}
@@ -1092,7 +1092,7 @@ export default function FeedbackPage() {
                   </div>
                   <div className="bg-white p-2.5 rounded-lg border border-slate-200">
                     <span className="text-[10px] text-slate-400 block font-medium">NetBounce Recruiter</span>
-                    <span className="font-bold text-purple-700">{activeLinkModal.record.recruiterName || 'Aditi Sharma'}</span>
+                    <span className="font-bold text-purple-700">{activeLinkModal.record.recruiterName || 'Unassigned'}</span>
                     <span className="text-[10px] text-slate-500 block">{activeLinkModal.record.teamName || 'Team Mukesh'}</span>
                   </div>
                   <div className="bg-white p-2.5 rounded-lg border border-slate-200">
