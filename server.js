@@ -152,7 +152,8 @@ const UserSchema = new mongoose.Schema({
   tttNbId: String,
   password: { type: String, default: 'NetBounce@2026' },
   joined: String,
-  avatar: String,
+  marketingManagerId: String,
+  marketingManagerName: String,
   status: { type: String, default: 'Active' },
 }, { timestamps: true });
 

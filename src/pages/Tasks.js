@@ -40,10 +40,27 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
     teamId: initialTeam.id,
     teamName: initialTeam.name,
     teamLeadId: initialTeam.leadId,
+    assignedSrId: '',
+    assignedSrName: '',
+    assignedSrEmail: '',
     remark: '',
     description: '',
     notes: '',
   });
+
+  // Dynamic Senior Recruiters mapped from MongoDB Atlas / DB users
+  const availableSrs = useMemo(() => {
+    const targetTeamId = form.teamId || initialTeam.id;
+    return (users || []).filter(u =>
+      u.role === 'marketing_sr' &&
+      (u.teamId === targetTeamId || u.team === targetTeamId ||
+       (targetTeamId === 'team-mukesh'
+          ? (u.teamName?.includes('Mukesh') || u.teamLeadId === 'u-1791911058812' || (u.name && ['Snehal', 'Ritik', 'Ausafkhan', 'Himanshu', 'Deepkumar', 'Rohan', 'Mukesh'].some(part => u.name.includes(part))))
+          : (u.teamName?.includes('Shivam') || u.teamLeadId === 'u-1791911115518' || (u.name && ['Vishal', 'Riyen', 'Smit', 'Rehan', 'Yug', 'Jinesh'].some(part => u.name.includes(part))))
+       )
+      )
+    );
+  }, [users, form.teamId, initialTeam.id]);
 
   // Sync team & clear inputs whenever modal opens
   useEffect(() => {
@@ -56,6 +73,9 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
         teamId: isMarketingUser ? initialTeam.id : prev.teamId || initialTeam.id,
         teamName: isMarketingUser ? initialTeam.name : prev.teamName || initialTeam.name,
         teamLeadId: isMarketingUser ? initialTeam.leadId : prev.teamLeadId || initialTeam.leadId,
+        assignedSrId: '',
+        assignedSrName: '',
+        assignedSrEmail: '',
         assigneeId: isMarketingUser ? '' : (prev.assigneeId || tseUsers[0]?.id || ''),
       }));
     }
@@ -93,6 +113,9 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
       teamId: selectedTeam.id,
       teamName: selectedTeam.name,
       teamLeadId: selectedTeam.leadId,
+      assignedSrId: '',
+      assignedSrName: '',
+      assignedSrEmail: '',
     }));
   };
 
@@ -110,6 +133,9 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
       teamId: initialTeam.id,
       teamName: initialTeam.name,
       teamLeadId: initialTeam.leadId,
+      assignedSrId: '',
+      assignedSrName: '',
+      assignedSrEmail: '',
       remark: '',
       description: '',
       notes: '',
@@ -133,6 +159,10 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
       assigneeId: isMarketingUser ? '' : (selectedTse?.id || ''),
       techPerson: isMarketingUser ? 'Unassigned' : (selectedTse?.name || 'Unassigned'),
       codeName: isMarketingUser ? 'Unassigned' : (selectedTse?.codeName || (selectedTse?.name ? getTseCodeName(selectedTse?.name) : 'Unassigned')),
+      assignedSrId: form.assignedSrId || '',
+      assignedSrName: form.assignedSrName || '',
+      assignedSrEmail: form.assignedSrEmail || '',
+      recruiterName: form.assignedSrName || '',
       title: `${form.candidateName.trim()} — ${form.taskType}${form.companyName ? ` (${form.companyName.trim()})` : ''}`,
       category: form.taskType,
       interviewDateTime: form.taskType === 'Interview' ? form.interviewDateTime : '',
@@ -149,7 +179,7 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
           <DialogTitle className="text-slate-900 text-lg">Create New Task / Candidate Record</DialogTitle>
           <DialogDescription className="text-slate-500 text-xs">
             {isMarketingUser
-              ? `Create task under ${initialTeam.name} (${initialTeam.leadName}). TSE assignment will be coordinated by TSM.`
+              ? `Create task under ${initialTeam.name} (${initialTeam.leadName}). All Senior Recruiters mapped dynamically from DB.`
               : 'Assign candidate task with Marketing Team Lead ownership & designated Tech Support Engineer.'}
           </DialogDescription>
         </DialogHeader>
@@ -182,6 +212,43 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
                 </SelectContent>
               </Select>
             )}
+          </div>
+
+          {/* Step 2: Senior Recruiter (Marketing SR) mapped dynamically from DB */}
+          <div className="md:col-span-1">
+            <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+              <span>Senior Recruiter (Marketing SR)</span>
+              <span className="text-rose-500">*</span>
+            </label>
+            <Select
+              value={form.assignedSrId}
+              onValueChange={(srId) => {
+                const srUser = availableSrs.find(u => u.id === srId);
+                setForm(prev => ({
+                  ...prev,
+                  assignedSrId: srId,
+                  assignedSrName: srUser?.name || '',
+                  assignedSrEmail: srUser?.email || '',
+                  recruiterName: srUser?.name || '',
+                }));
+              }}
+            >
+              <SelectTrigger data-testid="task-form-sr" className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white text-xs">
+                <SelectValue placeholder="Select Senior Recruiter" />
+              </SelectTrigger>
+              <SelectContent className="bg-white border-slate-200 text-slate-900 max-h-56">
+                {availableSrs.map(sr => (
+                  <SelectItem key={sr.id} value={sr.id}>
+                    {sr.name} ({sr.empId || sr.tttNbId || 'SR'})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-[10px] text-slate-500 mt-1 font-medium">
+              {availableSrs.length > 0
+                ? `Mapped from DB (${availableSrs.length} SRs in ${form.teamName || initialTeam.name})`
+                : 'No SRs registered in this team yet'}
+            </p>
           </div>
 
           {/* Task Type */}

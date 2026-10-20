@@ -51,7 +51,46 @@ export default function CreateUserModal({ open, onOpenChange }) {
   const [role, setRole] = useState('tse');
   const [dept, setDept] = useState('Tech Support');
   const [avatar, setAvatar] = useState(() => ALL_AVATARS[Math.floor(Math.random() * ALL_AVATARS.length)]?.url || DEFAULT_AVATAR);
+  const [marketingManagerId, setMarketingManagerId] = useState('u-1791910972412');
+  const [marketingTlId, setMarketingTlId] = useState('u-1791911058812');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Marketing Managers List
+  const marketingManagers = useMemo(() => {
+    const list = (users || []).filter(u => u.role === 'management' || u.role === 'upper_management');
+    const defaults = [
+      { id: 'u-1791910972412', name: 'Shashank Mishra', roleLabel: 'Super Admin / Operations' },
+      { id: 'u-1791911019553', name: 'Pradyuman Kothiya', roleLabel: 'Admin / Management' },
+    ];
+    const combined = [...defaults];
+    list.forEach(u => {
+      if (!combined.some(c => c.id === u.id || c.name.toLowerCase() === u.name.toLowerCase())) {
+        combined.push({ id: u.id, name: u.name, roleLabel: u.dept || 'Management' });
+      }
+    });
+    return combined;
+  }, [users]);
+
+  // Marketing TLs List (Mukesh Chaudhary & Shivam Barot)
+  const marketingTls = useMemo(() => {
+    const defaults = [
+      { id: 'u-1791911058812', name: 'Mukesh Chaudhary', teamId: 'team-mukesh', teamName: 'Team Mukesh' },
+      { id: 'u-1791911115518', name: 'Shivam Barot', teamId: 'team-shivam', teamName: 'Team Shivam' },
+    ];
+    const fromUsers = (users || []).filter(u => u.role === 'marketing_tl');
+    const combined = [...defaults];
+    fromUsers.forEach(u => {
+      if (!combined.some(c => c.id === u.id)) {
+        combined.push({
+          id: u.id,
+          name: u.name,
+          teamId: u.teamId || (u.name.toLowerCase().includes('shivam') ? 'team-shivam' : 'team-mukesh'),
+          teamName: u.teamName || (u.name.toLowerCase().includes('shivam') ? 'Team Shivam' : 'Team Mukesh'),
+        });
+      }
+    });
+    return combined;
+  }, [users]);
 
   // Automatically computed next TTT-NB ID (no manual entry required)
   const nextTttNbId = useMemo(() => getNextTttNbId(users), [users]);
@@ -99,6 +138,8 @@ export default function CreateUserModal({ open, onOpenChange }) {
     setIsSubmitting(true);
 
     const autoAssignedId = getNextTttNbId(users);
+    const selectedManager = marketingManagers.find(m => m.id === marketingManagerId) || marketingManagers[0];
+    const selectedTl = marketingTls.find(tl => tl.id === marketingTlId) || marketingTls[0];
 
     const newUser = {
       id: `u-${Date.now()}`,
@@ -106,7 +147,12 @@ export default function CreateUserModal({ open, onOpenChange }) {
       email: email.trim().toLowerCase(),
       password: password.trim() || 'NetBounce@2026',
       role,
-      dept,
+      dept: (role === 'marketing_sr' || role === 'marketing_tl') ? 'Marketing' : dept,
+      teamId: role === 'marketing_sr' ? selectedTl.teamId : (role === 'marketing_tl' ? (marketingTlId === 'u-1791911058812' ? 'team-mukesh' : 'team-shivam') : undefined),
+      teamName: role === 'marketing_sr' ? selectedTl.teamName : (role === 'marketing_tl' ? (marketingTlId === 'u-1791911058812' ? 'Team Mukesh' : 'Team Shivam') : undefined),
+      teamLeadId: role === 'marketing_sr' ? selectedTl.id : undefined,
+      marketingManagerId: role === 'marketing_sr' ? selectedManager.id : undefined,
+      marketingManagerName: role === 'marketing_sr' ? selectedManager.name : undefined,
       empId: autoAssignedId,
       tttNbId: autoAssignedId,
       joined: new Date().toISOString().slice(0, 10),
@@ -122,6 +168,8 @@ export default function CreateUserModal({ open, onOpenChange }) {
     setPassword('');
     setRole('tse');
     setDept('Tech Support');
+    setMarketingManagerId('u-1791910972412');
+    setMarketingTlId('u-1791911058812');
     shuffleAvatar();
     setIsSubmitting(false);
     onOpenChange(false);
@@ -295,6 +343,64 @@ export default function CreateUserModal({ open, onOpenChange }) {
                 })}
               </div>
             </div>
+
+            {/* Marketing Hierarchy Assignment for Marketing SR */}
+            {role === 'marketing_sr' && (
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-50/80 via-indigo-50/60 to-purple-50/80 dark:from-blue-950/30 dark:via-indigo-950/20 dark:to-purple-950/30 border-2 border-blue-200 dark:border-blue-800/80 space-y-3 shadow-xs">
+                <div className="text-xs font-bold text-blue-950 dark:text-blue-300 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <ShieldCheck size={14} className="text-[#0B1EE6] dark:text-cyan-400" />
+                    Marketing SR Reporting Hierarchy
+                  </span>
+                  <span className="text-[10px] bg-blue-100 text-blue-800 dark:bg-blue-900/60 dark:text-blue-300 px-2 py-0.5 rounded-full font-bold">
+                    Required for SR
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Marketing Manager Dropdown */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      Marketing Manager <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={marketingManagerId}
+                      onChange={(e) => setMarketingManagerId(e.target.value)}
+                      data-testid="select-marketing-manager"
+                      className="w-full h-10 px-3 rounded-xl border border-slate-300 dark:border-white/15 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs font-medium focus:border-[#0B1EE6] focus:ring-2 focus:ring-[#0B1EE6]/15 outline-none transition-all cursor-pointer shadow-2xs"
+                    >
+                      {marketingManagers.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.name} ({m.roleLabel || 'Manager'})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Marketing TL Dropdown */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      Marketing Team Lead (TL) <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={marketingTlId}
+                      onChange={(e) => setMarketingTlId(e.target.value)}
+                      data-testid="select-marketing-tl"
+                      className="w-full h-10 px-3 rounded-xl border border-slate-300 dark:border-white/15 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs font-medium focus:border-[#0B1EE6] focus:ring-2 focus:ring-[#0B1EE6]/15 outline-none transition-all cursor-pointer shadow-2xs"
+                    >
+                      {marketingTls.map((tl) => (
+                        <option key={tl.id} value={tl.id}>
+                          {tl.name} ({tl.teamName})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <p className="text-[10.5px] text-slate-500 dark:text-slate-400">
+                  Yeh SR automatically selected Marketing TL ke team me map ho jayega aur task creation ke time candidate assign karne ke liye drop down me aayega.
+                </p>
+              </div>
+            )}
 
             {/* Department & Employee ID Row */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
