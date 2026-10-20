@@ -728,7 +728,10 @@ export const filterAuthorizedData = (items, currentUser, currentRole) => {
     const currentEmpId = currentUser.empId || '';
 
     return items.filter(item => {
-      const isAssigneeId = item.assigneeId === currentId || item.techSupportId === currentId || item.techSupportId === currentEmpId;
+      const isAssigneeId = item.assigneeId === currentId ||
+        item.interviewerId === currentId ||
+        item.techSupportId === currentId ||
+        item.techSupportId === currentEmpId;
       const isTechPersonName = item.techPerson && (
         item.techPerson.toLowerCase() === currentName ||
         (currentCode && item.techPerson.toLowerCase() === currentCode)
@@ -749,8 +752,9 @@ export const filterAuthorizedData = (items, currentUser, currentRole) => {
 
     return items
       .filter(item => {
-        const isPocId = item.pocId === currentId;
-        const isRecruiterName = item.recruiterName && item.recruiterName.toLowerCase() === currentName;
+        const isPocId = item.pocId === currentId || item.assignedSrId === currentId;
+        const isRecruiterName = (item.recruiterName && item.recruiterName.toLowerCase() === currentName) ||
+          (item.assignedSrName && item.assignedSrName.toLowerCase() === currentName);
         return isPocId || isRecruiterName;
       })
       .map(item => sanitizeForIdentityPrivacy(item, currentRole));
@@ -759,7 +763,7 @@ export const filterAuthorizedData = (items, currentUser, currentRole) => {
   // 4. Marketing TL (Mukesh, Shivam, Vijesh):
   // Can ONLY see candidates belonging to their own team + code names only
   if (currentRole === 'marketing_tl') {
-    const currentTeamId = currentUser.teamId;
+    const currentTeamId = currentUser.teamId || currentUser.team;
     const currentUserId = currentUser.id;
     const currentTeamName = (currentUser.teamName || '').toLowerCase();
 
@@ -774,16 +778,39 @@ export const filterAuthorizedData = (items, currentUser, currentRole) => {
   }
 
   // 5. Marketing SR:
-  // Can ONLY see records belonging to their assigned team + code names only
+  // Can ONLY see records belonging to their assigned team, and if assigned specifically to an SR, only their own assigned items + code names only
   if (currentRole === 'marketing_sr') {
-    const currentTeamId = currentUser.teamId;
+    const currentTeamId = currentUser.teamId || currentUser.team;
+    const currentUserId = currentUser.id;
+    const currentName = (currentUser.name || '').toLowerCase();
     const currentTeamName = (currentUser.teamName || '').toLowerCase();
 
     return items
       .filter(item => {
         const matchesTeamId = item.teamId && currentTeamId && item.teamId === currentTeamId;
         const matchesTeamName = item.teamName && currentTeamName && item.teamName.toLowerCase() === currentTeamName;
-        return matchesTeamId || matchesTeamName;
+        const matchesTeam = matchesTeamId || matchesTeamName;
+        if (!matchesTeam) return false;
+
+        // Check if item is assigned specifically to an SR
+        const hasSpecificSr = Boolean(
+          (item.assignedSrId && item.assignedSrId.trim() !== '') ||
+          (item.pocId && item.pocId.trim() !== '') ||
+          (item.assignedSrName && item.assignedSrName.trim() !== '') ||
+          (item.recruiterName && item.recruiterName.trim() !== '' && !item.recruiterName.toLowerCase().startsWith('team '))
+        );
+
+        if (hasSpecificSr) {
+          const isMyItem = item.assignedSrId === currentUserId ||
+            item.pocId === currentUserId ||
+            (item.assignedSrName && item.assignedSrName.toLowerCase() === currentName) ||
+            (item.recruiterName && item.recruiterName.toLowerCase() === currentName) ||
+            item.createdById === currentUserId;
+          return isMyItem;
+        }
+
+        // If not assigned to any specific SR yet (general team pool created by TL)
+        return true;
       })
       .map(item => sanitizeForIdentityPrivacy(item, currentRole));
   }
@@ -794,6 +821,75 @@ export const filterAuthorizedData = (items, currentUser, currentRole) => {
   }
 
   return items;
+};
+
+// Maps a Task record to standard Interview schema for pipeline display & stages
+export const mapTaskToInterview = (t, feedbacks = []) => {
+  if (!t) return null;
+  const fb = (feedbacks || []).find(f => f.taskId === t.id || f.id === `fb-task-${t.id}` || f.id === `fb-${t.id}`);
+  const hasSubmittedFeedback = Boolean(fb?.candidateFeedback?.submitted);
+
+  let status = 'Scheduled';
+  const outcome = t.interviewOutcome || fb?.marketingReview?.decision || fb?.candidateFeedback?.decision;
+
+  if (outcome === 'Cleared' || outcome === 'Passed' || outcome === 'Moved to Next Round' || outcome === 'Offer Received' || t.status === 'Cleared') {
+    status = 'Cleared';
+  } else if (outcome === 'Failed' || outcome === 'Rejected' || t.status === 'Rejected') {
+    status = 'Rejected';
+  } else if (outcome === 'Hold' || t.status === 'Hold') {
+    status = 'Hold';
+  } else if (t.status === 'Done' || t.status === 'Completed') {
+    status = hasSubmittedFeedback ? 'Interview Completed' : 'Feedback Pending';
+  } else if (t.status === 'Cancel' || t.status === 'Not Possible') {
+    status = 'Rejected';
+  } else {
+    status = 'Scheduled';
+  }
+
+  let date = t.date || t.dueDate || '';
+  let time = 'EST';
+  if (t.interviewDateTime) {
+    try {
+      const dt = new Date(t.interviewDateTime);
+      if (!isNaN(dt.getTime())) {
+        date = t.interviewDateTime.slice(0, 10);
+        time = t.interviewDateTime.slice(11, 16);
+      }
+    } catch (e) {}
+  }
+
+  return {
+    id: t.id,
+    taskId: t.id,
+    candidateId: t.candidateId || `CND-${t.id}`,
+    candidateName: t.candidateName || t.title?.split('—')?.[0]?.trim() || 'Candidate',
+    position: t.position || 'Software Engineer',
+    company: t.companyName || t.company || '',
+    companyName: t.companyName || t.company || '',
+    date,
+    time,
+    interviewDateTime: t.interviewDateTime,
+    status,
+    teamId: t.teamId,
+    teamName: t.teamName,
+    teamLeadId: t.teamLeadId,
+    assignedSrId: t.assignedSrId,
+    assignedSrName: t.assignedSrName,
+    assignedSrEmail: t.assignedSrEmail,
+    pocId: t.pocId || t.assignedSrId,
+    recruiterName: t.assignedSrName || t.recruiterName,
+    assigneeId: t.assigneeId,
+    interviewerId: t.assigneeId,
+    techPerson: t.techPerson,
+    techSupport: t.techPerson,
+    techSupportId: t.assigneeId,
+    codeName: t.codeName,
+    employeeName: t.techPerson,
+    interviewOutcome: outcome,
+    feedback: fb,
+    feedbackSubmitted: hasSubmittedFeedback,
+    createdById: t.createdById,
+  };
 };
 
 export const anonymizeInterview = (interview) => ({

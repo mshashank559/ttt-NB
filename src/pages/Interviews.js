@@ -37,10 +37,31 @@ const EvaluationModal = ({ interview, onClose }) => {
     technical: 4, communication: 4, problem_solving: 4, ts_understanding: 4, overall: 4,
     strengths: '', concerns: '', remarks: '', decision: 'Cleared',
   });
+  const [stage, setStage] = useState('Scheduled');
+
+  React.useEffect(() => {
+    if (interview) {
+      setStage(interview.status || 'Scheduled');
+      if (interview.feedback?.marketingReview) {
+        const mr = interview.feedback.marketingReview;
+        setForm(f => ({
+          ...f,
+          overall: mr.overallRating || 4,
+          technical: mr.technical || 4,
+          communication: mr.communication || 4,
+          remarks: mr.feedbackRemarks || '',
+          decision: mr.decision || interview.status || 'Cleared',
+        }));
+      } else if (interview.interviewOutcome) {
+        setForm(f => ({ ...f, decision: interview.interviewOutcome }));
+      }
+    }
+  }, [interview]);
+
   if (!interview) return null;
 
   const submit = () => {
-    submitInterviewFeedback(interview.id, form);
+    submitInterviewFeedback(interview.id, { ...form, stage });
     onClose();
   };
 
@@ -52,16 +73,44 @@ const EvaluationModal = ({ interview, onClose }) => {
             <div className="h-8 w-8 rounded-md bg-blue-50 border border-blue-200 text-blue-700 flex items-center justify-center"><UserRound size={16} /></div>
             <div>
               <DialogTitle className="text-slate-900">Interview {interview.id}</DialogTitle>
-              <DialogDescription className="text-slate-500">Position · {interview.position} · {interview.date} {interview.time}</DialogDescription>
+              <DialogDescription className="text-slate-500">
+                {interview.company ? `${interview.company} · ` : ''}{interview.position} · {interview.date} {interview.time}
+              </DialogDescription>
             </div>
           </div>
         </DialogHeader>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mt-2">
+          <div>
+            <label className="text-xs uppercase tracking-wider text-slate-600 font-semibold">Stage / Status</label>
+            <Select value={stage} onValueChange={setStage}>
+              <SelectTrigger data-testid="feedback-stage" className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900"><SelectValue /></SelectTrigger>
+              <SelectContent className="bg-white border-slate-200 text-slate-900">
+                {STAGES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <label className="text-xs uppercase tracking-wider text-slate-600 font-semibold">Final Decision / Outcome</label>
+            <Select value={form.decision} onValueChange={v => setForm({...form, decision: v})}>
+              <SelectTrigger data-testid="feedback-decision" className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900"><SelectValue /></SelectTrigger>
+              <SelectContent className="bg-white border-slate-200 text-slate-900">
+                <SelectItem value="Cleared">Cleared</SelectItem>
+                <SelectItem value="Rejected">Rejected</SelectItem>
+                <SelectItem value="Hold">Hold</SelectItem>
+                <SelectItem value="Passed">Passed</SelectItem>
+                <SelectItem value="Failed">Failed</SelectItem>
+                <SelectItem value="Moved to Next Round">Moved to Next Round</SelectItem>
+                <SelectItem value="Offer Received">Offer Received</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
           <RatingStars testid="rate-technical" label="Technical Knowledge" value={form.technical} onChange={v => setForm({...form, technical: v})} />
           <RatingStars testid="rate-communication" label="Communication" value={form.communication} onChange={v => setForm({...form, communication: v})} />
           <RatingStars testid="rate-problem" label="Problem Solving" value={form.problem_solving} onChange={v => setForm({...form, problem_solving: v})} />
           <RatingStars testid="rate-ts" label="Technical Support Understanding" value={form.ts_understanding} onChange={v => setForm({...form, ts_understanding: v})} />
           <div className="md:col-span-2"><RatingStars testid="rate-overall" label="Overall Rating" value={form.overall} onChange={v => setForm({...form, overall: v})} /></div>
+          
           <div>
             <label className="text-xs uppercase tracking-wider text-slate-600 font-semibold">Strengths</label>
             <Textarea data-testid="feedback-strengths" rows={3} value={form.strengths} onChange={e => setForm({...form, strengths: e.target.value})} className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white resize-none" placeholder="Highlight standout qualities..." />
@@ -72,22 +121,7 @@ const EvaluationModal = ({ interview, onClose }) => {
           </div>
           <div className="md:col-span-2">
             <label className="text-xs uppercase tracking-wider text-slate-600 font-semibold">Interview Remarks</label>
-            <Textarea data-testid="feedback-remarks" rows={3} value={form.remarks} onChange={e => setForm({...form, remarks: e.target.value})} className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white resize-none" />
-          </div>
-          <div>
-            <label className="text-xs uppercase tracking-wider text-slate-600 font-semibold">Final decision</label>
-            <Select value={form.decision} onValueChange={v => setForm({...form, decision: v})}>
-              <SelectTrigger data-testid="feedback-decision" className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900"><SelectValue /></SelectTrigger>
-              <SelectContent className="bg-white border-slate-200 text-slate-900">
-                <SelectItem value="Passed">Passed</SelectItem>
-                <SelectItem value="Failed">Failed</SelectItem>
-                <SelectItem value="Moved to Next Round">Moved to Next Round</SelectItem>
-                <SelectItem value="Offer Received">Offer Received</SelectItem>
-                <SelectItem value="Cleared">Cleared</SelectItem>
-                <SelectItem value="Rejected">Rejected</SelectItem>
-                <SelectItem value="Hold">Hold</SelectItem>
-              </SelectContent>
-            </Select>
+            <Textarea data-testid="feedback-remarks" rows={3} value={form.remarks} onChange={e => setForm({...form, remarks: e.target.value})} className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white resize-none" placeholder="Document overall evaluation feedback..." />
           </div>
         </div>
         <div className="flex items-center justify-between gap-2 mt-5 pt-4 border-t border-slate-200">
@@ -113,18 +147,20 @@ const stageTint = {
 };
 
 export default function Interviews() {
-  const { visibleInterviews, currentRole, users } = useApp();
+  const { visibleInterviews, currentRole, currentUser, users } = useApp();
   const [active, setActive] = useState(null);
   const [statusFilter, setStatusFilter] = useState('all');
   const isMk = roleIsMarketing(currentRole);
 
-  const filtered = useMemo(() => visibleInterviews.filter(i => statusFilter === 'all' || i.status === statusFilter), [visibleInterviews, statusFilter]);
+  const filtered = useMemo(() => (visibleInterviews || []).filter(i => statusFilter === 'all' || i.status === statusFilter), [visibleInterviews, statusFilter]);
 
   const totals = {
     scheduled: filtered.filter(i => i.status === 'Scheduled').length,
     completed: filtered.filter(i => i.status === 'Interview Completed').length,
     pending: filtered.filter(i => i.status === 'Feedback Pending').length,
     cleared: filtered.filter(i => i.status === 'Cleared').length,
+    rejected: filtered.filter(i => i.status === 'Rejected').length,
+    hold: filtered.filter(i => i.status === 'Hold').length,
   };
 
   return (
@@ -133,11 +169,13 @@ export default function Interviews() {
         title="Interview Pipeline"
         subtitle={isMk ? 'All candidate identities are anonymized by policy.' : 'TSE hiring pipeline across stages.'}
       />
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
         <KpiCard testid="iv-scheduled" label="Scheduled" value={totals.scheduled} />
         <KpiCard testid="iv-completed" label="Completed" value={totals.completed} />
         <KpiCard testid="iv-pending" label="Feedback Pending" value={totals.pending} />
         <KpiCard testid="iv-cleared" label="Cleared" value={totals.cleared} />
+        <KpiCard testid="iv-rejected" label="Rejected" value={totals.rejected} />
+        <KpiCard testid="iv-hold" label="On Hold" value={totals.hold} />
       </div>
       <SectionCard title="Filter" actions={
         <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -168,18 +206,30 @@ export default function Interviews() {
                         initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
                         onClick={() => setActive(i)}
                         data-testid={`iv-card-${i.id}`}
-                        className="w-full text-left p-3 rounded-lg bg-white border border-slate-200 hover:border-blue-400 shadow-sm transition-all cursor-pointer"
+                        className="w-full text-left p-3.5 rounded-xl bg-white border border-slate-200 hover:border-blue-400 shadow-sm hover:shadow-md transition-all cursor-pointer group"
                       >
                         <div className="flex items-center justify-between">
-                          <span className="mono text-xs text-blue-700 font-semibold">{i.id}</span>
+                          <span className="mono text-xs text-blue-700 font-bold">{i.id}</span>
                           <StatusBadge value={i.status} />
                         </div>
-                        <div className="mt-2 text-sm font-semibold text-slate-900">
+                        <div className="mt-2 text-sm font-semibold text-slate-900 group-hover:text-blue-600 transition-colors">
                           {isMk ? i.id : i.candidateName}
                         </div>
-                        <div className="mt-1 text-xs text-slate-600">{i.position} · {i.date} {i.time}</div>
+                        <div className="mt-1 text-xs text-slate-600">
+                          {i.company ? <span className="font-semibold text-slate-800">{i.company} · </span> : null}
+                          {i.position} · {i.date} {i.time}
+                        </div>
+                        {i.teamName && !isMk && (
+                          <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-slate-500">
+                            <span className="px-1.5 py-0.5 rounded bg-slate-100 font-medium">{i.teamName}</span>
+                            {i.assignedSrName && <span>· SR: {i.assignedSrName}</span>}
+                          </div>
+                        )}
                         {interviewer && !isMk && (
-                          <div className="mt-2 text-[11px] text-slate-500 font-medium">Interviewer: {interviewer.name}</div>
+                          <div className="mt-2 text-[11px] text-indigo-600 font-medium">Interviewer: {interviewer.name}</div>
+                        )}
+                        {isMk && i.assignedSrName && (
+                          <div className="mt-2 text-[11px] text-slate-400">Assigned SR: {i.assignedSrName}</div>
                         )}
                       </motion.button>
                     );
@@ -190,27 +240,44 @@ export default function Interviews() {
           })}
         </div>
       </SectionCard>
-      {isMk && (
-        <SectionCard title="Evaluation queue" subtitle="Click a row to open the feedback form">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-xs text-slate-600 uppercase tracking-wider border-b border-slate-200 font-semibold">
-                  <th className="py-2.5">Interview ID</th><th>Position</th><th>Date</th><th>Status</th><th>Action</th>
+      
+      <SectionCard
+        title="Interview Queue & Evaluations"
+        subtitle={isMk ? "Candidate identities are anonymized per policy. Click any row to evaluate or change stage." : "In-scope interviews. Click any row to view details, evaluate, or update status."}
+      >
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs text-slate-600 uppercase tracking-wider border-b border-slate-200 font-semibold">
+                <th className="py-2.5">Interview ID</th>
+                <th>Candidate</th>
+                <th>Company</th>
+                <th>Position</th>
+                <th>Date & Time</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="py-8 text-center text-xs text-slate-400 italic">No interviews found for this filter.</td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {filtered.map(i => (
-                  <tr key={i.id} className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer transition-colors" onClick={() => setActive(i)}>
-                    <td className="py-2.5 mono text-xs text-blue-700 font-semibold">{i.id}</td><td className="text-slate-900 font-medium">{i.position}</td><td className="text-slate-600 text-xs">{i.date}</td><td><StatusBadge value={i.status} /></td>
-                    <td><span data-testid={`iv-evaluate-${i.id}`} className="text-xs text-blue-600 hover:text-blue-800 font-semibold">Evaluate →</span></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </SectionCard>
-      )}
+              ) : filtered.map(i => (
+                <tr key={i.id} className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer transition-colors" onClick={() => setActive(i)}>
+                  <td className="py-2.5 mono text-xs text-blue-700 font-semibold">{i.id}</td>
+                  <td className="text-slate-900 font-medium text-xs">{isMk ? i.id : i.candidateName}</td>
+                  <td className="text-slate-700 font-medium text-xs">{i.company || '—'}</td>
+                  <td className="text-slate-900 font-medium text-xs">{i.position}</td>
+                  <td className="text-slate-600 text-xs">{i.date} {i.time}</td>
+                  <td><StatusBadge value={i.status} /></td>
+                  <td><span data-testid={`iv-evaluate-${i.id}`} className="text-xs text-blue-600 hover:text-blue-800 font-semibold">Evaluate →</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </SectionCard>
       <EvaluationModal interview={active} onClose={() => setActive(null)} />
     </div>
   );

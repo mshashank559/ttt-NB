@@ -15,6 +15,7 @@ import {
   getTseCodeName,
   getTsmCodeName,
   filterAuthorizedData,
+  mapTaskToInterview,
   sanitizeForIdentityPrivacy,
   anonymizeInterview,
   getUserById,
@@ -339,9 +340,9 @@ export const AppProvider = ({ children }) => {
       techPerson: assignee?.name || task.techPerson || 'Unassigned',
       codeName,
       candidateName,
-      title: `${candidateName} — ${taskType} (${task.companyName || 'Assessment'})`,
+      title: `${candidateName} — ${taskType}${task.companyName ? ` (${task.companyName})` : ''}`,
       position: task.position || 'Software Engineer',
-      companyName: task.companyName || 'Amazon',
+      companyName: task.companyName || '',
       taskType,
       interviewDateTime: task.interviewDateTime || '',
       interviewOutcome: task.interviewOutcome || null,
@@ -389,7 +390,7 @@ export const AppProvider = ({ children }) => {
       teamLeadId: assignedTeam.leadId,
       teamName: assignedTeam.name,
       jobRole: task.position || 'Software Engineer',
-      company: task.companyName || 'Amazon',
+      company: task.companyName || '',
       round: taskType,
       techSupportType: taskType,
       timestamp: new Date().toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
@@ -489,11 +490,38 @@ export const AppProvider = ({ children }) => {
   }, [currentUser, updateTask]);
 
   const submitInterviewFeedback = useCallback((interviewId, feedback) => {
+    const outcome = feedback.decision; // 'Cleared', 'Rejected', 'Hold', etc.
+    const newStatus = feedback.stage || (
+      ['Cleared', 'Passed', 'Moved to Next Round', 'Offer Received'].includes(outcome)
+        ? 'Cleared'
+        : (outcome === 'Rejected' || outcome === 'Failed') ? 'Rejected' : 'Hold'
+    );
+
+    // 1. Update task in MongoDB & App state
+    const taskId = interviewId;
+    updateTask(taskId, {
+      interviewOutcome: outcome,
+      status: ['Cleared', 'Rejected', 'Hold', 'Interview Completed'].includes(newStatus) ? 'Done' : 'Pending',
+      completionRemark: feedback.remarks || `Interview evaluation: ${outcome}`,
+    }, `Interview evaluated by ${currentUser?.name || 'Reviewer'}: ${outcome}`);
+
+    // 2. Also record in feedbacks state and /api/feedbacks
+    const fbId = `fb-task-${taskId}`;
+    addMarketingReview(fbId, {
+      technical: feedback.technical,
+      communication: feedback.communication,
+      overallRating: feedback.overall,
+      feedbackRemarks: feedback.remarks,
+      decision: outcome,
+      reviewerName: currentUser?.name || 'Reviewer',
+    });
+
+    // 3. Update local standalone interview state if any
     setInterviews(prev => prev.map(iv => {
       if (iv.id !== interviewId) return iv;
-      const newStatus = feedback.decision === 'Cleared' ? 'Cleared' : feedback.decision === 'Rejected' ? 'Rejected' : 'Hold';
-      return { ...iv, feedback, feedbackSubmitted: true, status: newStatus };
+      return { ...iv, feedback, feedbackSubmitted: true, status: newStatus, interviewOutcome: outcome };
     }));
+
     setNotifications(prev => [{
       id: `n-${Date.now()}`,
       type: 'interview',
@@ -502,13 +530,26 @@ export const AppProvider = ({ children }) => {
       time: 'just now',
       read: false,
     }, ...prev]);
-    toast.success('Interview feedback submitted.');
-  }, []);
+    toast.success('Interview feedback and stage updated successfully.');
+  }, [currentUser, updateTask, addMarketingReview]);
 
   const updateInterviewStatus = useCallback((id, status) => {
+    let patch = {};
+    if (status === 'Cleared') {
+      patch = { status: 'Done', interviewOutcome: 'Cleared' };
+    } else if (status === 'Rejected') {
+      patch = { status: 'Done', interviewOutcome: 'Failed' };
+    } else if (status === 'Hold') {
+      patch = { status: 'Done', interviewOutcome: 'Hold' };
+    } else if (status === 'Interview Completed') {
+      patch = { status: 'Done' };
+    } else if (status === 'Scheduled') {
+      patch = { status: 'Pending', interviewOutcome: null };
+    }
+    updateTask(id, patch, `Interview status changed to ${status}`);
     setInterviews(prev => prev.map(iv => iv.id === id ? { ...iv, status } : iv));
-    toast.success('Interview status updated.');
-  }, []);
+    toast.success(`Interview moved to ${status}`);
+  }, [updateTask]);
 
   const markNotificationRead = useCallback((id) => {
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
@@ -712,9 +753,22 @@ export const AppProvider = ({ children }) => {
     return filterAuthorizedData(tasks, currentUser, currentRole);
   }, [tasks, currentUser, currentRole]);
 
+  // Derive all interview records dynamically from tasks + feedbacks + standalone interviews
+  const rawInterviews = useMemo(() => {
+    const taskInterviews = (tasks || [])
+      .filter(t => t.taskType === 'Interview' || t.category === 'Interview' || Boolean(t.interviewDateTime))
+      .map(t => mapTaskToInterview(t, feedbacks))
+      .filter(Boolean);
+
+    const existingIds = new Set(taskInterviews.map(i => i.id));
+    const extraInterviews = (interviews || []).filter(i => !existingIds.has(i.id));
+
+    return [...taskInterviews, ...extraInterviews];
+  }, [tasks, feedbacks, interviews]);
+
   const scopedInterviews = useMemo(() => {
-    return filterAuthorizedData(interviews, currentUser, currentRole);
-  }, [interviews, currentUser, currentRole]);
+    return filterAuthorizedData(rawInterviews, currentUser, currentRole);
+  }, [rawInterviews, currentUser, currentRole]);
 
   const scopedFeedbacks = useMemo(() => {
     return filterAuthorizedData(feedbacks, currentUser, currentRole);
