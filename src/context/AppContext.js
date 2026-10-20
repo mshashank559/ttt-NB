@@ -105,17 +105,28 @@ export const AppProvider = ({ children }) => {
     return () => window.removeEventListener('storage', handleStorage);
   }, []);
 
+  const [slaTickets, setSlaTickets] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('ttt_sla_tickets');
+        if (saved) return JSON.parse(saved);
+      } catch (e) {}
+    }
+    return [];
+  });
+
   const [dbConnected, setDbConnected] = useState(false);
 
   // Live Sync with MongoDB Atlas Backend (Mumbai Region)
   React.useEffect(() => {
     const fetchLiveData = async () => {
       try {
-        const [tasksRes, feedbacksRes, usersRes, healthRes] = await Promise.all([
+        const [tasksRes, feedbacksRes, usersRes, healthRes, slaRes] = await Promise.all([
           fetch('/api/tasks').catch(() => null),
           fetch('/api/feedbacks').catch(() => null),
           fetch('/api/users').catch(() => null),
           fetch('/api/health').catch(() => null),
+          fetch('/api/sla-tickets').catch(() => null),
         ]);
 
         if (healthRes && healthRes.ok) {
@@ -149,6 +160,16 @@ export const AppProvider = ({ children }) => {
             try {
               localStorage.setItem('ttt_users', JSON.stringify(liveUsers));
             } catch (e) { }
+          }
+        }
+
+        if (slaRes && slaRes.ok) {
+          const liveSla = await slaRes.json();
+          if (Array.isArray(liveSla)) {
+            setSlaTickets(liveSla);
+            try {
+              localStorage.setItem('ttt_sla_tickets', JSON.stringify(liveSla));
+            } catch (e) {}
           }
         }
       } catch (err) {
@@ -324,6 +345,8 @@ export const AppProvider = ({ children }) => {
       position: task.position || 'Software Engineer',
       companyName: task.companyName || 'Amazon',
       taskType,
+      interviewDateTime: task.interviewDateTime || '',
+      interviewOutcome: task.interviewOutcome || null,
       duration: task.duration || '30 mins',
       status: task.status || 'Pending',
       remark: task.remark || '',
@@ -491,6 +514,88 @@ export const AppProvider = ({ children }) => {
     toast.success('Marketing Review saved successfully.');
   }, [currentUser, updateFeedbacksWithStorage]);
 
+  // Milestone 6: SLA Ticket Management & Auto-Escalation
+  const addSlaTicket = useCallback((ticketData) => {
+    const id = ticketData.id || `SLA-${Date.now()}`;
+    const newTicket = {
+      ...ticketData,
+      id,
+      ticketNumber: ticketData.ticketNumber || `TKT-${Math.floor(1000 + Math.random() * 9000)}`,
+      status: ticketData.status || 'Open',
+      createdAt: ticketData.createdAt || new Date().toISOString(),
+      actionTaken: ticketData.actionTaken || '',
+      resolutionDetails: ticketData.resolutionDetails || '',
+    };
+
+    setSlaTickets(prev => {
+      const exists = prev.some(t => t.id === id || (t.interviewId && t.interviewId === newTicket.interviewId));
+      if (exists) return prev;
+      const updated = [newTicket, ...prev];
+      try { localStorage.setItem('ttt_sla_tickets', JSON.stringify(updated)); } catch (e) {}
+      return updated;
+    });
+
+    fetch('/api/sla-tickets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newTicket),
+    }).catch(() => {});
+
+    toast.error(`⚠️ Low Rating Escalation: SLA Ticket ${newTicket.ticketNumber} created for TSM review.`);
+    return newTicket;
+  }, []);
+
+  const updateSlaTicket = useCallback((ticketId, patch) => {
+    setSlaTickets(prev => {
+      const updated = prev.map(t => t.id === ticketId ? { ...t, ...patch } : t);
+      try { localStorage.setItem('ttt_sla_tickets', JSON.stringify(updated)); } catch (e) {}
+      return updated;
+    });
+
+    fetch(`/api/sla-tickets/${ticketId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    }).catch(() => {});
+
+    toast.success('SLA Ticket updated successfully.');
+  }, []);
+
+  const updateInterviewOutcome = useCallback((taskId, outcome) => {
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, interviewOutcome: outcome } : t));
+    fetch(`/api/tasks/${taskId}/outcome`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ outcome }),
+    }).catch(() => {});
+    toast.success(`Interview outcome recorded: ${outcome}`);
+  }, []);
+
+  // Milestone 2: 30-Minute Interview Reminder Monitor for TSE
+  React.useEffect(() => {
+    if (currentRole !== 'tse' || !currentUser) return;
+
+    const checkUpcomingReminders = () => {
+      const now = new Date();
+      tasks.forEach(t => {
+        if (t.taskType === 'Interview' && t.interviewDateTime && (t.assigneeId === currentUser.id || t.techPerson === currentUser.name)) {
+          const target = new Date(t.interviewDateTime);
+          const diffMin = Math.round((target.getTime() - now.getTime()) / (1000 * 60));
+          if (diffMin >= 0 && diffMin <= 30 && !t._reminderNotified) {
+            toast.error(`⏰ INTERVIEW REMINDER: Candidate session with ${t.candidateName} starts in ${diffMin} minutes!`, {
+              duration: 8000,
+            });
+            t._reminderNotified = true;
+          }
+        }
+      });
+    };
+
+    checkUpcomingReminders();
+    const interval = setInterval(checkUpcomingReminders, 60000);
+    return () => clearInterval(interval);
+  }, [currentRole, currentUser, tasks]);
+
   const submitCandidateFeedback = useCallback((feedbackId, feedbackData) => {
     updateFeedbacksWithStorage(prev => prev.map(item => {
       if (item.id !== feedbackId) return item;
@@ -504,6 +609,23 @@ export const AppProvider = ({ children }) => {
       };
     }));
 
+    // Auto-escalate if rating <= 3 stars
+    const rating = Number(feedbackData.performanceRating) || Number(feedbackData.experienceRating) || 5;
+    if (rating <= 3) {
+      const session = feedbacks.find(f => f.id === feedbackId);
+      addSlaTicket({
+        candidateName: session?.candidateName || feedbackData.candidateName || 'Candidate',
+        companyName: session?.company || 'Client Assessment',
+        interviewId: feedbackId,
+        techSupport: session?.employeeName || session?.techSupport || 'TSE',
+        techSupportId: session?.techSupportId || 'TSE-ID',
+        rating,
+        comments: feedbackData.comments || 'Low rating logged by candidate (<= 3 stars).',
+        responsibleTsm: 'Shashank Mishra',
+        responsibleTsmId: 'u-shashank-01',
+      });
+    }
+
     // Update in MongoDB Atlas
     fetch(`/api/feedbacks/${feedbackId}/candidate`, {
       method: 'PUT',
@@ -512,10 +634,26 @@ export const AppProvider = ({ children }) => {
     }).catch(() => { });
 
     toast.success('Candidate feedback updated successfully.');
-  }, [updateFeedbacksWithStorage]);
+  }, [updateFeedbacksWithStorage, feedbacks, addSlaTicket]);
 
   const addSagaFeedback = useCallback((newRecord) => {
     updateFeedbacksWithStorage(prev => [newRecord, ...prev]);
+
+    // Auto-escalate if rating <= 3 stars
+    const cRating = Number(newRecord.candidateFeedback?.performanceRating) || Number(newRecord.candidateFeedback?.experienceRating) || 5;
+    if (cRating <= 3) {
+      addSlaTicket({
+        candidateName: newRecord.candidateName || 'Candidate',
+        companyName: newRecord.company || 'Client Assessment',
+        interviewId: newRecord.id,
+        techSupport: newRecord.employeeName || newRecord.techSupport || 'TSE',
+        techSupportId: newRecord.techSupportId || 'TSE-ID',
+        rating: cRating,
+        comments: newRecord.candidateFeedback?.comments || 'Low rating submitted in Candidate SAGA.',
+        responsibleTsm: 'Shashank Mishra',
+        responsibleTsmId: 'u-shashank-01',
+      });
+    }
 
     // Save in MongoDB Atlas
     fetch('/api/feedbacks', {
@@ -524,8 +662,8 @@ export const AppProvider = ({ children }) => {
       body: JSON.stringify(newRecord),
     }).catch(() => { });
 
-    toast.success(`Feedback for ${newRecord.techSupport} recorded successfully.`);
-  }, [updateFeedbacksWithStorage]);
+    toast.success(`Feedback recorded successfully.`);
+  }, [updateFeedbacksWithStorage, addSlaTicket]);
 
   const createPendingFeedbackLink = useCallback((newRecord) => {
     updateFeedbacksWithStorage(prev => [newRecord, ...prev]);
@@ -603,6 +741,10 @@ export const AppProvider = ({ children }) => {
     markNotificationRead,
     markAllRead,
     setEvents,
+    slaTickets,
+    addSlaTicket,
+    updateSlaTicket,
+    updateInterviewOutcome,
   };
 
   return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>;

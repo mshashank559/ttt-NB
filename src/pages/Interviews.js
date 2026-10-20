@@ -79,6 +79,10 @@ const EvaluationModal = ({ interview, onClose }) => {
             <Select value={form.decision} onValueChange={v => setForm({...form, decision: v})}>
               <SelectTrigger data-testid="feedback-decision" className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900"><SelectValue /></SelectTrigger>
               <SelectContent className="bg-white border-slate-200 text-slate-900">
+                <SelectItem value="Passed">Passed</SelectItem>
+                <SelectItem value="Failed">Failed</SelectItem>
+                <SelectItem value="Moved to Next Round">Moved to Next Round</SelectItem>
+                <SelectItem value="Offer Received">Offer Received</SelectItem>
                 <SelectItem value="Cleared">Cleared</SelectItem>
                 <SelectItem value="Rejected">Rejected</SelectItem>
                 <SelectItem value="Hold">Hold</SelectItem>

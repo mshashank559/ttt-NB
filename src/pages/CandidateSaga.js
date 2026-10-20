@@ -842,39 +842,18 @@ export default function CandidateSaga() {
                         </h2>
                       </div>
 
-                      {/* Who did you interview with? */}
-                      <div>
-                        <label className="text-xs font-semibold text-blue-100 flex items-center justify-between">
-                          <span>Assigned Tech Support Engineer</span>
-                          {paramTseName && (
-                            <span className="text-[10px] text-blue-300 flex items-center gap-1 font-normal">
-                              <Lock size={10} className="text-blue-400" /> Pre-Assigned Session
-                            </span>
-                          )}
-                        </label>
-                        <select
-                          value={formData.tseName}
-                          onChange={e => {
-                            const found = TECH_SUPPORT_TEAM.find(t => t.supportName === e.target.value);
-                            setFormData({
-                              ...formData,
-                              tseName: e.target.value,
-                              tseId: found ? found.id : formData.tseId,
-                            });
-                          }}
-                          className="mt-1.5 w-full h-11 px-4 rounded-xl bg-[#040822] border border-blue-500/30 focus:border-[#2546f0] text-sm text-white outline-none"
-                        >
-                          {formData.tseName && !TECH_SUPPORT_TEAM.some(t => t.supportName === formData.tseName) && (
-                            <option value={formData.tseName} className="bg-[#070e30] text-white">
-                              {formData.tseName} ({formData.tseId})
-                            </option>
-                          )}
-                          {TECH_SUPPORT_TEAM.map(tse => (
-                            <option key={tse.id} value={tse.supportName} className="bg-[#070e30] text-white">
-                              {tse.supportName} ({tse.id}) — {tse.employeeName}
-                            </option>
-                          ))}
-                        </select>
+                      {/* Confidential Session Verification (TSE Identity Protected) */}
+                      <div className="p-3.5 rounded-xl bg-[#040822]/80 border border-blue-500/30 flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-2.5 text-blue-200">
+                          <div className="h-7 w-7 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center">
+                            <CheckCircle2 size={16} />
+                          </div>
+                          <div>
+                            <span className="font-semibold text-white block">Technical Session Verified</span>
+                            <span className="text-[11px] text-blue-300/70">Session linked securely to your interview assessment</span>
+                          </div>
+                        </div>
+                        <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 font-medium">100% Confidential</span>
                       </div>
 
                       {/* Performance Rating Cards */}
@@ -1051,7 +1030,7 @@ export default function CandidateSaga() {
                 </h3>
 
                 <p className="mt-2 text-xs text-blue-100/75 leading-relaxed max-w-sm mx-auto">
-                  Your feedback for <span className="font-semibold text-white">{formData.tseName}</span> has been securely logged into the NetBounce Tech Team Tracker.
+                  Your feedback has been securely logged into the Netbound Placement LLC Tech Team Tracker.
                 </p>
 
                 <div className="mt-6 pt-5 border-t border-blue-500/20">
@@ -1074,7 +1053,7 @@ export default function CandidateSaga() {
       <footer className="relative z-10 w-full max-w-7xl mx-auto px-6 sm:px-10 py-5 flex flex-col sm:flex-row items-center justify-between text-[11px] text-blue-300/60 border-t border-blue-500/15">
         <div className="flex items-center gap-2">
           <span>Powered by</span>
-          <span className="text-white font-semibold">NetBounce Placement</span>
+          <span className="text-white font-semibold">Netbound Placement LLC</span>
           <span>•</span>
           <span className="text-blue-300 font-medium">Candidate SAGA</span>
         </div>

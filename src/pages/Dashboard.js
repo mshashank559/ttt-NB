@@ -1,10 +1,18 @@
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ListChecks, CheckCircle2, Clock3, AlertTriangle, UserRoundCheck, Users as UsersIcon, Target, PieChart as PieIcon, Plus, ArrowUpRight, UserPlus } from 'lucide-react';
+import {
+  ListChecks, CheckCircle2, Clock3, AlertTriangle, UserRoundCheck, Users as UsersIcon,
+  Target, PieChart as PieIcon, Plus, ArrowUpRight, UserPlus, Star, AlertOctagon,
+  Calendar, CheckSquare, Sparkles, ShieldAlert, ArrowRight, ShieldCheck, Search
+} from 'lucide-react';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip as RTooltip, CartesianGrid, BarChart, Bar, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 import { useApp } from '../context/AppContext';
 import { KpiCard, PageHeader, StatusBadge, TaskTypeBadge, SectionCard, EmptyState, ArcGaugeCard, NeumorphicMetricCard, CircularProgressRing } from '../components/common';
-import { ROLES, USERS } from '../data/mockData';
+import { ROLES, USERS, getInterviewTimingMeta, getSmartTseRecommendations, roleIsMarketing } from '../data/mockData';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
+import { Input } from '../components/ui/input';
+import { Textarea } from '../components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 
 const palette = ['#3B82F6', '#10B981', '#8B5CF6', '#F59E0B', '#06B6D4', '#EC4899', '#64748B'];
 
@@ -76,8 +84,71 @@ const InterviewFunnel = ({ interviews }) => {
 };
 
 export default function Dashboard() {
-  const { currentRole, currentUser, tasks, visibleInterviews, interviews, users } = useApp();
+  const { currentRole, currentUser, tasks, visibleInterviews, interviews, users, feedbacks, slaTickets, updateSlaTicket } = useApp();
   const navigate = useNavigate();
+
+  const [selectedWorkloadDate, setSelectedWorkloadDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [candidateSearch, setCandidateSearch] = useState('');
+  const [activeSlaTicketModal, setActiveSlaTicketModal] = useState(null);
+  const [slaResolutionNote, setSlaResolutionNote] = useState('');
+  const [slaResolutionStatus, setSlaResolutionStatus] = useState('Resolved');
+
+  // Milestone 2: Urgent Priority Queue Detection
+  const urgentInterviews = useMemo(() => {
+    return (tasks || []).filter(t => {
+      if (!t.interviewDateTime) return false;
+      const meta = getInterviewTimingMeta(t.interviewDateTime);
+      return meta.isUrgent;
+    });
+  }, [tasks]);
+
+  const elevatedInterviews = useMemo(() => {
+    return (tasks || []).filter(t => {
+      if (!t.interviewDateTime) return false;
+      const meta = getInterviewTimingMeta(t.interviewDateTime);
+      return meta.isElevated;
+    });
+  }, [tasks]);
+
+  // Milestone 5: TSE Star Rating calculation
+  const myFeedbacks = useMemo(() => {
+    return (feedbacks || []).filter(f =>
+      f.techSupportId === currentUser?.id ||
+      (currentUser?.name && (f.techSupport || '').toLowerCase() === currentUser?.name?.toLowerCase())
+    );
+  }, [feedbacks, currentUser]);
+
+  const tseAvgRating = useMemo(() => {
+    const rated = myFeedbacks.filter(f => f.candidateFeedback?.performanceRating || f.candidateFeedback?.experienceRating);
+    if (rated.length === 0) return '5.0';
+    const sum = rated.reduce((acc, f) => acc + Number(f.candidateFeedback?.performanceRating || f.candidateFeedback?.experienceRating || 5), 0);
+    return (sum / rated.length).toFixed(1);
+  }, [myFeedbacks]);
+
+  // TSE-specific upcoming 30m interview
+  const myUrgentInterview = useMemo(() => {
+    return (tasks || []).find(t => {
+      const isMine = t.assigneeId === currentUser?.id || (currentUser?.name && (t.techPerson || '').toLowerCase() === currentUser?.name?.toLowerCase());
+      if (!isMine || !t.interviewDateTime) return false;
+      return getInterviewTimingMeta(t.interviewDateTime).isUrgent;
+    });
+  }, [tasks, currentUser]);
+
+  // Milestone 4 & 7: Candidate History & Smart Advisory Lookup
+  const candidateHistoryResult = useMemo(() => {
+    if (!candidateSearch.trim()) return null;
+    const q = candidateSearch.trim().toLowerCase();
+    const cTasks = (tasks || []).filter(t => (t.candidateName || '').toLowerCase().includes(q));
+    const cFeedbacks = (feedbacks || []).filter(f => (f.candidateName || '').toLowerCase().includes(q));
+    const tseUsers = (users || []).filter(u => u.role === 'tse');
+    const recs = getSmartTseRecommendations(candidateSearch.trim(), tasks, feedbacks, tseUsers);
+    return {
+      candidateName: candidateSearch.trim(),
+      tasks: cTasks,
+      feedbacks: cFeedbacks,
+      recommendations: recs,
+    };
+  }, [candidateSearch, tasks, feedbacks, users]);
 
   const trend = useMemo(() => buildTrend(tasks), [tasks]);
   const dist = useMemo(() => statusDistribution(tasks), [tasks]);
@@ -455,6 +526,7 @@ export default function Dashboard() {
   // ---------- TSM ----------
   if (currentRole === 'tsm') {
     const myTeam = users.filter(u => u.role === 'tse');
+
     return (
       <div className="space-y-6">
         <PageHeader
@@ -470,6 +542,46 @@ export default function Dashboard() {
             </button>
           }
         />
+
+        {/* Milestone 2: Urgent Priority Queue Alert Banner (<30m & <60m EST) */}
+        {urgentInterviews.length > 0 && (
+          <div className="p-4 rounded-2xl bg-gradient-to-r from-rose-600 via-rose-500 to-red-600 text-white shadow-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center shrink-0 animate-pulse">
+                <AlertTriangle size={20} className="text-white" />
+              </div>
+              <div>
+                <div className="font-bold text-sm flex items-center gap-2">
+                  <span>URGENT: Interview starting within 30 minutes!</span>
+                  <span className="px-2 py-0.5 rounded-full bg-white text-rose-700 text-[10px] font-black uppercase">Urgent SLA</span>
+                </div>
+                <div className="text-xs text-rose-100 mt-0.5">
+                  Candidate: <strong className="text-white">{urgentInterviews[0].candidateName}</strong> · TSE: <strong className="text-white">{urgentInterviews[0].techPerson}</strong> · Time: <strong className="text-white">{getInterviewTimingMeta(urgentInterviews[0].interviewDateTime).estFormatted}</strong>
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={() => navigate('/tasks')}
+              className="px-4 py-2 rounded-xl bg-white text-rose-700 font-bold text-xs hover:bg-rose-50 shadow-md shrink-0 cursor-pointer transition-transform hover:scale-105"
+            >
+              Open Priority Queue →
+            </button>
+          </div>
+        )}
+
+        {elevatedInterviews.length > 0 && urgentInterviews.length === 0 && (
+          <div className="p-3.5 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 text-xs font-semibold">
+              <Clock3 size={18} className="text-white shrink-0" />
+              <span>
+                Elevated Priority: Interview starting within 60 mins for <strong>{elevatedInterviews[0].candidateName}</strong> (TSE: {elevatedInterviews[0].techPerson}) at <strong>{getInterviewTimingMeta(elevatedInterviews[0].interviewDateTime).estFormatted}</strong>
+              </span>
+            </div>
+            <button onClick={() => navigate('/tasks')} className="px-3 py-1 rounded-lg bg-white text-amber-800 text-xs font-bold hover:bg-amber-50 shrink-0">
+              View Tasks
+            </button>
+          </div>
+        )}
 
         {/* Ghulam Image 1 Style Hero Arc Gauge & Metric Cards */}
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
@@ -491,17 +603,51 @@ export default function Dashboard() {
             <NeumorphicMetricCard testid="kpi-team" label="My Team" value={myTeam.length} subValue="TSE Engineers" percentage={myTeam.length > 0 ? 100 : 0} ringColor="#1416c1" />
             <NeumorphicMetricCard testid="kpi-active" label="Active Tasks" value={totals.inProgress + totals.pending} subValue="In Flight" percentage={totals.total > 0 ? Math.round(((totals.inProgress + totals.pending) / totals.total) * 100) : 0} ringColor="#3b82f6" />
             <NeumorphicMetricCard testid="kpi-done-today" label="Done Today" value={totals.completed} subValue="Resolved" percentage={completionRate} ringColor="#10b981" />
-            <NeumorphicMetricCard testid="kpi-pending" label="Pending" value={totals.pending} subValue="In Queue" percentage={totals.total > 0 ? Math.round((totals.pending / totals.total) * 100) : 0} ringColor="#f59e0b" />
+            <NeumorphicMetricCard
+              testid="kpi-sla-open"
+              label="SLA Escalations"
+              value={slaTickets.filter(t => t.status !== 'Resolved').length}
+              subValue="Low-Rating Cases"
+              trend={slaTickets.filter(t => t.status !== 'Resolved').length > 0 ? "down" : "up"}
+              percentage={slaTickets.length > 0 ? Math.round((slaTickets.filter(t => t.status !== 'Resolved').length / slaTickets.length) * 100) : 0}
+              ringColor="#f43f5e"
+            />
           </div>
         </div>
 
-        <SectionCard title="Team Workload" subtitle="Capacity across your TSEs">
+        {/* Milestone 4: Date-Selectable TSE Availability & Workload View */}
+        <SectionCard
+          title="Team Workload & Capacity"
+          subtitle={`Inspect engineer capacity on ${selectedWorkloadDate} to avoid over-allocation`}
+          actions={
+            <div className="flex items-center gap-2">
+              <label className="text-xs font-semibold text-slate-500">Selected Date:</label>
+              <input
+                type="date"
+                data-testid="tsm-workload-date-picker"
+                value={selectedWorkloadDate}
+                onChange={e => setSelectedWorkloadDate(e.target.value)}
+                className="text-xs px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-800 shadow-2xs font-medium cursor-pointer"
+              />
+            </div>
+          }
+        >
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
             {myTeam.map(u => {
-              const a = tasks.filter(t => t.assigneeId === u.id);
-              const c = a.filter(t => t.status === 'Completed').length;
-              const p = a.filter(t => t.status === 'In Progress').length;
-              const rate = a.length ? Math.round((c / a.length) * 100) : 0;
+              // Filter tasks assigned to TSE specifically for this chosen date
+              const dayTasks = tasks.filter(t =>
+                t.assigneeId === u.id &&
+                (t.date === selectedWorkloadDate || t.dueDate === selectedWorkloadDate || (t.interviewDateTime && t.interviewDateTime.slice(0, 10) === selectedWorkloadDate))
+              );
+              const dayDone = dayTasks.filter(t => t.status === 'Completed').length;
+              const dayActive = dayTasks.filter(t => t.status === 'In Progress' || t.status === 'Pending').length;
+              const loadLevel = dayTasks.length >= 4 ? 'Heavy' : dayTasks.length >= 1 ? 'Optimal' : 'Available';
+              const loadBadgeColor = dayTasks.length >= 4
+                ? 'bg-rose-100 text-rose-800 border-rose-200'
+                : dayTasks.length >= 1
+                ? 'bg-blue-100 text-blue-800 border-blue-200'
+                : 'bg-emerald-100 text-emerald-800 border-emerald-200';
+
               return (
                 <div
                   key={u.id}
@@ -511,26 +657,29 @@ export default function Dashboard() {
                   <div className="flex items-center justify-between">
                     <div>
                       <div className="text-sm font-bold text-slate-900 dark:text-white">{u.name}</div>
-                      <div className="text-xs text-slate-500 dark:text-slate-400 font-mono">{u.empId}</div>
+                      <div className="text-xs text-slate-500 dark:text-slate-400 font-mono">{u.empId || u.codeName}</div>
                     </div>
-                    <CircularProgressRing percentage={rate} color="#1416c1" size={38} />
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${loadBadgeColor}`}>
+                      {loadLevel}
+                    </span>
                   </div>
                   <div className="mt-3 grid grid-cols-3 gap-2 text-center py-2 px-1 bg-slate-50 dark:bg-white/5 rounded-xl border border-slate-200 dark:border-white/5">
                     <div>
-                      <div className="text-base font-bold text-slate-900 dark:text-white">{a.length}</div>
-                      <div className="text-[10px] text-slate-500 uppercase font-semibold">Tasks</div>
+                      <div className="text-base font-bold text-slate-900 dark:text-white">{dayTasks.length}</div>
+                      <div className="text-[10px] text-slate-500 uppercase font-semibold">Scheduled</div>
                     </div>
                     <div>
-                      <div className="text-base font-bold text-emerald-600 dark:text-emerald-400">{c}</div>
+                      <div className="text-base font-bold text-emerald-600 dark:text-emerald-400">{dayDone}</div>
                       <div className="text-[10px] text-slate-500 uppercase font-semibold">Done</div>
                     </div>
                     <div>
-                      <div className="text-base font-bold text-blue-600 dark:text-blue-400">{p}</div>
+                      <div className="text-base font-bold text-blue-600 dark:text-blue-400">{dayActive}</div>
                       <div className="text-[10px] text-slate-500 uppercase font-semibold">Active</div>
                     </div>
                   </div>
-                  <div className="mt-3 h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                    <div className="h-full rounded-full bg-gradient-to-r from-blue-600 to-cyan-400" style={{ width: `${rate}%` }} />
+                  <div className="mt-2.5 text-[11px] text-slate-500 flex items-center justify-between">
+                    <span>Overall Rate</span>
+                    <span className="font-bold text-slate-800">{tasks.filter(t => t.assigneeId === u.id).length ? Math.round((tasks.filter(t => t.assigneeId === u.id && t.status === 'Completed').length / tasks.filter(t => t.assigneeId === u.id).length) * 100) : 0}%</span>
                   </div>
                 </div>
               );
@@ -538,6 +687,159 @@ export default function Dashboard() {
           </div>
         </SectionCard>
 
+        {/* Milestone 6: Automated SLA Escalation Tickets (Rating <= 3 Stars) */}
+        <SectionCard
+          title="SLA Escalation Tickets (Candidate Feedback ≤ 3 Stars)"
+          subtitle="Auto-escalated quality tickets requiring TSM follow-up and resolution"
+          actions={
+            <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-rose-100 text-rose-800 border border-rose-200">
+              {slaTickets.filter(t => t.status !== 'Resolved').length} Actionable Tickets
+            </span>
+          }
+        >
+          {slaTickets.length === 0 ? (
+            <div className="p-6 text-center text-slate-500 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+              <ShieldCheck size={28} className="mx-auto text-emerald-500 mb-2" />
+              <div className="text-sm font-bold text-slate-800">Zero SLA Escalations</div>
+              <div className="text-xs text-slate-400 mt-0.5">All candidate feedback sessions are rating 4+ stars. Outstanding work!</div>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                    <th className="py-2.5 font-bold">Ticket ID</th>
+                    <th className="font-bold">Candidate</th>
+                    <th className="font-bold">Assigned TSE</th>
+                    <th className="font-bold">Rating</th>
+                    <th className="font-bold">Feedback / Concerns</th>
+                    <th className="font-bold">Status</th>
+                    <th className="font-bold text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {slaTickets.map(ticket => (
+                    <tr key={ticket.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                      <td className="py-3 mono text-xs font-bold text-rose-600">{ticket.id}</td>
+                      <td className="font-bold text-slate-900">{ticket.candidateName}</td>
+                      <td className="text-xs text-slate-700 font-semibold">{ticket.techPerson}</td>
+                      <td className="whitespace-nowrap">
+                        <span className="px-2 py-0.5 rounded bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold">
+                          ⭐ {ticket.rating}/5
+                        </span>
+                      </td>
+                      <td className="text-xs text-slate-600 max-w-xs truncate" title={ticket.remarks || ticket.feedbackDetails}>
+                        {ticket.remarks || ticket.feedbackDetails || 'Candidate reported low satisfaction.'}
+                      </td>
+                      <td>
+                        <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${
+                          ticket.status === 'Resolved'
+                            ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                            : ticket.status === 'In Review'
+                            ? 'bg-amber-100 text-amber-800 border-amber-200'
+                            : 'bg-rose-100 text-rose-800 border-rose-200'
+                        }`}>
+                          {ticket.status}
+                        </span>
+                      </td>
+                      <td className="text-right">
+                        <button
+                          onClick={() => {
+                            setActiveSlaTicketModal(ticket);
+                            setSlaResolutionStatus(ticket.status || 'Resolved');
+                            setSlaResolutionNote(ticket.resolutionNotes || '');
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold cursor-pointer border border-slate-200"
+                        >
+                          Manage →
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </SectionCard>
+
+        {/* Milestone 4 & 7: Candidate Historical Assignment & Smart Recommendation Quick-Lookup */}
+        <SectionCard
+          title="Candidate Historical Assignment &amp; Smart Advisory"
+          subtitle="Look up candidate history to view prior TSEs and receive smart assignment recommendations"
+        >
+          <div className="space-y-4">
+            <div className="relative max-w-md">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <Input
+                data-testid="tsm-candidate-history-search"
+                value={candidateSearch}
+                onChange={e => setCandidateSearch(e.target.value)}
+                placeholder="Type candidate name (e.g. Shubhangi Mishra, Rahul)..."
+                className="pl-9 bg-white border-slate-300 text-slate-900"
+              />
+            </div>
+
+            {candidateHistoryResult && (
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+                <div className="font-bold text-sm text-slate-900 flex items-center justify-between">
+                  <span>Results for: &quot;{candidateHistoryResult.candidateName}&quot;</span>
+                  <span className="text-xs text-slate-500">{candidateHistoryResult.tasks.length} prior tasks found</span>
+                </div>
+
+                {/* Smart Advisory */}
+                {candidateHistoryResult.recommendations.length > 0 && (
+                  <div className="space-y-1.5">
+                    {candidateHistoryResult.recommendations.map((rec, i) => (
+                      <div
+                        key={i}
+                        className={`p-2.5 rounded-lg text-xs font-semibold border flex items-center justify-between ${
+                          rec.type === 'recommend'
+                            ? 'bg-emerald-50 text-emerald-900 border-emerald-300'
+                            : 'bg-rose-50 text-rose-900 border-rose-300'
+                        }`}
+                      >
+                        <span>{rec.message}</span>
+                        <span className="text-[11px] uppercase font-bold">{rec.type === 'recommend' ? '⭐ Recommended' : '⚠️ Low Rating Caution'}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Historical records table */}
+                {candidateHistoryResult.tasks.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs bg-white rounded-lg border border-slate-200">
+                      <thead>
+                        <tr className="bg-slate-100 text-slate-600 border-b border-slate-200 text-left">
+                          <th className="p-2">Date</th>
+                          <th className="p-2">Company</th>
+                          <th className="p-2">Assigned TSE</th>
+                          <th className="p-2">Task</th>
+                          <th className="p-2">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {candidateHistoryResult.tasks.map((t, idx) => (
+                          <tr key={idx} className="border-b border-slate-100">
+                            <td className="p-2 mono">{t.date || t.dueDate}</td>
+                            <td className="p-2 font-semibold text-slate-800">{t.companyName}</td>
+                            <td className="p-2 font-medium text-blue-700">{t.techPerson}</td>
+                            <td className="p-2">{t.taskType || t.category}</td>
+                            <td className="p-2"><StatusBadge value={t.status} /></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="text-xs text-slate-400 italic">No past assignments found for this candidate name.</div>
+                )}
+              </div>
+            )}
+          </div>
+        </SectionCard>
+
+        {/* Recent Tasks */}
         <SectionCard
           title="Recent Tasks"
           subtitle="Latest assignments across the team"
@@ -594,13 +896,80 @@ export default function Dashboard() {
             </table>
           </div>
         </SectionCard>
+
+        {/* SLA Ticket Resolution Modal */}
+        <Dialog open={!!activeSlaTicketModal} onOpenChange={o => !o && setActiveSlaTicketModal(null)}>
+          <DialogContent className="bg-white border-slate-200 text-slate-900 max-w-lg shadow-2xl">
+            <DialogHeader>
+              <DialogTitle className="text-slate-900">Manage SLA Escalation Ticket</DialogTitle>
+              <DialogDescription className="text-slate-500">
+                Ticket: {activeSlaTicketModal?.id} · Candidate: {activeSlaTicketModal?.candidateName}
+              </DialogDescription>
+            </DialogHeader>
+            {activeSlaTicketModal && (
+              <div className="space-y-4 mt-2">
+                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-950 space-y-1">
+                  <div><strong>TSE Assigned:</strong> {activeSlaTicketModal.techPerson}</div>
+                  <div><strong>Rating Given:</strong> ⭐ {activeSlaTicketModal.rating} / 5</div>
+                  <div><strong>Candidate Feedback:</strong> {activeSlaTicketModal.remarks || activeSlaTicketModal.feedbackDetails || 'No additional remarks.'}</div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-700 uppercase">Update Status</label>
+                  <Select value={slaResolutionStatus} onValueChange={setSlaResolutionStatus}>
+                    <SelectTrigger className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-white border-slate-200 text-slate-900">
+                      <SelectItem value="Open">Open</SelectItem>
+                      <SelectItem value="In Review">In Review</SelectItem>
+                      <SelectItem value="Resolved">Resolved</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-700 uppercase">Resolution / Follow-up Notes</label>
+                  <Textarea
+                    rows={3}
+                    value={slaResolutionNote}
+                    onChange={e => setSlaResolutionNote(e.target.value)}
+                    placeholder="Document coaching, candidate follow-up, or corrective steps taken..."
+                    className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white resize-none text-xs"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
+                  <button
+                    onClick={() => setActiveSlaTicketModal(null)}
+                    className="h-9 px-4 rounded-lg bg-slate-100 text-slate-700 text-xs font-semibold"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => {
+                      updateSlaTicket(activeSlaTicketModal.id, {
+                        status: slaResolutionStatus,
+                        resolutionNotes: slaResolutionNote,
+                      });
+                      setActiveSlaTicketModal(null);
+                    }}
+                    className="btn-primary h-9 px-4 rounded-lg text-xs font-bold"
+                  >
+                    Save Resolution
+                  </button>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     );
   }
 
   // ---------- TSE ----------
   if (currentRole === 'tse') {
-    const myTasks = tasks.filter(t => t.assigneeId === currentUser?.id);
+    const myTasks = tasks.filter(t => t.assigneeId === currentUser?.id || (currentUser?.name && (t.techPerson || '').toLowerCase() === currentUser?.name?.toLowerCase()));
     const myStats = {
       assigned: myTasks.length,
       inProgress: myTasks.filter(t => t.status === 'In Progress').length,
@@ -611,9 +980,32 @@ export default function Dashboard() {
 
     return (
       <div className="space-y-6">
-        <PageHeader title="My Workspace" subtitle={`${currentUser?.name} · ${currentUser?.dept}`} />
+        <PageHeader title="My Workspace" subtitle={`${currentUser?.name} · ${currentUser?.dept || 'Tech Support Engineer'}`} />
 
-        {/* Ghulam Image 1 Style Hero Arc Gauge & Metric Cards */}
+        {/* Milestone 2: 30-Minute Interview Countdown Alert for TSE */}
+        {myUrgentInterview && (
+          <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 text-white shadow-lg flex items-center justify-between gap-4 animate-pulse">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+                <Clock3 size={22} className="text-white" />
+              </div>
+              <div>
+                <div className="font-extrabold text-sm">Upcoming Interview in &lt; 30 Minutes!</div>
+                <div className="text-xs text-amber-100 mt-0.5">
+                  Candidate: <strong>{myUrgentInterview.candidateName}</strong> · Position: <strong>{myUrgentInterview.position}</strong> · Scheduled EST: <strong>{getInterviewTimingMeta(myUrgentInterview.interviewDateTime).estFormatted}</strong>
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={() => navigate('/tasks')}
+              className="px-4 py-2 rounded-xl bg-white text-orange-800 font-bold text-xs hover:bg-amber-50 shadow-md shrink-0 cursor-pointer"
+            >
+              Open Ticket →
+            </button>
+          </div>
+        )}
+
+        {/* Milestone 5: TSE Star Rating KPI & Stats */}
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
           <ArcGaugeCard
             className="xl:col-span-1"
@@ -629,7 +1021,15 @@ export default function Dashboard() {
             stat2Label="Candidates Cleared"
             stat2Value={`${ivTotals.cleared} Qualified`}
           />
-          <div className="xl:col-span-2 grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div className="xl:col-span-2 grid grid-cols-2 sm:grid-cols-5 gap-3">
+            <NeumorphicMetricCard
+              testid="kpi-rating"
+              label="Avg Star Rating"
+              value={`⭐ ${tseAvgRating}`}
+              subValue={`${myFeedbacks.length} Reviews`}
+              percentage={Math.round((Number(tseAvgRating) / 5) * 100)}
+              ringColor="#f59e0b"
+            />
             <NeumorphicMetricCard testid="kpi-assigned" label="Assigned" value={myStats.assigned} subValue="Total Tickets" percentage={myStats.assigned > 0 ? 100 : 0} ringColor="#1416c1" />
             <NeumorphicMetricCard testid="kpi-inprog" label="In Progress" value={myStats.inProgress} subValue="Underway" percentage={myStats.assigned > 0 ? Math.round((myStats.inProgress / myStats.assigned) * 100) : 0} ringColor="#3b82f6" />
             <NeumorphicMetricCard testid="kpi-pending" label="Pending" value={myStats.pending} subValue="Queued" percentage={myStats.assigned > 0 ? Math.round((myStats.pending / myStats.assigned) * 100) : 0} ringColor="#f59e0b" />

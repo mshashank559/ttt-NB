@@ -205,6 +205,10 @@ export default function FeedbackPage() {
       if (statusFilter === 'marketing_reviewed' && !item.marketingReview?.reviewed) {
         return false;
       }
+      if (statusFilter === 'sla_escalated') {
+        const rating = Number(item.candidateFeedback?.performanceRating || item.candidateFeedback?.experienceRating || 0);
+        if (!item.candidateFeedback?.submitted || rating === 0 || rating > 3) return false;
+      }
       if (statusFilter === 'not_rated') {
         const rating = calculateOverallRating(item.candidateFeedback, item.marketingReview);
         if (rating.state !== 'NOT_RATED') return false;
@@ -423,6 +427,7 @@ export default function FeedbackPage() {
             className="bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-[#1416c1] shadow-xs"
           >
             <option value="all">All Feedback Status</option>
+            <option value="sla_escalated">🚨 SLA Escalated (Rating ≤ 3 Stars)</option>
             <option value="needs_marketing_review">Pending TSE Review ⏳</option>
             <option value="marketing_reviewed">TSE Reviewed by Marketing ✓</option>
             <option value="candidate_submitted">Candidate Submitted ✓</option>
@@ -542,6 +547,11 @@ export default function FeedbackPage() {
                                 Submitted ✓
                               </span>
                               <StarDisplay score={rating.score} state={rating.state} size={14} />
+                              {Number(row.candidateFeedback?.performanceRating || row.candidateFeedback?.experienceRating || 5) <= 3 && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-100 text-rose-800 border border-rose-300">
+                                  🚨 SLA Escalated (≤ 3★)
+                                </span>
+                              )}
                             </div>
                             <div className="text-[10px] text-slate-500 flex items-center gap-1.5 flex-wrap">
                               {rating.state === 'COMBINED' && (

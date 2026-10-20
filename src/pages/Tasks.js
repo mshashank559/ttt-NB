@@ -4,18 +4,18 @@ import { motion } from 'framer-motion';
 import { Plus, Search, UserRound, Calendar as CalIcon, Clock, Building2, Briefcase, FileText, StickyNote, MessageSquare, ShieldAlert } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { PageHeader, StatusBadge, TaskTypeBadge, SectionCard, EmptyState } from '../components/common';
-import { TASK_TYPES, TASK_STATUSES, MARKETING_TEAMS, POC_USERS_BY_TEAM, getTseCodeName, getTsmCodeName, roleIsMarketing } from '../data/mockData';
+import { TASK_TYPES, TASK_STATUSES, MARKETING_TEAMS, POC_USERS_BY_TEAM, getTseCodeName, getTsmCodeName, roleIsMarketing, getInterviewTimingMeta, sortTasksByInterviewPriority, getSmartTseRecommendations, INTERVIEW_OUTCOMES } from '../data/mockData';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../components/ui/sheet';
 
-const roleCanCreate = (r) => r === 'tsm' || r === 'management';
+const roleCanCreate = (r) => r === 'tsm' || r === 'management' || r === 'marketing_tl' || r === 'marketing_sr' || r === 'recruiter';
 const roleCanEditAny = (r) => r === 'tsm' || r === 'management';
 
 const CreateTaskModal = ({ open, onOpenChange }) => {
-  const { users, addTask, currentRole } = useApp();
+  const { users, addTask, tasks, feedbacks, currentRole } = useApp();
   const tseUsers = users.filter(u => u.role === 'tse');
   const todayStr = new Date().toISOString().slice(0, 10);
 
@@ -27,6 +27,7 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
     assigneeId: tseUsers[0]?.id || '',
     duration: '30 mins',
     taskType: 'Interview',
+    interviewDateTime: '',
     candidateName: '',
     position: 'Software Engineer',
     companyName: 'Amazon',
@@ -45,6 +46,31 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
   const eligiblePocs = useMemo(() => {
     return POC_USERS_BY_TEAM[form.teamId] || [];
   }, [form.teamId]);
+
+  // Milestone 4 & 7: Candidate Prior History
+  const priorHistory = useMemo(() => {
+    if (!form.candidateName.trim()) return [];
+    const q = form.candidateName.trim().toLowerCase();
+    const pastTasks = (tasks || []).filter(t => (t.candidateName || '').toLowerCase() === q);
+    const pastFeedbacks = (feedbacks || []).filter(f => (f.candidateName || '').toLowerCase() === q);
+    return pastTasks.map(t => {
+      const fb = pastFeedbacks.find(f => f.taskId === t.id || f.candidateName?.toLowerCase() === q);
+      const rating = fb?.candidateFeedback?.performanceRating || fb?.candidateFeedback?.experienceRating;
+      return {
+        date: t.date || t.dueDate,
+        techPerson: roleIsMarketing(currentRole) ? (t.techPersonId || 'TSE-ID') : t.techPerson,
+        companyName: t.companyName,
+        status: t.status,
+        rating,
+      };
+    });
+  }, [form.candidateName, tasks, feedbacks, currentRole]);
+
+  // Milestone 7: Smart Recommendations for TSM
+  const recommendations = useMemo(() => {
+    if (roleIsMarketing(currentRole)) return [];
+    return getSmartTseRecommendations(form.candidateName, tasks, feedbacks, tseUsers);
+  }, [form.candidateName, tasks, feedbacks, tseUsers, currentRole]);
 
   const handleTeamChange = (teamId) => {
     const selectedTeam = MARKETING_TEAMS.find(t => t.id === teamId) || MARKETING_TEAMS[0];
@@ -78,6 +104,7 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
       title: `${form.candidateName} — ${form.taskType} (${form.companyName})`,
       category: form.taskType,
       dueDate: form.date,
+      interviewDateTime: form.taskType === 'Interview' ? form.interviewDateTime : '',
     });
     onOpenChange(false);
     setForm({
@@ -85,6 +112,7 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
       assigneeId: tseUsers[0]?.id || '',
       duration: '30 mins',
       taskType: 'Interview',
+      interviewDateTime: '',
       candidateName: '',
       position: 'Software Engineer',
       companyName: 'Amazon',
@@ -195,6 +223,27 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
             </Select>
           </div>
 
+          {/* Conditional Interview Date & Time (EST) - Required for Interview tasks */}
+          {form.taskType === 'Interview' && (
+            <div className="md:col-span-1 p-2.5 bg-blue-50/70 border border-blue-200 rounded-xl">
+              <label className="text-xs font-bold text-blue-900 uppercase tracking-wider flex items-center gap-1.5">
+                <Clock size={12} className="text-blue-600" />
+                <span>Interview Date &amp; Time (EST)</span>
+                <span className="text-rose-500">*</span>
+              </label>
+              <Input
+                type="datetime-local"
+                data-testid="task-form-interview-datetime"
+                value={form.interviewDateTime}
+                onChange={e => setForm({ ...form, interviewDateTime: e.target.value })}
+                className="mt-1.5 bg-white border-blue-300 text-slate-900 focus:bg-white text-xs"
+              />
+              <p className="text-[10px] text-blue-700 mt-1">
+                Converted to EST standard · Auto-reminds assigned TSE 30 min before call.
+              </p>
+            </div>
+          )}
+
           {/* Duration */}
           <div>
             <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Duration</label>
@@ -218,6 +267,69 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
               className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white"
             />
           </div>
+
+          {/* Candidate Prior History Preview (Milestone 4 & 7) */}
+          {priorHistory.length > 0 && (
+            <div className="md:col-span-2 p-3 bg-slate-50 border border-slate-200 rounded-xl">
+              <div className="text-xs font-bold text-slate-800 flex items-center justify-between mb-1.5">
+                <span className="flex items-center gap-1.5">
+                  <Briefcase size={13} className="text-blue-600" />
+                  Past Candidate Engagements ({priorHistory.length})
+                </span>
+                <span className="text-[11px] text-slate-500">Historical Tracking</span>
+              </div>
+              <div className="space-y-1.5 max-h-28 overflow-y-auto pr-1">
+                {priorHistory.map((h, idx) => (
+                  <div key={idx} className="flex items-center justify-between text-xs bg-white p-2 rounded-lg border border-slate-200 shadow-2xs">
+                    <div>
+                      <span className="font-semibold text-slate-900">{h.companyName}</span>
+                      <span className="text-slate-500"> · {h.date} · TSE: </span>
+                      <span className="font-medium text-blue-700">{h.techPerson}</span>
+                    </div>
+                    <div>
+                      {h.rating ? (
+                        <span className="px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 font-bold">
+                          ⭐ {h.rating}/5
+                        </span>
+                      ) : (
+                        <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 text-[10px]">
+                          {h.status}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Smart TSE Advisory Recommendations (Milestone 7) */}
+          {recommendations.length > 0 && !roleIsMarketing(currentRole) && (
+            <div className="md:col-span-2 p-2.5 bg-gradient-to-r from-amber-50/80 to-blue-50/80 border border-amber-200/80 rounded-xl space-y-1.5">
+              <div className="text-[11px] font-bold text-amber-900 flex items-center gap-1">
+                <span>💡 Smart TSE Advisory Recommendation:</span>
+              </div>
+              {recommendations.map((rec, i) => (
+                <div
+                  key={i}
+                  className={`flex items-center justify-between p-2 rounded-lg text-xs border ${
+                    rec.type === 'recommend'
+                      ? 'bg-emerald-50/90 text-emerald-950 border-emerald-300'
+                      : 'bg-rose-50/90 text-rose-950 border-rose-300'
+                  }`}
+                >
+                  <span className="font-medium">{rec.message}</span>
+                  <button
+                    type="button"
+                    onClick={() => setForm(prev => ({ ...prev, assigneeId: rec.tseId }))}
+                    className="px-2.5 py-1 text-[11px] font-bold rounded bg-white text-slate-800 hover:bg-slate-100 border border-slate-200 shadow-2xs cursor-pointer"
+                  >
+                    Select {rec.tseName}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Position */}
           <div>
@@ -318,13 +430,15 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
 };
 
 const TaskDrawer = ({ task, onClose }) => {
-  const { users, reassignTask, changeTaskStatus, currentRole, currentUser } = useApp();
+  const { users, reassignTask, changeTaskStatus, currentRole, currentUser, updateInterviewOutcome } = useApp();
   const assignee = users.find(u => u.id === task?.assigneeId);
   const creator = users.find(u => u.id === task?.createdById);
   const tseUsers = users.filter(u => u.role === 'tse');
   const canEdit = roleCanEditAny(currentRole) || task?.assigneeId === currentUser?.id;
 
   if (!task) return null;
+
+  const timingMeta = task.interviewDateTime ? getInterviewTimingMeta(task.interviewDateTime) : null;
 
   return (
     <Sheet open={!!task} onOpenChange={(o) => !o && onClose()}>
@@ -345,12 +459,50 @@ const TaskDrawer = ({ task, onClose }) => {
                     {task.companyName}
                   </span>
                 )}
+                {task.interviewOutcome && (
+                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-purple-100 border border-purple-200 text-purple-800 font-bold flex items-center gap-1">
+                    🎯 {task.interviewOutcome}
+                  </span>
+                )}
               </div>
             </div>
           </div>
         </SheetHeader>
 
         <div className="p-5 space-y-5 overflow-y-auto h-[calc(100vh-140px)]">
+          {/* Milestone 2: EST Interview Timing & Urgent Priority Alert Banner */}
+          {timingMeta && (
+            <div className={`p-3.5 rounded-xl border text-xs flex items-center justify-between ${
+              timingMeta.isUrgent
+                ? 'bg-rose-50 border-rose-300 text-rose-950 font-bold shadow-xs'
+                : timingMeta.isElevated
+                ? 'bg-amber-50 border-amber-300 text-amber-950 font-semibold shadow-xs'
+                : 'bg-blue-50 border-blue-200 text-blue-900'
+            }`}>
+              <div className="flex items-center gap-2">
+                <Clock size={16} className={timingMeta.isUrgent ? 'text-rose-600 animate-pulse' : 'text-blue-600'} />
+                <div>
+                  <div className="font-bold">Interview Schedule (EST)</div>
+                  <div className="text-[11px] opacity-90">{timingMeta.estFormatted}</div>
+                </div>
+              </div>
+              <div className="text-right">
+                {timingMeta.isUrgent && (
+                  <span className="px-2 py-0.5 rounded-full bg-rose-600 text-white text-[10px] font-extrabold uppercase tracking-wider animate-pulse">
+                    🚨 URGENT (&lt;30m)
+                  </span>
+                )}
+                {timingMeta.isElevated && (
+                  <span className="px-2 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-extrabold uppercase tracking-wider">
+                    ⚡ PRIORITY (&lt;60m)
+                  </span>
+                )}
+                {!timingMeta.isUrgent && !timingMeta.isElevated && (
+                  <span className="text-slate-600 text-[11px]">Scheduled</span>
+                )}
+              </div>
+            </div>
+          )}
           {/* Quick info grid */}
           <div className="grid grid-cols-2 gap-3.5 p-4 rounded-xl bg-slate-50 border border-slate-200">
             <div>
@@ -457,6 +609,29 @@ const TaskDrawer = ({ task, onClose }) => {
             </div>
           )}
 
+          {/* Milestone 6: Marketing TL & TSM Interview Outcome Selection */}
+          {(currentRole === 'marketing_tl' || currentRole === 'tsm' || currentRole === 'management' || currentRole === 'upper_management') && (
+            <div className="p-4 rounded-xl bg-purple-50/70 border border-purple-200">
+              <label className="text-xs text-purple-900 font-bold block mb-1.5 flex items-center justify-between">
+                <span>🎯 Interview Outcome Decision</span>
+                <span className="text-[10px] text-purple-600 font-normal">Marketing TL &amp; TSM</span>
+              </label>
+              <Select
+                value={task.interviewOutcome || ''}
+                onValueChange={v => updateInterviewOutcome && updateInterviewOutcome(task.id, v)}
+              >
+                <SelectTrigger data-testid="task-interview-outcome" className="bg-white border-purple-300 text-slate-900 h-9">
+                  <SelectValue placeholder="Mark Outcome (Passed, Failed, Next Round, Offer)" />
+                </SelectTrigger>
+                <SelectContent className="bg-white border-slate-200 text-slate-900">
+                  {INTERVIEW_OUTCOMES.map(o => (
+                    <SelectItem key={o} value={o}>{o}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           {/* Activity Timeline */}
           <div>
             <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-3">Activity timeline</div>
@@ -514,6 +689,11 @@ export default function Tasks() {
     });
   }, [tasks, filters, currentRole, currentUser]);
 
+  // Milestone 2: Automated Priority Sorting (Urgent & Elevated at the top)
+  const sortedTasks = useMemo(() => {
+    return sortTasksByInterviewPriority(filtered);
+  }, [filtered]);
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -531,7 +711,7 @@ export default function Tasks() {
       />
 
       {/* Filters */}
-      <SectionCard title="Filters" subtitle={`${filtered.length} of ${tasks.length} tasks`}>
+      <SectionCard title="Filters" subtitle={`${sortedTasks.length} of ${tasks.length} tasks`}>
         <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
           <div className="relative md:col-span-2">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -581,31 +761,33 @@ export default function Tasks() {
 
       {/* Task Queue Table */}
       <SectionCard title="Task queue">
-        {filtered.length === 0 ? (
+        {sortedTasks.length === 0 ? (
           <EmptyState title="No tasks match" description="Try clearing a filter or create a new task." />
         ) : (
           <div className="overflow-x-auto -mx-5 md:-mx-6">
             <table className="w-full text-sm">
               <thead className="sticky top-0 bg-slate-50 border-b border-slate-200 z-10">
                 <tr className="text-left text-xs text-slate-600 uppercase tracking-wider">
-                  <th className="py-3 px-4 font-semibold">Date</th>
+                  <th className="py-3 px-4 font-semibold">Date / EST Timing</th>
                   <th className="py-3 px-4 font-semibold">{roleIsMarketing(currentRole) ? 'Tech ID' : 'Tech Person'}</th>
                   <th className="py-3 px-3 font-semibold">Duration</th>
                   <th className="py-3 px-3 font-semibold">Task</th>
                   <th className="py-3 px-4 font-semibold">Candidate Name</th>
                   <th className="py-3 px-4 font-semibold">Position</th>
                   <th className="py-3 px-4 font-semibold">Company name</th>
-                  <th className="py-3 px-4 font-semibold">Status</th>
+                  <th className="py-3 px-4 font-semibold">Status / Outcome</th>
                   <th className="py-3 px-4 font-semibold">Remark</th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(t => {
+                {sortedTasks.map(t => {
                   const a = users.find(u => u.id === t.assigneeId);
                   const isMarketing = roleIsMarketing(currentRole);
                   const techName = isMarketing
                     ? (a?.empId || a?.tttNbId || t.techPersonId || t.assigneeId || 'TSE-ID')
                     : (a?.name || t.techPerson || 'Unassigned');
+                  const timing = t.interviewDateTime ? getInterviewTimingMeta(t.interviewDateTime) : null;
+
                   return (
                     <motion.tr
                       initial={{ opacity: 0 }}
@@ -613,11 +795,35 @@ export default function Tasks() {
                       key={t.id}
                       data-testid={`task-row-${t.id}`}
                       onClick={() => setActiveTask(t)}
-                      className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer transition-colors"
+                      className={`border-b transition-colors cursor-pointer ${
+                        timing?.isUrgent
+                          ? 'bg-rose-50/70 border-rose-200 hover:bg-rose-100/70'
+                          : timing?.isElevated
+                          ? 'bg-amber-50/60 border-amber-200 hover:bg-amber-100/60'
+                          : 'border-slate-100 hover:bg-slate-50'
+                      }`}
                     >
-                      {/* Date */}
+                      {/* Date & EST Timing */}
                       <td className="py-3 px-4 mono text-xs text-slate-600 whitespace-nowrap">
-                        {t.date || t.dueDate}
+                        <div>{t.date || t.dueDate}</div>
+                        {timing && (
+                          <div className="flex items-center gap-1 mt-0.5">
+                            <Clock size={11} className={timing.isUrgent ? 'text-rose-600 animate-pulse' : 'text-blue-600'} />
+                            <span className={`text-[10px] font-bold ${timing.isUrgent ? 'text-rose-700' : 'text-blue-700'}`}>
+                              {timing.estFormatted}
+                            </span>
+                            {timing.isUrgent && (
+                              <span className="px-1.5 py-0.2 rounded bg-rose-600 text-white text-[9px] font-black animate-pulse">
+                                URGENT
+                              </span>
+                            )}
+                            {timing.isElevated && (
+                              <span className="px-1 py-0.2 rounded bg-amber-500 text-white text-[9px] font-bold">
+                                ELEVATED
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </td>
 
                       {/* Tech Person */}
@@ -656,9 +862,18 @@ export default function Tasks() {
                         {t.companyName || '—'}
                       </td>
 
-                      {/* Status */}
+                      {/* Status / Outcome */}
                       <td className="py-3 px-4 whitespace-nowrap">
-                        <StatusBadge value={t.status} />
+                        <div className="space-y-1">
+                          <StatusBadge value={t.status} />
+                          {t.interviewOutcome && (
+                            <div>
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
+                                🎯 {t.interviewOutcome}
+                              </span>
+                            </div>
+                          )}
+                        </div>
                       </td>
 
                       {/* Remark */}

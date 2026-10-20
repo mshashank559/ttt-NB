@@ -68,6 +68,10 @@ const TaskSchema = new mongoose.Schema({
   createdById: String,
   description: String,
   notes: String,
+  interviewDateTime: String,
+  interviewOutcome: String, // 'Passed', 'Failed', 'Moved to Next Round', 'Offer Received'
+  isUrgent: Boolean,
+  isElevated: Boolean,
   timeline: Array,
 }, { timestamps: true });
 
@@ -112,6 +116,24 @@ const FeedbackSchema = new mongoose.Schema({
   },
 }, { timestamps: true });
 
+const SlaTicketSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true },
+  ticketNumber: String,
+  candidateName: String,
+  companyName: String,
+  interviewId: String,
+  techSupport: String,
+  techSupportId: String,
+  rating: Number,
+  comments: String,
+  responsibleTsm: { type: String, default: 'Shashank Mishra' },
+  responsibleTsmId: String,
+  status: { type: String, default: 'Open' }, // 'Open', 'In Follow-up', 'Resolved'
+  actionTaken: { type: String, default: '' },
+  resolutionDetails: { type: String, default: '' },
+  resolvedAt: String,
+}, { timestamps: true });
+
 const UserSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
   name: { type: String, required: true },
@@ -133,6 +155,7 @@ const UserSchema = new mongoose.Schema({
 const Task = mongoose.model('Task', TaskSchema);
 const Feedback = mongoose.model('Feedback', FeedbackSchema);
 const User = mongoose.model('User', UserSchema);
+const SlaTicket = mongoose.model('SlaTicket', SlaTicketSchema);
 
 // -------------------------------------------------------------
 // Auto-Seed Initial Data if Collections are Empty
@@ -439,14 +462,14 @@ app.get('/api/feedbacks', async (req, res) => {
 
     let feedbacks = await Feedback.find(filter).sort({ createdAt: -1 });
 
-    // Sanitize identity privacy for Marketing roles
+    // Sanitize identity privacy for Marketing roles: ONLY show IDs, never real names or aliases
     if (role === 'marketing_tl' || role === 'marketing_sr') {
-      const { TSE_CODE_NAMES } = await import('./src/data/mockData.js');
       feedbacks = feedbacks.map(fb => {
         const obj = fb.toObject ? fb.toObject() : { ...fb };
-        const codeName = obj.codeName || (TSE_CODE_NAMES && TSE_CODE_NAMES[obj.techSupport]) || 'Code Name Unassigned';
-        obj.techSupport = codeName;
-        obj.employeeName = codeName; // Never leak real employee name
+        const safeId = obj.techSupportId || 'TTT-NB-TSE';
+        obj.techSupport = safeId;
+        obj.employeeName = safeId;
+        obj.codeName = safeId;
         obj.techSupportEmail = 'techsupport@netbounceplacement.com';
         return obj;
       });
@@ -462,6 +485,30 @@ app.post('/api/feedbacks', async (req, res) => {
   try {
     const feedback = new Feedback(req.body);
     await feedback.save();
+
+    // Auto-create SLA Ticket if rating <= 3
+    const cRating = feedback.candidateFeedback?.performanceRating || feedback.candidateFeedback?.experienceRating;
+    if (cRating && Number(cRating) <= 3) {
+      const ticketId = `SLA-${Date.now()}`;
+      const slaTicket = new SlaTicket({
+        id: ticketId,
+        ticketNumber: `TKT-${Math.floor(1000 + Math.random() * 9000)}`,
+        candidateName: feedback.candidateName || 'Candidate',
+        companyName: feedback.company || 'Client',
+        interviewId: feedback.id,
+        techSupport: feedback.employeeName || feedback.techSupport || 'TSE',
+        techSupportId: feedback.techSupportId || 'TSE-ID',
+        rating: Number(cRating),
+        comments: feedback.candidateFeedback?.comments || 'Low rating logged on feedback creation.',
+        responsibleTsm: 'Shashank Mishra',
+        responsibleTsmId: 'u-shashank-01',
+        status: 'Open',
+        actionTaken: '',
+        resolutionDetails: '',
+      });
+      await slaTicket.save();
+    }
+
     res.status(201).json(feedback);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -476,10 +523,12 @@ app.put('/api/feedbacks/:id/candidate', async (req, res) => {
       day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
     });
 
+    const ratingNum = Number(performanceRating) || Number(experienceRating) || 5.0;
+
     const updateData = {
       'candidateFeedback.submitted': true,
-      'candidateFeedback.performanceRating': Number(performanceRating) || 5.0,
-      'candidateFeedback.experienceRating': Number(experienceRating) || 5.0,
+      'candidateFeedback.performanceRating': ratingNum,
+      'candidateFeedback.experienceRating': Number(experienceRating) || ratingNum,
       'candidateFeedback.comments': comments || 'Support session completed.',
       'candidateFeedback.timestamp': nowFormatted,
     };
@@ -489,6 +538,32 @@ app.put('/api/feedbacks/:id/candidate', async (req, res) => {
       { $set: updateData },
       { new: true, upsert: true }
     );
+
+    // Milestone 6: Automatically create SLA Ticket if rating <= 3 stars
+    if (ratingNum <= 3) {
+      const existingTicket = await SlaTicket.findOne({ interviewId: req.params.id });
+      if (!existingTicket) {
+        const ticketId = `SLA-${Date.now()}`;
+        const slaTicket = new SlaTicket({
+          id: ticketId,
+          ticketNumber: `TKT-${Math.floor(1000 + Math.random() * 9000)}`,
+          candidateName: updated.candidateName || 'Candidate',
+          companyName: updated.company || 'Client Assessment',
+          interviewId: req.params.id,
+          techSupport: updated.employeeName || updated.techSupport || 'TSE',
+          techSupportId: updated.techSupportId || 'TSE-ID',
+          rating: ratingNum,
+          comments: comments || 'Candidate reported unsatisfactory rating (3 stars or below).',
+          responsibleTsm: 'Shashank Mishra',
+          responsibleTsmId: 'u-shashank-01',
+          status: 'Open',
+          actionTaken: '',
+          resolutionDetails: '',
+        });
+        await slaTicket.save();
+      }
+    }
+
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -517,6 +592,62 @@ app.put('/api/feedbacks/:id/marketing', async (req, res) => {
       { new: true }
     );
     if (!updated) return res.status(404).json({ error: 'Feedback record not found' });
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ----------------- SLA TICKETS ENDPOINTS (Milestone 6) -----------------
+app.get('/api/sla-tickets', async (req, res) => {
+  try {
+    const tickets = await SlaTicket.find().sort({ createdAt: -1 });
+    res.json(tickets);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/sla-tickets', async (req, res) => {
+  try {
+    const data = req.body;
+    const ticketId = data.id || `SLA-${Date.now()}`;
+    const newTicket = new SlaTicket({
+      ...data,
+      id: ticketId,
+      ticketNumber: data.ticketNumber || `TKT-${Math.floor(1000 + Math.random() * 9000)}`,
+    });
+    await newTicket.save();
+    res.status(201).json(newTicket);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/sla-tickets/:id', async (req, res) => {
+  try {
+    const updated = await SlaTicket.findOneAndUpdate(
+      { id: req.params.id },
+      { $set: req.body },
+      { new: true }
+    );
+    if (!updated) return res.status(404).json({ error: 'SLA Ticket not found' });
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ----------------- INTERVIEW OUTCOME ENDPOINT (Milestone 6) -----------------
+app.put('/api/tasks/:id/outcome', async (req, res) => {
+  try {
+    const { outcome } = req.body;
+    const updated = await Task.findOneAndUpdate(
+      { id: req.params.id },
+      { $set: { interviewOutcome: outcome } },
+      { new: true }
+    );
+    if (!updated) return res.status(404).json({ error: 'Task not found' });
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: err.message });

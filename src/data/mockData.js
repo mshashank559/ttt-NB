@@ -356,3 +356,138 @@ export const anonymizeInterview = (interview) => ({
 });
 
 export const getUserById = (id, users = USERS) => users.find(u => u.id === id);
+
+// ----------------- MILESTONE 2: EST TIMING & URGENCY HELPERS -----------------
+export const INTERVIEW_OUTCOMES = ['Passed', 'Failed', 'Moved to Next Round', 'Offer Received'];
+
+export function getInterviewTimingMeta(interviewDateTime) {
+  if (!interviewDateTime) {
+    return { isUrgent: false, isElevated: false, minutesUntil: null, estString: '', urgencyLabel: '', urgencyBadge: 'normal' };
+  }
+
+  const target = new Date(interviewDateTime);
+  if (isNaN(target.getTime())) {
+    return { isUrgent: false, isElevated: false, minutesUntil: null, estString: interviewDateTime, urgencyLabel: '', urgencyBadge: 'normal' };
+  }
+
+  const now = new Date();
+  const diffMs = target.getTime() - now.getTime();
+  const diffMinutes = Math.round(diffMs / (1000 * 60));
+
+  // Format in EST (Eastern Standard Time)
+  const estString = target.toLocaleString('en-US', {
+    timeZone: 'America/New_York',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  }) + ' EST';
+
+  if (diffMinutes >= 0 && diffMinutes <= 30) {
+    return {
+      isUrgent: true,
+      isElevated: true,
+      minutesUntil: diffMinutes,
+      estString,
+      urgencyLabel: `🚨 URGENT (Starts in ${diffMinutes}m)`,
+      urgencyBadge: 'urgent',
+    };
+  } else if (diffMinutes > 30 && diffMinutes <= 60) {
+    return {
+      isUrgent: false,
+      isElevated: true,
+      minutesUntil: diffMinutes,
+      estString,
+      urgencyLabel: `⚡ Elevated Priority (In ${diffMinutes}m)`,
+      urgencyBadge: 'elevated',
+    };
+  } else {
+    return {
+      isUrgent: false,
+      isElevated: false,
+      minutesUntil: diffMinutes,
+      estString,
+      urgencyLabel: diffMinutes < 0 ? `Concluded (${estString})` : estString,
+      urgencyBadge: 'normal',
+    };
+  }
+}
+
+// Priority Queue sorting: Urgent (<30m) > Elevated (<60m) > Earlier interview time
+export function sortTasksByInterviewPriority(tasks = []) {
+  return [...tasks].sort((a, b) => {
+    const metaA = getInterviewTimingMeta(a.interviewDateTime);
+    const metaB = getInterviewTimingMeta(b.interviewDateTime);
+
+    if (metaA.isUrgent && !metaB.isUrgent) return -1;
+    if (!metaA.isUrgent && metaB.isUrgent) return 1;
+
+    if (metaA.isElevated && !metaB.isElevated) return -1;
+    if (!metaA.isElevated && metaB.isElevated) return 1;
+
+    if (a.interviewDateTime && b.interviewDateTime) {
+      return new Date(a.interviewDateTime).getTime() - new Date(b.interviewDateTime).getTime();
+    }
+    return 0;
+  });
+}
+
+// ----------------- MILESTONE 7: SMART TSE RECOMMENDATIONS -----------------
+export function getSmartTseRecommendations(candidateName, allTasks = [], allFeedbacks = [], tseUsers = []) {
+  if (!candidateName) return [];
+  const cLower = candidateName.trim().toLowerCase();
+
+  // Find candidate's past interview tasks & feedback
+  const pastCandidateTasks = allTasks.filter(t => (t.candidateName || '').toLowerCase() === cLower);
+  const pastCandidateFeedbacks = allFeedbacks.filter(f => (f.candidateName || '').toLowerCase() === cLower);
+
+  return tseUsers.map(tse => {
+    const tseTasks = allTasks.filter(t => t.assigneeId === tse.id || (t.techPerson && t.techPerson.toLowerCase() === tse.name.toLowerCase()));
+    const activeTasksCount = tseTasks.filter(t => t.status === 'In Progress' || t.status === 'Pending').length;
+
+    // Check past feedback for this TSE with this specific candidate
+    const priorFeedback = pastCandidateFeedbacks.find(f =>
+      (f.techSupportId === tse.id) ||
+      (f.techSupport && f.techSupport.toLowerCase() === (tse.codeName || '').toLowerCase()) ||
+      (f.employeeName && f.employeeName.toLowerCase() === tse.name.toLowerCase())
+    );
+
+    const priorRating = priorFeedback?.candidateFeedback?.performanceRating || priorFeedback?.candidateFeedback?.experienceRating;
+
+    let score = 50; // base score
+    let rationale = [];
+    let isRecommended = true;
+    let isWarning = false;
+
+    if (priorRating) {
+      if (priorRating >= 4.0) {
+        score += 40;
+        rationale.push(`⭐ Candidate previously rated this TSE ${priorRating}/5.0`);
+      } else if (priorRating <= 3.0) {
+        score -= 60;
+        isRecommended = false;
+        isWarning = true;
+        rationale.push(`⚠️ Not recommended: Candidate gave a low rating (${priorRating}/5.0) in previous round`);
+      }
+    }
+
+    if (activeTasksCount > 4) {
+      score -= 20;
+      rationale.push(`Heavy workload (${activeTasksCount} active tasks)`);
+    } else {
+      score += 10;
+      rationale.push(`Available capacity (${activeTasksCount} active tasks)`);
+    }
+
+    return {
+      tse,
+      score,
+      isRecommended: isRecommended && !isWarning,
+      isWarning,
+      activeTasksCount,
+      priorRating: priorRating || null,
+      rationaleText: rationale.join(' • '),
+    };
+  }).sort((a, b) => b.score - a.score);
+}
