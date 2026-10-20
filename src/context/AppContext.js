@@ -462,6 +462,15 @@ export const AppProvider = ({ children }) => {
 
   const assignMarketingSr = useCallback((taskId, srUser) => {
     if (!srUser) return;
+    if (currentRole === 'tse') {
+      toast.error('TSE cannot assign or change Senior Recruiter.');
+      return;
+    }
+    const currentTask = (tasks || []).find(t => t.id === taskId);
+    if (currentRole === 'tsm' && currentTask && (currentTask.assignedSrId || currentTask.assignedSrName)) {
+      toast.error('Senior Recruiter is already assigned and locked for TSM.');
+      return;
+    }
     const patch = {
       assignedSrId: srUser.id,
       assignedSrName: srUser.name,
@@ -470,7 +479,7 @@ export const AppProvider = ({ children }) => {
       recruiterName: srUser.name,
     };
     updateTask(taskId, patch, `Assigned to Senior Recruiter ${srUser.name} by ${currentUser?.name || 'Marketing TL'}`);
-  }, [currentUser, updateTask]);
+  }, [currentUser, currentRole, tasks, updateTask]);
 
   const reassignTask = useCallback((id, newAssigneeId) => {
     const newUser = getUserById(newAssigneeId);

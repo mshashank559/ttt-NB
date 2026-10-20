@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Plus, Search, UserRound, Calendar as CalIcon, Clock, Building2, Briefcase, FileText, StickyNote, MessageSquare, ShieldAlert, CheckCircle2, Sparkles } from 'lucide-react';
+import { Plus, Search, UserRound, Calendar as CalIcon, Clock, Building2, Briefcase, FileText, StickyNote, MessageSquare, ShieldAlert, CheckCircle2, Sparkles, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { useApp } from '../context/AppContext';
 import { PageHeader, StatusBadge, TaskTypeBadge, SectionCard, EmptyState } from '../components/common';
@@ -604,46 +604,110 @@ const TaskDrawer = ({ task, onClose }) => {
             </div>
           )}
 
-          {/* Step 3: Marketing TL Assigns Senior Recruiter (Marketing SR) */}
-          {(currentRole === 'marketing_tl' || currentRole === 'tsm' || currentRole === 'management' || currentRole === 'upper_management') && (
-            <div className="p-4 rounded-xl bg-blue-50/70 border border-blue-200 space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="text-xs text-blue-950 font-bold flex items-center gap-1.5">
-                  <UserRound size={13} className="text-blue-600" />
-                  <span>Assign Senior Recruiter (Marketing SR)</span>
-                </label>
-                {task.assignedSrName ? (
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 font-bold border border-blue-300">
-                    Assigned: {task.assignedSrName}
-                  </span>
-                ) : (
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-bold border border-amber-300 animate-pulse">
-                    SR Unassigned
-                  </span>
-                )}
-              </div>
-              <Select
-                value={task.assignedSrId || ''}
-                onValueChange={srId => {
-                  const srUser = eligibleSrs.find(u => u.id === srId);
-                  if (srUser && assignMarketingSr) {
-                    assignMarketingSr(task.id, srUser);
-                  }
-                }}
-              >
-                <SelectTrigger data-testid="task-assign-sr" className="bg-white border-blue-300 text-slate-900 h-9">
-                  <SelectValue placeholder={task.assignedSrName ? `Current: ${task.assignedSrName}` : "Select Senior Recruiter (SR)..."} />
-                </SelectTrigger>
-                <SelectContent className="bg-white border-slate-200 text-slate-900">
-                  {eligibleSrs.map(sr => (
-                    <SelectItem key={sr.id} value={sr.id}>
-                      {sr.name} {sr.teamName ? `(${sr.teamName})` : ''}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
+          {/* Step 3: Senior Recruiter (Marketing SR) Assignment */}
+          {(() => {
+            const isAssigned = Boolean(task.assignedSrId || task.assignedSrName);
+            const isTechRole = currentRole === 'tsm' || currentRole === 'tse';
+            const canChangeSr = currentRole === 'marketing_tl' || currentRole === 'management' || currentRole === 'upper_management';
+
+            // If user is TSM or TSE and SR is assigned -> Show LOCKED view!
+            if (isTechRole && isAssigned) {
+              return (
+                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs text-slate-700 font-bold flex items-center gap-1.5">
+                      <UserRound size={13} className="text-blue-600" />
+                      <span>Senior Recruiter (Marketing SR)</span>
+                    </label>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 font-bold border border-slate-300 flex items-center gap-1">
+                      <Lock size={10} />
+                      Locked (Assigned)
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between p-2.5 rounded-lg bg-white border border-slate-200 shadow-2xs">
+                    <div className="flex items-center gap-2">
+                      <div className="h-7 w-7 rounded-full bg-blue-50 border border-blue-200 text-blue-700 flex items-center justify-center text-xs font-bold">
+                        {(task.assignedSrName || 'SR').charAt(0)}
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-slate-900">{task.assignedSrName}</div>
+                        <div className="text-[11px] text-slate-500">{task.teamName || 'Marketing Team'}</div>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-medium px-2 py-0.5 rounded bg-slate-100 text-slate-500 flex items-center gap-1">
+                      <Lock size={10} /> Read-only for {currentRole === 'tsm' ? 'TSM' : 'TSE'}
+                    </span>
+                  </div>
+                </div>
+              );
+            }
+
+            // If user is TSM or TSE and NOT assigned
+            if (isTechRole && !isAssigned) {
+              return (
+                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs text-slate-700 font-bold flex items-center gap-1.5">
+                      <UserRound size={13} className="text-blue-600" />
+                      <span>Senior Recruiter (Marketing SR)</span>
+                    </label>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-bold border border-amber-300">
+                      Awaiting Assignment
+                    </span>
+                  </div>
+                  <div className="p-2.5 rounded-lg bg-white border border-dashed border-slate-300 text-xs text-slate-500 italic flex items-center justify-between">
+                    <span>No SR assigned yet</span>
+                    <span className="text-[11px] text-amber-600 font-medium">To be assigned by Marketing TL</span>
+                  </div>
+                </div>
+              );
+            }
+
+            // If user can change SR (Marketing TL or Management)
+            if (canChangeSr) {
+              return (
+                <div className="p-4 rounded-xl bg-blue-50/70 border border-blue-200 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs text-blue-950 font-bold flex items-center gap-1.5">
+                      <UserRound size={13} className="text-blue-600" />
+                      <span>Assign Senior Recruiter (Marketing SR)</span>
+                    </label>
+                    {task.assignedSrName ? (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 font-bold border border-blue-300">
+                        Assigned: {task.assignedSrName}
+                      </span>
+                    ) : (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-bold border border-amber-300 animate-pulse">
+                        SR Unassigned
+                      </span>
+                    )}
+                  </div>
+                  <Select
+                    value={task.assignedSrId || ''}
+                    onValueChange={srId => {
+                      const srUser = eligibleSrs.find(u => u.id === srId);
+                      if (srUser && assignMarketingSr) {
+                        assignMarketingSr(task.id, srUser);
+                      }
+                    }}
+                  >
+                    <SelectTrigger data-testid="task-assign-sr" className="bg-white border-blue-300 text-slate-900 h-9">
+                      <SelectValue placeholder={task.assignedSrName ? `Current: ${task.assignedSrName}` : "Select Senior Recruiter (SR)..."} />
+                    </SelectTrigger>
+                    <SelectContent className="bg-white border-slate-200 text-slate-900">
+                      {eligibleSrs.map(sr => (
+                        <SelectItem key={sr.id} value={sr.id}>
+                          {sr.name} {sr.teamName ? `(${sr.teamName})` : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              );
+            }
+
+            return null;
+          })()}
 
           {/* Quick info grid */}
           <div className="grid grid-cols-2 gap-3.5 p-4 rounded-xl bg-slate-50 border border-slate-200">
