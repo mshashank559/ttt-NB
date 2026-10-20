@@ -489,6 +489,30 @@ export const AppProvider = ({ children }) => {
     updateTask(id, patch, note);
   }, [currentUser, updateTask]);
 
+  const addMarketingReview = useCallback((feedbackId, reviewData) => {
+    updateFeedbacksWithStorage(prev => prev.map(item => {
+      if (item.id !== feedbackId) return item;
+      return {
+        ...item,
+        marketingReview: {
+          reviewed: true,
+          ...reviewData,
+          reviewedBy: reviewData.reviewedBy || currentUser?.name || 'Marketing Reviewer',
+          timestamp: reviewData.timestamp || new Date().toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+        },
+      };
+    }));
+
+    // Update in MongoDB Atlas
+    fetch(`/api/feedbacks/${feedbackId}/marketing`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(reviewData),
+    }).catch(() => { });
+
+    toast.success('Marketing Review saved successfully.');
+  }, [currentUser, updateFeedbacksWithStorage]);
+
   const submitInterviewFeedback = useCallback((interviewId, feedback) => {
     const outcome = feedback.decision; // 'Cleared', 'Rejected', 'Hold', etc.
     const newStatus = feedback.stage || (
@@ -559,30 +583,6 @@ export const AppProvider = ({ children }) => {
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
     toast.success('All notifications marked as read.');
   }, []);
-
-  const addMarketingReview = useCallback((feedbackId, reviewData) => {
-    updateFeedbacksWithStorage(prev => prev.map(item => {
-      if (item.id !== feedbackId) return item;
-      return {
-        ...item,
-        marketingReview: {
-          reviewed: true,
-          ...reviewData,
-          reviewedBy: reviewData.reviewedBy || currentUser?.name || 'Marketing Reviewer',
-          timestamp: reviewData.timestamp || new Date().toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
-        },
-      };
-    }));
-
-    // Update in MongoDB Atlas
-    fetch(`/api/feedbacks/${feedbackId}/marketing`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(reviewData),
-    }).catch(() => { });
-
-    toast.success('Marketing Review saved successfully.');
-  }, [currentUser, updateFeedbacksWithStorage]);
 
   // Milestone 6: SLA Ticket Management & Auto-Escalation
   const addSlaTicket = useCallback((ticketData) => {
