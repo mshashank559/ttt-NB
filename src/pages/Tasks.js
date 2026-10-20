@@ -16,29 +16,50 @@ const roleCanCreate = (r) => r === 'tsm' || r === 'management' || r === 'marketi
 const roleCanEditAny = (r) => r === 'tsm' || r === 'management';
 
 const CreateTaskModal = ({ open, onOpenChange }) => {
-  const { users, addTask, tasks, feedbacks, currentRole } = useApp();
+  const { users, addTask, tasks, feedbacks, currentRole, currentUser } = useApp();
   const tseUsers = users.filter(u => u.role === 'tse');
   const todayStr = new Date().toISOString().slice(0, 10);
 
-  const defaultTeam = MARKETING_TEAMS[0];
+  const isMarketingUser = roleIsMarketing(currentRole) || currentRole === 'marketing_tl' || currentRole === 'marketing_sr';
+
+  const userTeamId = currentUser?.teamId ||
+    (currentUser?.team === 'team-mukesh' || currentUser?.id === 'u-1791911058812' || (currentUser?.name || '').toLowerCase().includes('mukesh') ? 'team-mukesh' :
+     currentUser?.team === 'team-shivam' || currentUser?.id === 'u-1791911115518' || (currentUser?.name || '').toLowerCase().includes('shivam') ? 'team-shivam' : '');
+  const initialTeam = (userTeamId && MARKETING_TEAMS.find(t => t.id === userTeamId)) || MARKETING_TEAMS[0];
 
   const [form, setForm] = useState({
     date: todayStr,
-    assigneeId: tseUsers[0]?.id || '',
+    assigneeId: isMarketingUser ? '' : (tseUsers[0]?.id || ''),
     duration: '30 mins',
     taskType: 'Interview',
     interviewDateTime: '',
     candidateName: '',
-    position: 'Software Engineer',
-    companyName: 'Amazon',
+    position: '',
+    companyName: '',
     status: 'Pending',
-    teamId: defaultTeam.id,
-    teamName: defaultTeam.name,
-    teamLeadId: defaultTeam.leadId,
+    teamId: initialTeam.id,
+    teamName: initialTeam.name,
+    teamLeadId: initialTeam.leadId,
     remark: '',
     description: '',
     notes: '',
   });
+
+  // Sync team & clear inputs whenever modal opens
+  useEffect(() => {
+    if (open) {
+      setForm(prev => ({
+        ...prev,
+        position: '',
+        companyName: '',
+        candidateName: '',
+        teamId: isMarketingUser ? initialTeam.id : prev.teamId || initialTeam.id,
+        teamName: isMarketingUser ? initialTeam.name : prev.teamName || initialTeam.name,
+        teamLeadId: isMarketingUser ? initialTeam.leadId : prev.teamLeadId || initialTeam.leadId,
+        assigneeId: isMarketingUser ? '' : (prev.assigneeId || tseUsers[0]?.id || ''),
+      }));
+    }
+  }, [open, isMarketingUser, initialTeam]);
 
   // Candidate Prior History
   const priorHistory = useMemo(() => {
@@ -61,9 +82,9 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
 
   // Smart Recommendations for TSM
   const recommendations = useMemo(() => {
-    if (roleIsMarketing(currentRole)) return [];
+    if (isMarketingUser) return [];
     return getSmartTseRecommendations(form.candidateName, tasks, feedbacks, tseUsers);
-  }, [form.candidateName, tasks, feedbacks, tseUsers, currentRole]);
+  }, [form.candidateName, tasks, feedbacks, tseUsers, isMarketingUser]);
 
   const handleTeamChange = (teamId) => {
     const selectedTeam = MARKETING_TEAMS.find(t => t.id === teamId) || MARKETING_TEAMS[0];
@@ -75,36 +96,50 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
     }));
   };
 
-  const submit = () => {
-    if (!form.candidateName.trim()) return;
-    const selectedTse = tseUsers.find(u => u.id === form.assigneeId);
-    addTask({
-      ...form,
-      techPerson: selectedTse?.name || 'Unassigned',
-      codeName: selectedTse?.codeName || getTseCodeName(selectedTse?.name),
-      title: `${form.candidateName} — ${form.taskType} (${form.companyName})`,
-      category: form.taskType,
-      dueDate: form.date,
-      interviewDateTime: form.taskType === 'Interview' ? form.interviewDateTime : '',
-    });
-    onOpenChange(false);
+  const resetForm = () => {
     setForm({
       date: todayStr,
-      assigneeId: tseUsers[0]?.id || '',
+      assigneeId: isMarketingUser ? '' : (tseUsers[0]?.id || ''),
       duration: '30 mins',
       taskType: 'Interview',
       interviewDateTime: '',
       candidateName: '',
-      position: 'Software Engineer',
-      companyName: 'Amazon',
+      position: '',
+      companyName: '',
       status: 'Pending',
-      teamId: defaultTeam.id,
-      teamName: defaultTeam.name,
-      teamLeadId: defaultTeam.leadId,
+      teamId: initialTeam.id,
+      teamName: initialTeam.name,
+      teamLeadId: initialTeam.leadId,
       remark: '',
       description: '',
       notes: '',
     });
+  };
+
+  const submit = () => {
+    if (!form.candidateName.trim()) {
+      toast.error('Please enter the candidate name');
+      return;
+    }
+    const selectedTse = tseUsers.find(u => u.id === form.assigneeId);
+    const taskDate = form.taskType === 'Interview' && form.interviewDateTime
+      ? form.interviewDateTime.slice(0, 10)
+      : form.date;
+
+    addTask({
+      ...form,
+      date: taskDate,
+      dueDate: taskDate,
+      assigneeId: isMarketingUser ? '' : (selectedTse?.id || ''),
+      techPerson: isMarketingUser ? 'Unassigned' : (selectedTse?.name || 'Unassigned'),
+      codeName: isMarketingUser ? 'Unassigned' : (selectedTse?.codeName || (selectedTse?.name ? getTseCodeName(selectedTse?.name) : 'Unassigned')),
+      title: `${form.candidateName.trim()} — ${form.taskType}${form.companyName ? ` (${form.companyName.trim()})` : ''}`,
+      category: form.taskType,
+      interviewDateTime: form.taskType === 'Interview' ? form.interviewDateTime : '',
+    });
+    toast.success('Task created successfully!');
+    onOpenChange(false);
+    resetForm();
   };
 
   return (
@@ -113,70 +148,40 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
         <DialogHeader>
           <DialogTitle className="text-slate-900 text-lg">Create New Task / Candidate Record</DialogTitle>
           <DialogDescription className="text-slate-500 text-xs">
-            Assign candidate task with Marketing Team Lead ownership &amp; designated Tech Support Engineer.
+            {isMarketingUser
+              ? `Create task under ${initialTeam.name} (${initialTeam.leadName}). TSE assignment will be coordinated by TSM.`
+              : 'Assign candidate task with Marketing Team Lead ownership & designated Tech Support Engineer.'}
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
-          {/* Step 1: Marketing Team Lead (Team Mukesh or Team Shivam) */}
+          {/* Step 1: Marketing Team Lead */}
           <div className="md:col-span-1">
             <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
               <span>Marketing Team Lead</span>
               <span className="text-rose-500">*</span>
             </label>
-            <Select value={form.teamId} onValueChange={handleTeamChange}>
-              <SelectTrigger data-testid="task-form-team" className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white">
-                <SelectValue placeholder="Select Marketing Team" />
-              </SelectTrigger>
-              <SelectContent className="bg-white border-slate-200 text-slate-900">
-                {MARKETING_TEAMS.map(team => (
-                  <SelectItem key={team.id} value={team.id}>
-                    {team.name} ({team.leadName})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Date */}
-          <div>
-            <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Date</label>
-            <Input
-              type="date"
-              data-testid="task-form-date"
-              value={form.date}
-              onChange={e => setForm({ ...form, date: e.target.value })}
-              className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white"
-            />
-          </div>
-
-          {/* Date */}
-          <div>
-            <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Date</label>
-            <Input
-              type="date"
-              data-testid="task-form-date"
-              value={form.date}
-              onChange={e => setForm({ ...form, date: e.target.value })}
-              className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white"
-            />
-          </div>
-
-          {/* Tech Person (TSE) */}
-          <div>
-            <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Tech Person (TSE)</label>
-            <Select value={form.assigneeId} onValueChange={v => setForm({ ...form, assigneeId: v })}>
-              <SelectTrigger data-testid="task-form-assignee" className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white">
-                <SelectValue placeholder="Select TSE" />
-              </SelectTrigger>
-              <SelectContent className="bg-white border-slate-200 text-slate-900">
-                {tseUsers.map(u => (
-                  <SelectItem key={u.id} value={u.id}>
-                    {roleIsMarketing(currentRole) ? (u.empId || u.tttNbId || u.id) : `${u.name} (${u.codeName || getTseCodeName(u.name)})`}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {isMarketingUser ? (
+              <div className="mt-1.5 h-10 px-3.5 rounded-lg bg-slate-100 border border-slate-300 text-slate-900 text-xs font-bold flex items-center justify-between">
+                <span>{initialTeam.name} ({initialTeam.leadName})</span>
+                <span className="text-[10px] text-blue-700 font-bold bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                  Your Team
+                </span>
+              </div>
+            ) : (
+              <Select value={form.teamId} onValueChange={handleTeamChange}>
+                <SelectTrigger data-testid="task-form-team" className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white">
+                  <SelectValue placeholder="Select Marketing Team" />
+                </SelectTrigger>
+                <SelectContent className="bg-white border-slate-200 text-slate-900">
+                  {MARKETING_TEAMS.map(team => (
+                    <SelectItem key={team.id} value={team.id}>
+                      {team.name} ({team.leadName})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
 
           {/* Task Type */}
@@ -194,24 +199,54 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
             </Select>
           </div>
 
-          {/* Conditional Interview Date & Time (EST) - Required for Interview tasks */}
-          {form.taskType === 'Interview' && (
-            <div className="md:col-span-1 p-2.5 bg-blue-50/70 border border-blue-200 rounded-xl">
-              <label className="text-xs font-bold text-blue-900 uppercase tracking-wider flex items-center gap-1.5">
-                <Clock size={12} className="text-blue-600" />
-                <span>Interview Date &amp; Time (EST)</span>
-                <span className="text-rose-500">*</span>
-              </label>
-              <Input
-                type="datetime-local"
-                data-testid="task-form-interview-datetime"
-                value={form.interviewDateTime}
-                onChange={e => setForm({ ...form, interviewDateTime: e.target.value })}
-                className="mt-1.5 bg-white border-blue-300 text-slate-900 focus:bg-white text-xs"
-              />
-              <p className="text-[10px] text-blue-700 mt-1">
-                Converted to EST standard · Auto-reminds assigned TSE 30 min before call.
+          {/* Single Date Field (ONLY 1 DATE FIELD) */}
+          <div className="md:col-span-1">
+            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+              <Clock size={12} className="text-blue-600" />
+              <span>{form.taskType === 'Interview' ? 'Interview Date & Time (EST)' : 'Date'}</span>
+              <span className="text-rose-500">*</span>
+            </label>
+            <Input
+              type={form.taskType === 'Interview' ? 'datetime-local' : 'date'}
+              data-testid="task-form-single-date"
+              value={form.taskType === 'Interview' ? form.interviewDateTime : form.date}
+              onChange={e => {
+                const val = e.target.value;
+                if (form.taskType === 'Interview') {
+                  setForm(prev => ({
+                    ...prev,
+                    interviewDateTime: val,
+                    date: val ? val.slice(0, 10) : prev.date
+                  }));
+                } else {
+                  setForm(prev => ({ ...prev, date: val }));
+                }
+              }}
+              className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white text-xs"
+            />
+            {form.taskType === 'Interview' && (
+              <p className="text-[10px] text-blue-700 mt-1 font-medium">
+                EST standard timing · Auto-reminds 30 min before call.
               </p>
+            )}
+          </div>
+
+          {/* Tech Person (TSE) - Only visible when NOT Marketing TL / SR */}
+          {!isMarketingUser && (
+            <div>
+              <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Tech Person (TSE)</label>
+              <Select value={form.assigneeId} onValueChange={v => setForm({ ...form, assigneeId: v })}>
+                <SelectTrigger data-testid="task-form-assignee" className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white">
+                  <SelectValue placeholder="Select TSE" />
+                </SelectTrigger>
+                <SelectContent className="bg-white border-slate-200 text-slate-900">
+                  {tseUsers.map(u => (
+                    <SelectItem key={u.id} value={u.id}>
+                      {u.name} ({u.codeName || getTseCodeName(u.name)})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           )}
 
@@ -309,7 +344,7 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
               data-testid="task-form-position"
               value={form.position}
               onChange={e => setForm({ ...form, position: e.target.value })}
-              placeholder="e.g. Software Engineer, Data Scientist"
+              placeholder="e.g. Data Scientist, SWE, Data Analyst"
               className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white"
             />
           </div>
@@ -321,7 +356,7 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
               data-testid="task-form-company"
               value={form.companyName}
               onChange={e => setForm({ ...form, companyName: e.target.value })}
-              placeholder="e.g. Amazon, Capital One, Merrick Bank"
+              placeholder="e.g. Google, Apple, Amazon"
               className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white"
             />
           </div>
