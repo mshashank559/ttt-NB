@@ -8,6 +8,16 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Textarea } from '../components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 
+const STAGES = ['Scheduled', 'Interview Completed', 'Feedback Pending', 'Cleared', 'Rejected', 'Hold'];
+const stageTint = {
+  Scheduled: 'border-sky-500/30',
+  'Interview Completed': 'border-indigo-500/30',
+  'Feedback Pending': 'border-amber-500/30',
+  Cleared: 'border-emerald-500/30',
+  Rejected: 'border-rose-500/30',
+  Hold: 'border-purple-500/30',
+};
+
 const RatingStars = ({ value, onChange, label, testid }) => (
   <div data-testid={testid}>
     <div className="text-xs uppercase tracking-wider text-slate-400 mb-1.5">{label}</div>
@@ -136,15 +146,6 @@ const EvaluationModal = ({ interview, onClose }) => {
   );
 };
 
-const STAGES = ['Scheduled', 'Interview Completed', 'Feedback Pending', 'Cleared', 'Rejected', 'Hold'];
-const stageTint = {
-  Scheduled: 'border-sky-500/30',
-  'Interview Completed': 'border-indigo-500/30',
-  'Feedback Pending': 'border-amber-500/30',
-  Cleared: 'border-emerald-500/30',
-  Rejected: 'border-rose-500/30',
-  Hold: 'border-purple-500/30',
-};
 
 export default function Interviews() {
   const { visibleInterviews, currentRole, currentUser, users } = useApp();
