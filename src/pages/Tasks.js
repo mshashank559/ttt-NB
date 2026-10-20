@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Plus, Search, UserRound, Calendar as CalIcon, Clock, Building2, Briefcase, FileText, StickyNote, MessageSquare, ShieldAlert } from 'lucide-react';
+import { Plus, Search, UserRound, Calendar as CalIcon, Clock, Building2, Briefcase, FileText, StickyNote, MessageSquare, ShieldAlert, CheckCircle2, Sparkles } from 'lucide-react';
+import { toast } from 'sonner';
 import { useApp } from '../context/AppContext';
 import { PageHeader, StatusBadge, TaskTypeBadge, SectionCard, EmptyState } from '../components/common';
-import { TASK_TYPES, TASK_STATUSES, MARKETING_TEAMS, POC_USERS_BY_TEAM, getTseCodeName, getTsmCodeName, roleIsMarketing, getInterviewTimingMeta, sortTasksByInterviewPriority, getSmartTseRecommendations, INTERVIEW_OUTCOMES } from '../data/mockData';
+import { TASK_TYPES, TASK_STATUSES, MARKETING_TEAMS, getTseCodeName, getTsmCodeName, roleIsMarketing, getInterviewTimingMeta, sortTasksByInterviewPriority, getSmartTseRecommendations, INTERVIEW_OUTCOMES } from '../data/mockData';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
@@ -20,7 +21,6 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
   const todayStr = new Date().toISOString().slice(0, 10);
 
   const defaultTeam = MARKETING_TEAMS[0];
-  const defaultPocs = POC_USERS_BY_TEAM[defaultTeam.id] || [];
 
   const [form, setForm] = useState({
     date: todayStr,
@@ -35,19 +35,12 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
     teamId: defaultTeam.id,
     teamName: defaultTeam.name,
     teamLeadId: defaultTeam.leadId,
-    pocId: defaultPocs[0]?.id || '',
-    recruiterName: defaultPocs[0]?.name || '',
     remark: '',
     description: '',
     notes: '',
   });
 
-  // Eligible POCs dynamically scoped to currently selected team
-  const eligiblePocs = useMemo(() => {
-    return POC_USERS_BY_TEAM[form.teamId] || [];
-  }, [form.teamId]);
-
-  // Milestone 4 & 7: Candidate Prior History
+  // Candidate Prior History
   const priorHistory = useMemo(() => {
     if (!form.candidateName.trim()) return [];
     const q = form.candidateName.trim().toLowerCase();
@@ -66,7 +59,7 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
     });
   }, [form.candidateName, tasks, feedbacks, currentRole]);
 
-  // Milestone 7: Smart Recommendations for TSM
+  // Smart Recommendations for TSM
   const recommendations = useMemo(() => {
     if (roleIsMarketing(currentRole)) return [];
     return getSmartTseRecommendations(form.candidateName, tasks, feedbacks, tseUsers);
@@ -74,23 +67,11 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
 
   const handleTeamChange = (teamId) => {
     const selectedTeam = MARKETING_TEAMS.find(t => t.id === teamId) || MARKETING_TEAMS[0];
-    const pocs = POC_USERS_BY_TEAM[selectedTeam.id] || [];
     setForm(prev => ({
       ...prev,
       teamId: selectedTeam.id,
       teamName: selectedTeam.name,
       teamLeadId: selectedTeam.leadId,
-      pocId: pocs[0]?.id || '',
-      recruiterName: pocs[0]?.name || '',
-    }));
-  };
-
-  const handlePocChange = (pocId) => {
-    const selectedPoc = eligiblePocs.find(p => p.id === pocId);
-    setForm(prev => ({
-      ...prev,
-      pocId,
-      recruiterName: selectedPoc?.name || '',
     }));
   };
 
@@ -120,8 +101,6 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
       teamId: defaultTeam.id,
       teamName: defaultTeam.name,
       teamLeadId: defaultTeam.leadId,
-      pocId: defaultPocs[0]?.id || '',
-      recruiterName: defaultPocs[0]?.name || '',
       remark: '',
       description: '',
       notes: '',
@@ -134,12 +113,12 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
         <DialogHeader>
           <DialogTitle className="text-slate-900 text-lg">Create New Task / Candidate Record</DialogTitle>
           <DialogDescription className="text-slate-500 text-xs">
-            Assign candidate assessment with explicit Marketing Team Lead &amp; Recruiter POC ownership.
+            Assign candidate task with Marketing Team Lead ownership &amp; designated Tech Support Engineer.
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
-          {/* Step 1: Marketing Team Lead */}
+          {/* Step 1: Marketing Team Lead (Team Mukesh or Team Shivam) */}
           <div className="md:col-span-1">
             <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
               <span>Marketing Team Lead</span>
@@ -159,24 +138,16 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
             </Select>
           </div>
 
-          {/* Step 2: Recruiter / POC (Filtered dynamically to selected team) */}
-          <div className="md:col-span-1">
-            <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-              <span>Recruiter / POC</span>
-              <span className="text-rose-500">*</span>
-            </label>
-            <Select value={form.pocId} onValueChange={handlePocChange}>
-              <SelectTrigger data-testid="task-form-recruiter" className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white">
-                <SelectValue placeholder="Select Assigned POC" />
-              </SelectTrigger>
-              <SelectContent className="bg-white border-slate-200 text-slate-900">
-                {eligiblePocs.map(poc => (
-                  <SelectItem key={poc.id} value={poc.id}>
-                    {poc.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          {/* Date */}
+          <div>
+            <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Date</label>
+            <Input
+              type="date"
+              data-testid="task-form-date"
+              value={form.date}
+              onChange={e => setForm({ ...form, date: e.target.value })}
+              className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white"
+            />
           </div>
 
           {/* Date */}
@@ -430,11 +401,38 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
 };
 
 const TaskDrawer = ({ task, onClose }) => {
-  const { users, reassignTask, changeTaskStatus, currentRole, currentUser, updateInterviewOutcome } = useApp();
+  const { users, reassignTask, changeTaskStatus, assignMarketingSr, currentRole, currentUser, updateInterviewOutcome } = useApp();
   const assignee = users.find(u => u.id === task?.assigneeId);
   const creator = users.find(u => u.id === task?.createdById);
   const tseUsers = users.filter(u => u.role === 'tse');
   const canEdit = roleCanEditAny(currentRole) || task?.assigneeId === currentUser?.id;
+  const [completionRemark, setCompletionRemark] = useState(task?.completionRemark || task?.remark || '');
+
+  const eligibleSrs = useMemo(() => {
+    const allSrs = (users || []).filter(u => u.role === 'marketing_sr');
+    const teamSrs = allSrs.filter(u => 
+      u.teamId === task?.teamId || 
+      (task?.teamId === 'team-mukesh' ? (u.teamName?.includes('Mukesh') || u.teamLeadId === 'u-1791911058812') : (u.teamName?.includes('Shivam') || u.teamLeadId === 'u-1791911115518'))
+    );
+    return teamSrs.length > 0 ? teamSrs : allSrs;
+  }, [users, task?.teamId]);
+
+  const handleCopyFeedbackLink = (t) => {
+    const origin = window.location.origin;
+    const pathname = window.location.pathname;
+    const recruiter = t.assignedSrName || t.recruiterName || 'Marketing SR';
+    const tseId = t.assigneeId || 'TSE-NB-001';
+    const tseName = t.techPerson || 'Technical Support';
+    const link = `${origin}${pathname}#/candidate-saga?id=fb-task-${t.id}&recruiter=${encodeURIComponent(recruiter)}&tseId=${encodeURIComponent(tseId)}&tseName=${encodeURIComponent(tseName)}&candidate=${encodeURIComponent(t.candidateName || '')}&company=${encodeURIComponent(t.companyName || '')}&type=${encodeURIComponent(t.taskType || 'Interview')}`;
+
+    try {
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(link);
+      }
+    } catch (e) {}
+
+    toast.success(`Feedback Link generated & copied for candidate: ${t.candidateName}!`);
+  };
 
   if (!task) return null;
 
@@ -503,6 +501,48 @@ const TaskDrawer = ({ task, onClose }) => {
               </div>
             </div>
           )}
+
+          {/* Step 3: Marketing TL Assigns Senior Recruiter (Marketing SR) */}
+          {(currentRole === 'marketing_tl' || currentRole === 'tsm' || currentRole === 'management' || currentRole === 'upper_management') && (
+            <div className="p-4 rounded-xl bg-blue-50/70 border border-blue-200 space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs text-blue-950 font-bold flex items-center gap-1.5">
+                  <UserRound size={13} className="text-blue-600" />
+                  <span>Assign Senior Recruiter (Marketing SR)</span>
+                </label>
+                {task.assignedSrName ? (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 font-bold border border-blue-300">
+                    Assigned: {task.assignedSrName}
+                  </span>
+                ) : (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-bold border border-amber-300 animate-pulse">
+                    SR Unassigned
+                  </span>
+                )}
+              </div>
+              <Select
+                value={task.assignedSrId || ''}
+                onValueChange={srId => {
+                  const srUser = eligibleSrs.find(u => u.id === srId);
+                  if (srUser && assignMarketingSr) {
+                    assignMarketingSr(task.id, srUser);
+                  }
+                }}
+              >
+                <SelectTrigger data-testid="task-assign-sr" className="bg-white border-blue-300 text-slate-900 h-9">
+                  <SelectValue placeholder={task.assignedSrName ? `Current: ${task.assignedSrName}` : "Select Senior Recruiter (SR)..."} />
+                </SelectTrigger>
+                <SelectContent className="bg-white border-slate-200 text-slate-900">
+                  {eligibleSrs.map(sr => (
+                    <SelectItem key={sr.id} value={sr.id}>
+                      {sr.name} {sr.teamName ? `(${sr.teamName})` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           {/* Quick info grid */}
           <div className="grid grid-cols-2 gap-3.5 p-4 rounded-xl bg-slate-50 border border-slate-200">
             <div>
@@ -525,6 +565,24 @@ const TaskDrawer = ({ task, onClose }) => {
                 {roleIsMarketing(currentRole)
                   ? (assignee?.empId || assignee?.tttNbId || task.techPersonId || task.assigneeId || 'TSE-ID')
                   : (assignee?.name || task.techPerson || 'Unassigned')}
+              </div>
+            </div>
+            <div>
+              <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1 flex items-center gap-1.5">
+                <Building2 size={12} className="text-blue-600" /> Marketing Team
+              </div>
+              <div className="text-sm font-semibold text-slate-900">{task.teamName || 'Team Mukesh'}</div>
+            </div>
+            <div>
+              <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1 flex items-center gap-1.5">
+                <UserRound size={12} className="text-blue-600" /> Senior Recruiter (SR)
+              </div>
+              <div className="text-sm font-semibold text-slate-900">
+                {task.assignedSrName ? (
+                  <span className="text-blue-700 font-bold">{task.assignedSrName}</span>
+                ) : (
+                  <span className="text-amber-700 font-medium italic">Pending Assignment</span>
+                )}
               </div>
             </div>
             <div>
@@ -559,6 +617,52 @@ const TaskDrawer = ({ task, onClose }) => {
             </div>
           )}
 
+          {/* Step 4: TSE Completion Remarks (Visible to all) */}
+          {task.completionRemark && (
+            <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200">
+              <div className="text-xs font-bold text-emerald-900 flex items-center gap-1.5 mb-1">
+                <CheckCircle2 size={13} className="text-emerald-600" /> TSE Completion Remarks (Visible to all)
+              </div>
+              <p className="text-xs text-emerald-950 font-medium leading-relaxed">{task.completionRemark}</p>
+            </div>
+          )}
+
+          {/* Step 5: Automatically Enable Feedback Form Generation */}
+          {task.status === 'Done' ? (
+            <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-100 border border-emerald-300 shadow-sm space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
+                  <Sparkles size={14} className="text-emerald-600" />
+                  <span>Candidate Feedback Form Generation</span>
+                </div>
+                <span className="px-2 py-0.5 rounded-full bg-emerald-600 text-white text-[10px] font-black uppercase">
+                  Ready
+                </span>
+              </div>
+              <p className="text-xs text-emerald-800">
+                Task is marked Done. {task.assignedSrName ? `Assigned SR (${task.assignedSrName})` : 'Assigned Senior Recruiter'} can now generate and share the candidate feedback link.
+              </p>
+              <button
+                type="button"
+                data-testid="generate-feedback-link-btn"
+                onClick={() => handleCopyFeedbackLink(task)}
+                className="w-full h-9 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white text-xs font-bold flex items-center justify-center gap-2 shadow-xs cursor-pointer transition-all"
+              >
+                <Sparkles size={13} /> Generate &amp; Copy Candidate Feedback Link
+              </button>
+            </div>
+          ) : (
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-500 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Clock size={14} className="text-slate-400" />
+                <span>Candidate Feedback Link</span>
+              </div>
+              <span className="text-[11px] font-semibold text-slate-400 bg-slate-200/60 px-2 py-0.5 rounded-md">
+                Locked (Unlocks when TSE marks Done)
+              </span>
+            </div>
+          )}
+
           {/* Description */}
           <div>
             <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1.5 flex items-center gap-1.5">
@@ -579,33 +683,79 @@ const TaskDrawer = ({ task, onClose }) => {
             </div>
           </div>
 
-          {/* Status & Assignee Controls */}
+          {/* Status & Assignee Controls with Mandatory Remarks on Done */}
           {canEdit && (
-            <div className="grid grid-cols-2 gap-3 p-4 rounded-xl bg-slate-50 border border-slate-200">
-              <div>
-                <label className="text-xs text-slate-600 font-semibold">Update Status</label>
-                <Select value={task.status} onValueChange={v => changeTaskStatus(task.id, v)}>
-                  <SelectTrigger data-testid="task-change-status" className="mt-1 bg-white border-slate-300 text-slate-900 h-9">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-white border-slate-200 text-slate-900">
-                    {TASK_STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              {roleCanEditAny(currentRole) && (
+            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-slate-600 font-semibold">Reassign TSE</label>
-                  <Select value={task.assigneeId} onValueChange={v => reassignTask(task.id, v)}>
-                    <SelectTrigger data-testid="task-reassign" className="mt-1 bg-white border-slate-300 text-slate-900 h-9">
+                  <label className="text-xs text-slate-600 font-semibold">Update Status</label>
+                  <Select
+                    value={task.status}
+                    onValueChange={v => {
+                      if (v === 'Done') {
+                        if (!completionRemark.trim()) {
+                          toast.error('Please enter completion remarks below before marking Done.');
+                        } else {
+                          changeTaskStatus(task.id, 'Done', completionRemark.trim());
+                        }
+                      } else {
+                        changeTaskStatus(task.id, v);
+                      }
+                    }}
+                  >
+                    <SelectTrigger data-testid="task-change-status" className="mt-1 bg-white border-slate-300 text-slate-900 h-9">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="bg-white border-slate-200 text-slate-900">
-                      {tseUsers.map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}
+                      {TASK_STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
-              )}
+                {roleCanEditAny(currentRole) && (
+                  <div>
+                    <label className="text-xs text-slate-600 font-semibold">Reassign TSE</label>
+                    <Select value={task.assigneeId} onValueChange={v => reassignTask(task.id, v)}>
+                      <SelectTrigger data-testid="task-reassign" className="mt-1 bg-white border-slate-300 text-slate-900 h-9">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-white border-slate-200 text-slate-900">
+                        {tseUsers.map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
+
+              {/* Completion remarks input */}
+              <div className="pt-2 border-t border-slate-200">
+                <label className="text-xs font-semibold text-slate-700 flex items-center justify-between">
+                  <span>TSE Completion Remarks</span>
+                  <span className="text-[10px] text-slate-500">Visible to all</span>
+                </label>
+                <div className="mt-1.5 flex gap-2">
+                  <Input
+                    data-testid="completion-remark-input"
+                    value={completionRemark}
+                    onChange={e => setCompletionRemark(e.target.value)}
+                    placeholder="Enter candidate evaluation remarks &amp; details..."
+                    className="bg-white border-slate-300 text-xs h-9"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!completionRemark.trim()) {
+                        toast.error('Please enter completion remarks before saving as Done.');
+                        return;
+                      }
+                      changeTaskStatus(task.id, 'Done', completionRemark.trim());
+                      toast.success('Task marked as Done with completion remarks!');
+                    }}
+                    className="px-3.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shrink-0 cursor-pointer transition-colors shadow-2xs"
+                  >
+                    Mark Done
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 

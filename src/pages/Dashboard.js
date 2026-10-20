@@ -3,8 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import {
   ListChecks, CheckCircle2, Clock3, AlertTriangle, UserRoundCheck, Users as UsersIcon,
   Target, PieChart as PieIcon, Plus, ArrowUpRight, UserPlus, Star, AlertOctagon,
-  Calendar, CheckSquare, Sparkles, ShieldAlert, ArrowRight, ShieldCheck, Search
+  Calendar, CheckSquare, Sparkles, ShieldAlert, ArrowRight, ShieldCheck, Search,
+  Copy, ExternalLink, Lock, Check, UserCheck
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip as RTooltip, CartesianGrid, BarChart, Bar, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 import { useApp } from '../context/AppContext';
 import { KpiCard, PageHeader, StatusBadge, TaskTypeBadge, SectionCard, EmptyState, ArcGaugeCard, NeumorphicMetricCard, CircularProgressRing } from '../components/common';
@@ -84,7 +86,7 @@ const InterviewFunnel = ({ interviews }) => {
 };
 
 export default function Dashboard() {
-  const { currentRole, currentUser, tasks, visibleInterviews, interviews, users, feedbacks, slaTickets, updateSlaTicket } = useApp();
+  const { currentRole, currentUser, tasks, visibleInterviews, interviews, users, feedbacks, slaTickets, updateSlaTicket, assignMarketingSr } = useApp();
   const navigate = useNavigate();
 
   const [selectedWorkloadDate, setSelectedWorkloadDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -92,6 +94,7 @@ export default function Dashboard() {
   const [activeSlaTicketModal, setActiveSlaTicketModal] = useState(null);
   const [slaResolutionNote, setSlaResolutionNote] = useState('');
   const [slaResolutionStatus, setSlaResolutionStatus] = useState('Resolved');
+  const [srAssignments, setSrAssignments] = useState({});
 
   // Milestone 2: Urgent Priority Queue Detection
   const urgentInterviews = useMemo(() => {
@@ -1071,71 +1074,360 @@ export default function Dashboard() {
     );
   }
 
-  // ---------- MARKETING TL/SR ----------
-  if (currentRole === 'marketing_tl' || currentRole === 'marketing_sr') {
+  // ---------- MARKETING TL ----------
+  if (currentRole === 'marketing_tl') {
+    const tlTeam = currentUser?.team || (
+      currentUser?.id === 'u-1791911058812' || (currentUser?.name || '').toLowerCase().includes('mukesh') ? 'team-mukesh' :
+      currentUser?.id === 'u-1791911115518' || (currentUser?.name || '').toLowerCase().includes('shivam') ? 'team-shivam' : ''
+    );
+    const teamLabel = tlTeam === 'team-mukesh' ? 'Team Mukesh' : tlTeam === 'team-shivam' ? 'Team Shivam' : 'Marketing Operations';
+
+    const teamTasks = (tasks || []).filter(t => !tlTeam || t.marketingTeam === tlTeam);
+    const tasksAwaitingSr = teamTasks.filter(t => !t.assignedSrId);
+    const activeTasks = teamTasks.filter(t => t.assignedSrId);
+
+    const eligibleSrs = (users || []).filter(u => u.role === 'marketing_sr' && (!tlTeam || u.team === tlTeam));
+
+    const handleAssignSr = (task) => {
+      const selectedId = srAssignments[task.id];
+      const targetSr = eligibleSrs.find(u => u.id === selectedId);
+      if (!targetSr) {
+        toast.error('Please select a Senior Recruiter from the list');
+        return;
+      }
+      assignMarketingSr(task.id, targetSr);
+      toast.success(`Task ${task.id} assigned to ${targetSr.name}!`);
+      setSrAssignments(prev => {
+        const next = { ...prev };
+        delete next[task.id];
+        return next;
+      });
+    };
+
     const assigned = visibleInterviews.filter(i => i.interviewerId === currentUser?.id || true).slice(0, 20);
     const evalRate = assigned.length ? Math.round((assigned.filter(i => i.feedbackSubmitted).length / assigned.length) * 100) : 0;
 
     return (
       <div className="space-y-6">
-        <PageHeader title="TSE Interview Evaluation" subtitle="Candidate identities are anonymized by policy." />
+        <PageHeader
+          title={`${currentUser?.name || 'Marketing Team Lead'} Dashboard`}
+          subtitle={`${teamLabel} · Task Assignment & Workflow Coordination`}
+        />
 
-        {/* Ghulam Image 1 Style Hero Arc Gauge & Metric Cards */}
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-          <ArcGaugeCard
-            className="xl:col-span-1"
-            title="Interview Clear Rate"
-            subtitle="Candidate qualification & clearance ratio"
-            percentage={interviewClearRate}
-            primaryMetric={`${interviewClearRate}%`}
-            meterLabel="Clear Rate"
-            secondaryLabel="Target Benchmark"
-            secondaryValue="60%"
-            stat1Label="Interview Rounds"
-            stat1Value={`${totalRoundsConducted} Evaluated`}
-            stat2Label="Candidates Cleared"
-            stat2Value={`${ivTotals.cleared} Qualified`}
+        {/* TL Team Workflow KPIs */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <NeumorphicMetricCard
+            testid="kpi-tl-total"
+            label="Total Team Tasks"
+            value={teamTasks.length}
+            subValue="In Scope"
+            percentage={100}
+            ringColor="#1416c1"
           />
-          <div className="xl:col-span-2 grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <NeumorphicMetricCard testid="kpi-assigned" label="Assigned" value={assigned.length} subValue="In Pool" percentage={assigned.length > 0 ? 100 : 0} ringColor="#1416c1" />
-            <NeumorphicMetricCard testid="kpi-completed" label="Completed" value={assigned.filter(i => i.status === 'Interview Completed').length} subValue="Conducted" percentage={assigned.length > 0 ? Math.round((assigned.filter(i => i.status === 'Interview Completed').length / assigned.length) * 100) : 0} ringColor="#10b981" />
-            <NeumorphicMetricCard testid="kpi-feedback" label="Feedback Pending" value={assigned.filter(i => i.status === 'Feedback Pending').length} subValue="Action Needed" percentage={assigned.length > 0 ? Math.round((assigned.filter(i => i.status === 'Feedback Pending').length / assigned.length) * 100) : 0} ringColor="#f59e0b" />
-            <NeumorphicMetricCard testid="kpi-evaluated" label="Evaluated" value={assigned.filter(i => i.feedbackSubmitted).length} subValue="Scorecard Done" percentage={evalRate} ringColor="#8b5cf6" />
-          </div>
+          <NeumorphicMetricCard
+            testid="kpi-tl-awaiting-sr"
+            label="Awaiting SR"
+            value={tasksAwaitingSr.length}
+            subValue="Action Required"
+            percentage={teamTasks.length > 0 ? Math.round((tasksAwaitingSr.length / teamTasks.length) * 100) : 0}
+            ringColor="#ef4444"
+          />
+          <NeumorphicMetricCard
+            testid="kpi-tl-in-progress"
+            label="With TSE"
+            value={teamTasks.filter(t => t.status === 'In Progress' || t.status === 'Pending').length}
+            subValue="In Progress"
+            percentage={teamTasks.length > 0 ? Math.round((teamTasks.filter(t => t.status === 'In Progress' || t.status === 'Pending').length / teamTasks.length) * 100) : 0}
+            ringColor="#f59e0b"
+          />
+          <NeumorphicMetricCard
+            testid="kpi-tl-completed"
+            label="TSE Done"
+            value={teamTasks.filter(t => t.status === 'Done' || t.status === 'Completed').length}
+            subValue="Completed"
+            percentage={teamTasks.length > 0 ? Math.round((teamTasks.filter(t => t.status === 'Done' || t.status === 'Completed').length / teamTasks.length) * 100) : 0}
+            ringColor="#10b981"
+          />
         </div>
 
-        <SectionCard title="Evaluation Queue" subtitle="Pending reviews awaiting your scorecard">
+        {/* Step 3: Action Required: Assign Senior Recruiter */}
+        <SectionCard
+          title="⚡ Action Required: Assign Senior Recruiter (Marketing SR)"
+          subtitle={`Tasks assigned by TSM to ${teamLabel} requiring a Senior Recruiter`}
+        >
+          {tasksAwaitingSr.length === 0 ? (
+            <div className="p-8 text-center bg-slate-50 dark:bg-white/5 rounded-2xl border border-dashed border-slate-200 dark:border-white/10">
+              <CheckCircle2 size={32} className="mx-auto text-emerald-500 mb-2" />
+              <div className="text-sm font-bold text-slate-800 dark:text-white">All caught up!</div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm mx-auto">
+                No tasks are currently waiting for Senior Recruiter assignment in {teamLabel}.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {tasksAwaitingSr.map(t => (
+                <div
+                  key={t.id}
+                  className="p-4 rounded-2xl bg-white dark:bg-[#111A2E] border-2 border-rose-200 dark:border-rose-900/50 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4"
+                >
+                  <div className="space-y-1.5 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="mono text-xs font-bold text-blue-700 dark:text-blue-400">{t.id}</span>
+                      <TaskTypeBadge type={t.taskType || 'Interview'} />
+                      <StatusBadge value={t.status} />
+                      <span className="px-2 py-0.5 rounded-md bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300 text-[11px] font-bold">
+                        Awaiting SR Assignment
+                      </span>
+                    </div>
+                    <div className="text-sm font-bold text-slate-900 dark:text-white">
+                      {t.title}
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400 flex-wrap">
+                      <span>Candidate: <strong className="text-slate-700 dark:text-slate-200">{t.candidateName || 'Candidate'}</strong></span>
+                      {t.company && <span>· Client: <strong className="text-slate-700 dark:text-slate-200">{t.company}</strong></span>}
+                      <span>· Assigned TSE: <strong className="text-indigo-600 dark:text-indigo-400">{t.assigneeName || t.techPerson || 'TSE'}</strong></span>
+                    </div>
+                  </div>
+
+                  {/* SR Selection & Quick Assign */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <select
+                      data-testid={`select-sr-${t.id}`}
+                      value={srAssignments[t.id] || ''}
+                      onChange={(e) => setSrAssignments(prev => ({ ...prev, [t.id]: e.target.value }))}
+                      className="h-10 px-3 rounded-xl border border-slate-300 dark:border-white/20 bg-white dark:bg-slate-900 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">Select Senior Recruiter...</option>
+                      {eligibleSrs.map(sr => (
+                        <option key={sr.id} value={sr.id}>
+                          {sr.name}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      data-testid={`assign-sr-btn-${t.id}`}
+                      onClick={() => handleAssignSr(t)}
+                      className="h-10 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-bold shadow-md hover:shadow-lg transition-all flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <UserCheck size={14} />
+                      <span>Assign SR</span>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </SectionCard>
+
+        {/* Team Tasks Overview */}
+        <SectionCard title="Active Team Tasks" subtitle={`All tasks routed to ${teamLabel}`}>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-white/10">
-                  <th className="py-2.5 font-bold">Interview ID</th>
-                  <th className="font-bold">Position</th>
-                  <th className="font-bold">Date</th>
+                  <th className="py-2.5 font-bold">Task ID</th>
+                  <th className="font-bold">Candidate / Title</th>
+                  <th className="font-bold">Type</th>
+                  <th className="font-bold">Assigned TSE</th>
+                  <th className="font-bold">Senior Recruiter</th>
                   <th className="font-bold">Status</th>
-                  <th className="font-bold">Action</th>
+                  <th className="font-bold">TSE Remarks</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-white/5">
-                {assigned.slice(0, 10).map(i => (
-                  <tr key={i.id} className="border-b border-slate-100 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
-                    <td className="py-2.5 mono text-xs text-blue-700 dark:text-blue-400 font-bold">{i.id}</td>
-                    <td className="text-slate-900 dark:text-white font-medium">{i.position}</td>
-                    <td className="text-slate-600 dark:text-slate-400 text-xs">{i.date} · {i.time}</td>
-                    <td><StatusBadge value={i.status} /></td>
+                {teamTasks.map(t => (
+                  <tr key={t.id} className="border-b border-slate-100 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
+                    <td className="py-2.5 mono text-xs text-blue-700 dark:text-blue-400 font-bold">{t.id}</td>
                     <td>
-                      <button
-                        onClick={() => navigate('/interviews')}
-                        className="text-xs text-blue-600 dark:text-blue-400 hover:underline font-bold cursor-pointer"
-                      >
-                        Evaluate →
-                      </button>
+                      <div className="font-medium text-slate-900 dark:text-white">{t.candidateName || t.title}</div>
+                      <div className="text-[11px] text-slate-400">{t.company || t.title}</div>
+                    </td>
+                    <td><TaskTypeBadge type={t.taskType || 'Interview'} /></td>
+                    <td className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">{t.assigneeName || t.techPerson || 'TSE'}</td>
+                    <td className="text-xs">
+                      {t.assignedSrName ? (
+                        <span className="font-bold text-slate-800 dark:text-slate-200">{t.assignedSrName}</span>
+                      ) : (
+                        <span className="text-rose-500 font-bold text-[11px]">Unassigned</span>
+                      )}
+                    </td>
+                    <td><StatusBadge value={t.status} /></td>
+                    <td className="text-xs text-slate-600 dark:text-slate-300 max-w-[200px] truncate">
+                      {t.completionRemark || '—'}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+        </SectionCard>
+      </div>
+    );
+  }
+
+  // ---------- MARKETING SR ----------
+  if (currentRole === 'marketing_sr') {
+    const mySrTasks = (tasks || []).filter(t =>
+      t.assignedSrId === currentUser?.id ||
+      (currentUser?.name && t.assignedSrName && t.assignedSrName.toLowerCase() === currentUser.name.toLowerCase())
+    );
+
+    const feedbackReadyTasks = mySrTasks.filter(t => t.status === 'Done' || t.status === 'Completed');
+    const inProgressTasks = mySrTasks.filter(t => t.status !== 'Done' && t.status !== 'Completed');
+
+    const handleCopyFeedbackLink = (t) => {
+      const origin = window.location.origin;
+      const pathname = window.location.pathname.endsWith('/') ? window.location.pathname : `${window.location.pathname}/`;
+      const url = `${origin}${pathname}#/candidate-saga?id=fb-task-${t.id}&recruiter=${encodeURIComponent(t.assignedSrName || currentUser?.name || 'Senior Recruiter')}&tseId=${encodeURIComponent(t.assigneeId || '')}&tseName=${encodeURIComponent(t.assigneeName || 'TSE')}&candidate=${encodeURIComponent(t.candidateName || t.title || 'Candidate')}&company=${encodeURIComponent(t.company || 'Client')}&type=${encodeURIComponent(t.taskType || 'Interview')}`;
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(() => {
+          toast.success('Candidate Feedback link generated and copied to clipboard!');
+        }).catch(() => {
+          window.prompt('Copy candidate feedback URL:', url);
+        });
+      } else {
+        window.prompt('Copy candidate feedback URL:', url);
+      }
+    };
+
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          title={`${currentUser?.name || 'Senior Recruiter'} Dashboard`}
+          subtitle={`${currentUser?.team === 'team-mukesh' ? 'Team Mukesh' : currentUser?.team === 'team-shivam' ? 'Team Shivam' : 'Marketing Operations'} · Candidate Feedback & Coordination`}
+        />
+
+        {/* SR Workflow KPIs */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <NeumorphicMetricCard
+            testid="kpi-sr-total"
+            label="My Assigned Tasks"
+            value={mySrTasks.length}
+            subValue="In Scope"
+            percentage={100}
+            ringColor="#1416c1"
+          />
+          <NeumorphicMetricCard
+            testid="kpi-sr-feedback-ready"
+            label="Feedback Link Ready"
+            value={feedbackReadyTasks.length}
+            subValue="Action Required"
+            percentage={mySrTasks.length > 0 ? Math.round((feedbackReadyTasks.length / mySrTasks.length) * 100) : 0}
+            ringColor="#10b981"
+          />
+          <NeumorphicMetricCard
+            testid="kpi-sr-in-progress"
+            label="With TSE"
+            value={inProgressTasks.length}
+            subValue="In Progress"
+            percentage={mySrTasks.length > 0 ? Math.round((inProgressTasks.length / mySrTasks.length) * 100) : 0}
+            ringColor="#f59e0b"
+          />
+          <NeumorphicMetricCard
+            testid="kpi-sr-completed"
+            label="Finished Tasks"
+            value={feedbackReadyTasks.length}
+            subValue="Completed"
+            percentage={mySrTasks.length > 0 ? Math.round((feedbackReadyTasks.length / mySrTasks.length) * 100) : 0}
+            ringColor="#8b5cf6"
+          />
+        </div>
+
+        {/* Step 5: Action Required: Candidate Feedback Link Generation */}
+        <SectionCard
+          title="🎉 Action Required: Generate Candidate Feedback Link"
+          subtitle="Tasks marked Done by TSE - You can now generate and send the feedback form to candidates"
+        >
+          {feedbackReadyTasks.length === 0 ? (
+            <div className="p-8 text-center bg-slate-50 dark:bg-white/5 rounded-2xl border border-dashed border-slate-200 dark:border-white/10">
+              <Sparkles size={32} className="mx-auto text-slate-400 mb-2" />
+              <div className="text-sm font-bold text-slate-800 dark:text-white">No feedback forms pending</div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm mx-auto">
+                Once a TSE marks an assigned interview task as Done and submits completion remarks, the Feedback Link action will appear here.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {feedbackReadyTasks.map(t => (
+                <div
+                  key={t.id}
+                  className="p-5 rounded-2xl bg-gradient-to-r from-emerald-50 via-teal-50/50 to-emerald-100/50 dark:from-emerald-950/20 dark:via-teal-950/20 dark:to-emerald-900/20 border-2 border-emerald-300 dark:border-emerald-700/60 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4"
+                >
+                  <div className="space-y-2 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="mono text-xs font-bold text-emerald-800 dark:text-emerald-300">{t.id}</span>
+                      <TaskTypeBadge type={t.taskType || 'Interview'} />
+                      <span className="px-2.5 py-0.5 rounded-full bg-emerald-600 text-white text-[10px] font-black uppercase tracking-wide">
+                        TSE Done
+                      </span>
+                    </div>
+                    <div className="text-sm font-bold text-slate-900 dark:text-white">
+                      {t.candidateName || t.title}
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-slate-600 dark:text-slate-300 flex-wrap">
+                      <span>Client: <strong className="text-slate-800 dark:text-slate-200">{t.company || 'Client'}</strong></span>
+                      <span>· Completed By TSE: <strong className="text-indigo-600 dark:text-indigo-400">{t.assigneeName || t.techPerson || 'TSE'}</strong></span>
+                    </div>
+                    {t.completionRemark && (
+                      <div className="p-3 rounded-xl bg-white dark:bg-slate-900/60 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-950 dark:text-emerald-200">
+                        <strong className="text-emerald-800 dark:text-emerald-400">TSE Remarks: </strong>
+                        {t.completionRemark}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="shrink-0">
+                    <button
+                      type="button"
+                      data-testid={`generate-feedback-link-${t.id}`}
+                      onClick={() => handleCopyFeedbackLink(t)}
+                      className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-bold shadow-md hover:shadow-lg transition-all flex items-center gap-2 cursor-pointer active:scale-95"
+                    >
+                      <Sparkles size={14} />
+                      <span>Generate &amp; Copy Feedback Link</span>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </SectionCard>
+
+        {/* Tasks in progress with TSE */}
+        <SectionCard title="Active Tasks (Awaiting TSE Completion)" subtitle="Feedback link generation is locked until TSE finishes the task">
+          {inProgressTasks.length === 0 ? (
+            <div className="p-6 text-center text-xs text-slate-400">
+              No tasks currently in-progress with TSE.
+            </div>
+          ) : (
+            <div className="space-y-2.5">
+              {inProgressTasks.map(t => (
+                <div
+                  key={t.id}
+                  className="p-3.5 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 flex items-center justify-between text-xs"
+                >
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-2">
+                      <span className="mono font-bold text-blue-600 dark:text-blue-400">{t.id}</span>
+                      <span className="font-bold text-slate-800 dark:text-white">{t.candidateName || t.title}</span>
+                      <TaskTypeBadge type={t.taskType || 'Interview'} />
+                    </div>
+                    <div className="text-slate-500">
+                      Assigned TSE: <strong className="text-slate-700 dark:text-slate-300">{t.assigneeName || t.techPerson || 'TSE'}</strong> · Due {t.dueDate}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <StatusBadge value={t.status} />
+                    <span className="px-2 py-0.5 rounded-md bg-slate-200 dark:bg-slate-800 text-[10px] text-slate-500 font-semibold flex items-center gap-1">
+                      <Lock size={10} /> Link Locked
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </SectionCard>
       </div>
     );

@@ -298,194 +298,169 @@ export default function Login() {
 
               {/* Role Cards & Specific Team Personas */}
               <div className="mt-4 max-h-[60vh] overflow-y-auto pr-1 space-y-4">
-                {/* 1. Marketing Team Leads (Mukesh, Shivam, Vijesh) */}
+                {/* 1. Marketing Team Leads (Team Mukesh & Team Shivam ONLY) */}
                 <div>
                   <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">
-                    Marketing Team Leads (Team Isolation)
+                    Marketing Team Leads
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <button
                       data-testid="role-pick-marketing-tl-mukesh"
-                      onClick={() => pick('marketing_tl', 'u-tl-mukesh')}
-                      className="p-3 rounded-xl bg-blue-50/60 hover:bg-blue-100/70 border border-blue-200 text-left transition-all cursor-pointer shadow-xs"
+                      onClick={() => pick('marketing_tl', 'u-1791911058812')}
+                      className="p-3 rounded-xl bg-blue-50/70 hover:bg-blue-100/80 border border-blue-200 text-left transition-all cursor-pointer shadow-xs"
                     >
-                      <div className="text-xs font-bold text-blue-900">Mukesh Patel</div>
+                      <div className="text-xs font-bold text-blue-900">Mukesh Chaudhary</div>
                       <div className="text-[11px] text-blue-600 font-semibold">Team Mukesh (Lead)</div>
-                      <div className="text-[10px] text-slate-500 mt-1">Sees Mukesh candidates only</div>
+                      <div className="text-[10px] text-slate-500 mt-1">Assigns Team Mukesh Senior Recruiters</div>
                     </button>
                     <button
                       data-testid="role-pick-marketing-tl-shivam"
-                      onClick={() => pick('marketing_tl', 'u-tl-shivam')}
-                      className="p-3 rounded-xl bg-purple-50/60 hover:bg-purple-100/70 border border-purple-200 text-left transition-all cursor-pointer shadow-xs"
+                      onClick={() => pick('marketing_tl', 'u-1791911115518')}
+                      className="p-3 rounded-xl bg-purple-50/70 hover:bg-purple-100/80 border border-purple-200 text-left transition-all cursor-pointer shadow-xs"
                     >
-                      <div className="text-xs font-bold text-purple-900">Shivam Gupta</div>
+                      <div className="text-xs font-bold text-purple-900">Shivam Barot</div>
                       <div className="text-[11px] text-purple-600 font-semibold">Team Shivam (Lead)</div>
-                      <div className="text-[10px] text-slate-500 mt-1">Sees Shivam candidates only</div>
-                    </button>
-                    <button
-                      data-testid="role-pick-marketing-tl-vijesh"
-                      onClick={() => pick('marketing_tl', 'u-tl-vijesh')}
-                      className="p-3 rounded-xl bg-emerald-50/60 hover:bg-emerald-100/70 border border-emerald-200 text-left transition-all cursor-pointer shadow-xs"
-                    >
-                      <div className="text-xs font-bold text-emerald-900">Vijesh Kumar</div>
-                      <div className="text-[11px] text-emerald-600 font-semibold">Team Vijesh (Lead)</div>
-                      <div className="text-[10px] text-slate-500 mt-1">Sees Vijesh candidates only</div>
+                      <div className="text-[10px] text-slate-500 mt-1">Assigns Team Shivam Senior Recruiters</div>
                     </button>
                   </div>
                 </div>
 
-                {/* 2. Recruiters / POCs (Self-Only Candidate Isolation) */}
+                {/* 2. Marketing Senior Recruiters (Feedback Form Generators) */}
                 <div>
                   <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">
-                    Recruiters / POCs (Own Assigned Candidates Only)
+                    Marketing Senior Recruiters (Generates Candidate Feedback Form)
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                     <button
-                      data-testid="role-pick-poc-aditi"
-                      onClick={() => pick('recruiter', 'u-poc-aditi')}
+                      data-testid="role-pick-sr-snehal"
+                      onClick={() => pick('marketing_sr', 'u-sr-mukesh-01')}
                       className="p-2.5 rounded-xl bg-slate-50 hover:bg-blue-50 border border-slate-200 text-left transition-all cursor-pointer"
                     >
-                      <div className="text-xs font-bold text-slate-900">Aditi Sharma</div>
-                      <div className="text-[10px] text-blue-700 font-semibold">POC • Team Mukesh</div>
+                      <div className="text-xs font-bold text-slate-900">Prajapati Snehal</div>
+                      <div className="text-[10px] text-blue-700 font-semibold">SR • Team Mukesh</div>
                     </button>
                     <button
-                      data-testid="role-pick-poc-rahul"
-                      onClick={() => pick('recruiter', 'u-poc-rahul')}
+                      data-testid="role-pick-sr-ritik"
+                      onClick={() => pick('marketing_sr', 'u-sr-mukesh-02')}
                       className="p-2.5 rounded-xl bg-slate-50 hover:bg-blue-50 border border-slate-200 text-left transition-all cursor-pointer"
                     >
-                      <div className="text-xs font-bold text-slate-900">Rahul Verma</div>
-                      <div className="text-[10px] text-blue-700 font-semibold">POC • Team Mukesh</div>
+                      <div className="text-xs font-bold text-slate-900">Ritik Kumar Gupta</div>
+                      <div className="text-[10px] text-blue-700 font-semibold">SR • Team Mukesh</div>
                     </button>
                     <button
-                      data-testid="role-pick-poc-priya"
-                      onClick={() => pick('recruiter', 'u-poc-priya')}
+                      data-testid="role-pick-sr-ausafkhan"
+                      onClick={() => pick('marketing_sr', 'u-sr-mukesh-03')}
+                      className="p-2.5 rounded-xl bg-slate-50 hover:bg-blue-50 border border-slate-200 text-left transition-all cursor-pointer"
+                    >
+                      <div className="text-xs font-bold text-slate-900">Ausafkhan Pathan</div>
+                      <div className="text-[10px] text-blue-700 font-semibold">SR • Team Mukesh</div>
+                    </button>
+                    <button
+                      data-testid="role-pick-sr-vishal"
+                      onClick={() => pick('marketing_sr', 'u-sr-shivam-01')}
                       className="p-2.5 rounded-xl bg-slate-50 hover:bg-purple-50 border border-slate-200 text-left transition-all cursor-pointer"
                     >
-                      <div className="text-xs font-bold text-slate-900">Priya Singh</div>
-                      <div className="text-[10px] text-purple-700 font-semibold">POC • Team Shivam</div>
+                      <div className="text-xs font-bold text-slate-900">Vishal Suthar</div>
+                      <div className="text-[10px] text-purple-700 font-semibold">SR • Team Shivam</div>
                     </button>
                     <button
-                      data-testid="role-pick-poc-amit"
-                      onClick={() => pick('recruiter', 'u-poc-amit')}
+                      data-testid="role-pick-sr-riyen"
+                      onClick={() => pick('marketing_sr', 'u-sr-shivam-02')}
                       className="p-2.5 rounded-xl bg-slate-50 hover:bg-purple-50 border border-slate-200 text-left transition-all cursor-pointer"
                     >
-                      <div className="text-xs font-bold text-slate-900">Amit Mishra</div>
-                      <div className="text-[10px] text-purple-700 font-semibold">POC • Team Shivam</div>
+                      <div className="text-xs font-bold text-slate-900">Riyen Sukhadiya</div>
+                      <div className="text-[10px] text-purple-700 font-semibold">SR • Team Shivam</div>
                     </button>
                     <button
-                      data-testid="role-pick-poc-sneha"
-                      onClick={() => pick('recruiter', 'u-poc-sneha')}
-                      className="p-2.5 rounded-xl bg-slate-50 hover:bg-emerald-50 border border-slate-200 text-left transition-all cursor-pointer"
+                      data-testid="role-pick-sr-smit"
+                      onClick={() => pick('marketing_sr', 'u-sr-shivam-03')}
+                      className="p-2.5 rounded-xl bg-slate-50 hover:bg-purple-50 border border-slate-200 text-left transition-all cursor-pointer"
                     >
-                      <div className="text-xs font-bold text-slate-900">Sneha Joshi</div>
-                      <div className="text-[10px] text-emerald-700 font-semibold">POC • Team Vijesh</div>
-                    </button>
-                    <button
-                      data-testid="role-pick-poc-vikas"
-                      onClick={() => pick('recruiter', 'u-poc-vikas')}
-                      className="p-2.5 rounded-xl bg-slate-50 hover:bg-emerald-50 border border-slate-200 text-left transition-all cursor-pointer"
-                    >
-                      <div className="text-xs font-bold text-slate-900">Vikas Dubey</div>
-                      <div className="text-[10px] text-emerald-700 font-semibold">POC • Team Vijesh</div>
+                      <div className="text-xs font-bold text-slate-900">Smit H Patel</div>
+                      <div className="text-[10px] text-purple-700 font-semibold">SR • Team Shivam</div>
                     </button>
                   </div>
                 </div>
 
-                {/* 3. TSE Engineers (TSE-Only Candidate Isolation) */}
+                {/* 3. TSE Engineers (Conducts Task & Adds Remarks on Done) */}
                 <div>
                   <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">
-                    TSE Engineers (Own Candidates Only)
+                    TSE Engineers (Conducts Task &amp; Marks Done)
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     <button
-                      data-testid="role-pick-tse-harit"
-                      onClick={() => pick('tse', 'u-tse-harit')}
-                      className="p-2.5 rounded-xl bg-slate-50 hover:bg-cyan-50 border border-slate-200 text-left transition-all cursor-pointer"
+                      data-testid="role-pick-tse-shilp-mm"
+                      onClick={() => pick('tse', 'u-shilp-patel-mm')}
+                      className="p-2.5 rounded-xl bg-slate-50 hover:bg-emerald-50 border border-slate-200 text-left transition-all cursor-pointer"
                     >
-                      <div className="text-xs font-bold text-slate-900">Harit Verma</div>
-                      <div className="text-[10px] text-cyan-700 font-semibold">Code: Abhishek</div>
+                      <div className="text-xs font-bold text-slate-900">Shilp Patel MM</div>
+                      <div className="text-[10px] text-emerald-700 font-semibold">TSE Engineer</div>
                     </button>
                     <button
-                      data-testid="role-pick-tse-prem"
-                      onClick={() => pick('tse', 'u-tse-prem')}
-                      className="p-2.5 rounded-xl bg-slate-50 hover:bg-cyan-50 border border-slate-200 text-left transition-all cursor-pointer"
+                      data-testid="role-pick-tse-rudra"
+                      onClick={() => pick('tse', 'u-rudra-patel')}
+                      className="p-2.5 rounded-xl bg-slate-50 hover:bg-emerald-50 border border-slate-200 text-left transition-all cursor-pointer"
                     >
-                      <div className="text-xs font-bold text-slate-900">Prem Makwana</div>
-                      <div className="text-[10px] text-cyan-700 font-semibold">Code: Kiran</div>
+                      <div className="text-xs font-bold text-slate-900">Rudra Patel</div>
+                      <div className="text-[10px] text-emerald-700 font-semibold">TSE Engineer</div>
                     </button>
                     <button
-                      data-testid="role-pick-tse-shaurya"
-                      onClick={() => pick('tse', 'u-tse-shaurya')}
-                      className="p-2.5 rounded-xl bg-slate-50 hover:bg-cyan-50 border border-slate-200 text-left transition-all cursor-pointer"
+                      data-testid="role-pick-tse-nisrag"
+                      onClick={() => pick('tse', 'u-nisrag-patel')}
+                      className="p-2.5 rounded-xl bg-slate-50 hover:bg-emerald-50 border border-slate-200 text-left transition-all cursor-pointer"
                     >
-                      <div className="text-xs font-bold text-slate-900">Shaurya Mishra</div>
-                      <div className="text-[10px] text-cyan-700 font-semibold">Code: Henil</div>
+                      <div className="text-xs font-bold text-slate-900">Nisrag Patel</div>
+                      <div className="text-[10px] text-emerald-700 font-semibold">TSE Engineer</div>
                     </button>
                     <button
-                      data-testid="role-pick-tse-nikunj"
-                      onClick={() => pick('tse', 'u-tse-nikunj')}
-                      className="p-2.5 rounded-xl bg-slate-50 hover:bg-cyan-50 border border-slate-200 text-left transition-all cursor-pointer"
+                      data-testid="role-pick-tse-divya"
+                      onClick={() => pick('tse', 'u-divya')}
+                      className="p-2.5 rounded-xl bg-slate-50 hover:bg-emerald-50 border border-slate-200 text-left transition-all cursor-pointer"
                     >
-                      <div className="text-xs font-bold text-slate-900">Nikunj Kataria</div>
-                      <div className="text-[10px] text-cyan-700 font-semibold">Code: Saurav</div>
-                    </button>
-                    <button
-                      data-testid="role-pick-tse-amber"
-                      onClick={() => pick('tse', 'u-tse-amber')}
-                      className="p-2.5 rounded-xl bg-slate-50 hover:bg-cyan-50 border border-slate-200 text-left transition-all cursor-pointer"
-                    >
-                      <div className="text-xs font-bold text-slate-900">Amber Afreen</div>
-                      <div className="text-[10px] text-cyan-700 font-semibold">Code: Smriti</div>
+                      <div className="text-xs font-bold text-slate-900">Divya</div>
+                      <div className="text-[10px] text-emerald-700 font-semibold">TSE Engineer</div>
                     </button>
                   </div>
                 </div>
 
-                {/* 4. Leadership & Management (All Teams Access) */}
+                {/* 4. Leadership & Management */}
                 <div>
                   <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">
-                    Management &amp; Leadership (Full Cross-Team Visibility)
+                    Super Admin &amp; Management
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <button
-                      data-testid="role-pick-management"
-                      onClick={() => pick('management', 'u-02')}
+                      data-testid="role-pick-super-admin"
+                      onClick={() => pick('management', 'u-1791910972412')}
                       className="p-3 rounded-xl bg-slate-900 text-white hover:bg-slate-800 text-left transition-all cursor-pointer"
                     >
-                      <div className="text-xs font-bold">Priya Nair (Operations)</div>
-                      <div className="text-[11px] text-cyan-300 font-semibold">Management • All Teams</div>
+                      <div className="text-xs font-bold">Shashank Mishra</div>
+                      <div className="text-[11px] text-amber-300 font-semibold">Super Admin · Full Control</div>
                     </button>
                     <button
-                      data-testid="role-pick-upper_management"
-                      onClick={() => pick('upper_management', 'u-01')}
+                      data-testid="role-pick-admin"
+                      onClick={() => pick('management', 'u-1791911019553')}
                       className="p-3 rounded-xl bg-slate-900 text-white hover:bg-slate-800 text-left transition-all cursor-pointer"
                     >
-                      <div className="text-xs font-bold">Aarav Mehta (Executive)</div>
-                      <div className="text-[11px] text-amber-300 font-semibold">Upper Management • All Teams</div>
+                      <div className="text-xs font-bold">Pradyuman Kothiya</div>
+                      <div className="text-[11px] text-cyan-300 font-semibold">Admin · Management</div>
                     </button>
                   </div>
                 </div>
 
-                {/* 5. TSM Leads */}
+                {/* 5. TSM Operations */}
                 <div>
                   <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">
                     TSM Operations (Task Assignment)
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <button
                       data-testid="role-pick-tsm"
-                      onClick={() => pick('tsm', 'u-03')}
+                      onClick={() => pick('tsm', 'u-1791910972412')}
                       className="p-2.5 rounded-xl bg-slate-50 hover:bg-blue-50 border border-slate-200 text-left transition-all cursor-pointer"
                     >
-                      <div className="text-xs font-bold text-slate-900">Rohan Kapoor</div>
-                      <div className="text-[10px] text-blue-600 font-semibold">TSM • Code: TSM Titan</div>
-                    </button>
-                    <button
-                      data-testid="role-pick-tsm-neha"
-                      onClick={() => pick('tsm', 'u-04')}
-                      className="p-2.5 rounded-xl bg-slate-50 hover:bg-blue-50 border border-slate-200 text-left transition-all cursor-pointer"
-                    >
-                      <div className="text-xs font-bold text-slate-900">Neha Iyer</div>
-                      <div className="text-[10px] text-blue-600 font-semibold">TSM • Code: TSM Nova</div>
+                      <div className="text-xs font-bold text-slate-900">TSM Operations Lead</div>
+                      <div className="text-[10px] text-blue-600 font-semibold">Creates &amp; Assigns Tasks to TL / TSE</div>
                     </button>
                   </div>
                 </div>

@@ -65,6 +65,10 @@ const TaskSchema = new mongoose.Schema({
   teamLeadId: String,
   pocId: String,
   recruiterName: String,
+  assignedSrId: String,
+  assignedSrName: String,
+  assignedSrEmail: String,
+  completionRemark: String,
   createdById: String,
   description: String,
   notes: String,
@@ -190,8 +194,32 @@ async function seedDatabaseIfEmpty() {
     } else {
       console.log('✅ Database is already configured with real members.');
     }
+
+    // Auto-provision 14 Marketing SR users if missing
+    await syncMarketingSrUsersInternal();
   } catch (err) {
     console.error('⚠️ Seeding error:', err.message);
+  }
+}
+
+async function syncMarketingSrUsersInternal() {
+  try {
+    const { MARKETING_SR_USERS } = await import('./src/data/mockData.js');
+    if (Array.isArray(MARKETING_SR_USERS) && MARKETING_SR_USERS.length > 0) {
+      let added = 0;
+      for (const sr of MARKETING_SR_USERS) {
+        const exists = await User.findOne({ $or: [{ id: sr.id }, { email: sr.email }, { empId: sr.empId }] });
+        if (!exists) {
+          await new User(sr).save();
+          added++;
+        }
+      }
+      if (added > 0) {
+        console.log(`✅ Provisioned ${added} Marketing SR users to MongoDB Atlas.`);
+      }
+    }
+  } catch (e) {
+    console.warn('⚠️ SR sync warning:', e.message);
   }
 }
 
@@ -315,13 +343,19 @@ app.delete('/api/users/:id', async (req, res) => {
   }
 });
 
-// Valid Marketing Teams & POC assignment boundaries
-const VALID_TEAMS = ['team-mukesh', 'team-shivam', 'team-vijesh'];
-const VALID_POCS_BY_TEAM = {
-  'team-mukesh': ['u-poc-aditi', 'u-poc-rahul'],
-  'team-shivam': ['u-poc-priya', 'u-poc-amit'],
-  'team-vijesh': ['u-poc-sneha', 'u-poc-vikas'],
-};
+// Valid Marketing Teams (Team Mukesh & Team Shivam)
+const VALID_TEAMS = ['team-mukesh', 'team-shivam'];
+
+// Manual sync route for Marketing SR users
+app.post('/api/sync-marketing-srs', async (req, res) => {
+  try {
+    await syncMarketingSrUsersInternal();
+    const srs = await User.find({ role: 'marketing_sr' });
+    res.json({ success: true, count: srs.length, users: srs });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // ----------------- TASKS ENDPOINTS -----------------
 app.get('/api/tasks', async (req, res) => {
@@ -332,11 +366,17 @@ app.get('/api/tasks', async (req, res) => {
     if (role === 'tse' && userId) {
       filter = { $or: [{ assigneeId: userId }, { techPerson: { $regex: new RegExp(userId, 'i') } }] };
     } else if (role === 'recruiter' && userId) {
-      filter = { $or: [{ pocId: userId }, { recruiterName: { $regex: new RegExp(userId, 'i') } }] };
+      filter = { $or: [{ pocId: userId }, { recruiterName: { $regex: new RegExp(userId, 'i') } }, { assignedSrId: userId }] };
     } else if (role === 'marketing_tl') {
-      filter = { $or: [{ teamLeadId: userId }, { teamId: teamId || 'team-mukesh' }] };
+      const isShivam = userId === 'u-1791911115518' || (req.query.teamName && req.query.teamName.includes('Shivam'));
+      const defaultTeam = isShivam ? 'team-shivam' : 'team-mukesh';
+      filter = { $or: [{ teamLeadId: userId }, { teamId: teamId || defaultTeam }] };
     } else if (role === 'marketing_sr') {
-      filter = { teamId: teamId || 'team-mukesh' };
+      if (userId) {
+        filter = { $or: [{ assignedSrId: userId }, { teamId: teamId || 'team-mukesh' }] };
+      } else {
+        filter = { teamId: teamId || 'team-mukesh' };
+      }
     }
 
     let tasks = await Task.find(filter).sort({ createdAt: -1 });
@@ -367,19 +407,10 @@ app.get('/api/tasks', async (req, res) => {
 app.post('/api/tasks', async (req, res) => {
   try {
     const taskData = req.body;
-    const { teamId, pocId, candidateName } = taskData;
+    const { teamId, candidateName } = taskData;
 
     if (!candidateName || !candidateName.trim()) {
       return res.status(400).json({ error: 'Candidate name is required.' });
-    }
-
-    // Strict server-side validation: reject invalid or mismatched team/POC combinations
-    if (teamId && pocId && VALID_POCS_BY_TEAM[teamId]) {
-      if (!VALID_POCS_BY_TEAM[teamId].includes(pocId)) {
-        return res.status(400).json({
-          error: 'Unauthorized assignment: Recruiter / POC does not belong to the selected Marketing Team.',
-        });
-      }
     }
 
     const task = new Task(taskData);
@@ -394,24 +425,29 @@ app.post('/api/tasks', async (req, res) => {
         t.supportName.toLowerCase() === (task.techPerson || '').toLowerCase()
       ) || TECH_SUPPORT_TEAM[0];
 
+      const isShivam = task.teamId === 'team-shivam' || (task.teamName && task.teamName.includes('Shivam'));
+      const fallbackLeadId = isShivam ? 'u-1791911115518' : 'u-1791911058812';
+      const fallbackTeamName = isShivam ? 'Team Shivam' : 'Team Mukesh';
+
       const linkedFeedback = new Feedback({
         id: feedbackId,
+        taskId: task.id,
         date: task.date || new Date().toISOString().slice(0, 10),
         techSupport: task.codeName || assignedTse.supportName,
         techSupportId: assignedTse.id,
         techSupportEmail: assignedTse.email,
         employeeName: assignedTse.employeeName,
         candidateName: task.candidateName || 'Candidate',
-        candidateEmail: '',
-        recruiterName: task.recruiterName || 'Aditi Sharma',
-        pocId: task.pocId || 'u-poc-aditi',
-        teamId: task.teamId || 'team-mukesh',
-        teamLeadId: task.teamLeadId || 'u-tl-mukesh',
-        teamName: task.teamName || 'Team Mukesh',
+        candidateEmail: task.candidateEmail || '',
+        recruiterName: task.assignedSrName || task.recruiterName || 'Marketing Team',
+        pocId: task.assignedSrId || task.pocId || '',
+        teamId: task.teamId || (isShivam ? 'team-shivam' : 'team-mukesh'),
+        teamLeadId: task.teamLeadId || fallbackLeadId,
+        teamName: task.teamName || fallbackTeamName,
         jobRole: task.position || 'Software Engineer',
         company: task.companyName || 'Amazon',
-        round: task.taskType || 'TQC',
-        techSupportType: task.taskType || 'TQC',
+        round: task.taskType || 'Interview',
+        techSupportType: task.taskType || 'Interview',
         timestamp: new Date().toLocaleString('en-GB'),
         candidateFeedback: { submitted: false },
         marketingReview: null,
@@ -429,6 +465,18 @@ app.put('/api/tasks/:id', async (req, res) => {
   try {
     const updated = await Task.findOneAndUpdate({ id: req.params.id }, req.body, { new: true });
     if (!updated) return res.status(404).json({ error: 'Task not found' });
+
+    // Sync to linked feedback record if assignedSr or completion status changed
+    if (req.body.assignedSrName || req.body.assignedSrId) {
+      await Feedback.findOneAndUpdate(
+        { $or: [{ id: `fb-task-${updated.id}` }, { taskId: updated.id }] },
+        { 
+          recruiterName: req.body.assignedSrName, 
+          pocId: req.body.assignedSrId 
+        }
+      );
+    }
+
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: err.message });

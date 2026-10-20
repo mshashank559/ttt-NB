@@ -327,8 +327,6 @@ export const AppProvider = ({ children }) => {
     const taskType = task.taskType || 'Interview';
     const date = task.date || new Date().toISOString().slice(0, 10);
     const assignedTeam = MARKETING_TEAMS.find(t => t.id === task.teamId || t.name === task.teamName) || MARKETING_TEAMS[0];
-    const teamPocs = POC_USERS_BY_TEAM[assignedTeam.id] || [];
-    const assignedPoc = teamPocs.find(p => p.id === task.pocId || p.name === task.recruiterName) || teamPocs[0];
     const codeName = assignee?.codeName || getTseCodeName(assignee?.name);
 
     const newTask = {
@@ -355,8 +353,12 @@ export const AppProvider = ({ children }) => {
       teamId: assignedTeam.id,
       teamName: assignedTeam.name,
       teamLeadId: assignedTeam.leadId,
-      pocId: assignedPoc?.id || task.pocId || 'u-poc-aditi',
-      recruiterName: assignedPoc?.name || task.recruiterName || 'Aditi Sharma',
+      assignedSrId: task.assignedSrId || '',
+      assignedSrName: task.assignedSrName || '',
+      assignedSrEmail: task.assignedSrEmail || '',
+      pocId: task.assignedSrId || task.pocId || '',
+      recruiterName: task.assignedSrName || task.recruiterName || assignedTeam.name,
+      completionRemark: '',
       assigneeId: assignee?.id || task.assigneeId,
       createdById: creator?.id,
       timeline: [
@@ -381,8 +383,8 @@ export const AppProvider = ({ children }) => {
       employeeName: assignee?.name || matchingTse.employeeName,
       candidateName,
       candidateEmail: task.candidateEmail || '',
-      recruiterName: assignedPoc?.name || task.recruiterName || 'Aditi Sharma',
-      pocId: assignedPoc?.id || task.pocId || 'u-poc-aditi',
+      recruiterName: task.assignedSrName || task.recruiterName || assignedTeam.name,
+      pocId: task.assignedSrId || task.pocId || '',
       teamId: assignedTeam.id,
       teamLeadId: assignedTeam.leadId,
       teamName: assignedTeam.name,
@@ -440,24 +442,51 @@ export const AppProvider = ({ children }) => {
       const updated = { ...t, ...patch };
       if (note) {
         updated.timeline = [
-          ...t.timeline,
+          ...(t.timeline || []),
           { at: new Date().toISOString().slice(0, 10), event: note, by: currentUser?.name || 'System' },
         ];
       }
       return updated;
     }));
+
+    // Persist to MongoDB Atlas via PUT endpoint
+    fetch(`/api/tasks/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    }).catch(() => {});
+
     toast.success(note || 'Task updated.');
   }, [currentUser]);
+
+  const assignMarketingSr = useCallback((taskId, srUser) => {
+    if (!srUser) return;
+    const patch = {
+      assignedSrId: srUser.id,
+      assignedSrName: srUser.name,
+      assignedSrEmail: srUser.email,
+      pocId: srUser.id,
+      recruiterName: srUser.name,
+    };
+    updateTask(taskId, patch, `Assigned to Senior Recruiter ${srUser.name} by ${currentUser?.name || 'Marketing TL'}`);
+  }, [currentUser, updateTask]);
 
   const reassignTask = useCallback((id, newAssigneeId) => {
     const newUser = getUserById(newAssigneeId);
     updateTask(id, { assigneeId: newAssigneeId }, `Reassigned to ${newUser?.name}`);
-    toast.success('Task reassigned successfully.');
   }, [updateTask]);
 
-  const changeTaskStatus = useCallback((id, status) => {
-    updateTask(id, { status }, `Status changed to ${status}`);
-  }, [updateTask]);
+  const changeTaskStatus = useCallback((id, status, completionRemark) => {
+    const patch = { status };
+    if (completionRemark) {
+      patch.completionRemark = completionRemark;
+      patch.remark = completionRemark;
+    }
+    const note = status === 'Done' && completionRemark
+      ? `Task marked as Done by ${currentUser?.name || 'TSE'}: ${completionRemark}`
+      : `Status changed to ${status}`;
+    updateTask(id, patch, note);
+  }, [currentUser, updateTask]);
 
   const submitInterviewFeedback = useCallback((interviewId, feedback) => {
     setInterviews(prev => prev.map(iv => {
@@ -736,6 +765,7 @@ export const AppProvider = ({ children }) => {
     updateTask,
     reassignTask,
     changeTaskStatus,
+    assignMarketingSr,
     submitInterviewFeedback,
     updateInterviewStatus,
     markNotificationRead,
