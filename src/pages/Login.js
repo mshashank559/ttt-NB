@@ -5,6 +5,7 @@ import {
   Mail, Lock, Eye, EyeOff, MessageSquare, ChevronDown,
   X, Shield, Zap, Sparkles
 } from 'lucide-react';
+import { useApp } from '../context/AppContext';
 import { toast } from 'sonner';
 import { ROLES, USERS } from '../data/mockData';
 
