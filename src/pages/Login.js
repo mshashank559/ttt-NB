@@ -5,8 +5,8 @@ import {
   Mail, Lock, Eye, EyeOff, MessageSquare, ChevronDown,
   X, Shield, Zap, Sparkles
 } from 'lucide-react';
-import { useApp } from '../context/AppContext';
-import { ROLES } from '../data/mockData';
+import { toast } from 'sonner';
+import { ROLES, USERS } from '../data/mockData';
 
 // ============================================================================
 // APP STORE & GOOGLE PLAY BADGES (COMPACT VECTOR BADGES)
@@ -74,7 +74,7 @@ function NetBounceLogoHeader() {
 // MAIN SCROLL-FREE COMPACT B.WELL LOGIN COMPONENT
 // ============================================================================
 export default function Login() {
-  const { loginAs } = useApp();
+  const { loginAs, users } = useApp();
   const navigate = useNavigate();
   const [showRoles, setShowRoles] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -89,7 +89,33 @@ export default function Login() {
 
   const handleLogin = (e) => {
     e.preventDefault();
-    pick('management', 'u-shashank-01');
+    const cleanEmail = (email || '').trim().toLowerCase();
+    if (!cleanEmail) {
+      toast.error('Please enter your email address');
+      return;
+    }
+
+    const allUsers = users && users.length > 0 ? users : USERS;
+    const found = allUsers.find(u => (u.email || '').toLowerCase() === cleanEmail) ||
+      USERS.find(u => (u.email || '').toLowerCase() === cleanEmail);
+
+    if (found) {
+      if (password && found.password && found.password !== password) {
+        toast.error('Invalid password. Please check your credentials.');
+        return;
+      }
+      pick(found.role, found.id);
+      return;
+    }
+
+    // Also match if user entered name (e.g. "mukesh")
+    const foundByName = allUsers.find(u => (u.name || '').toLowerCase().includes(cleanEmail));
+    if (foundByName) {
+      pick(foundByName.role, foundByName.id);
+      return;
+    }
+
+    toast.error('No account found with this email. Please check your email or select from Demo accounts below.');
   };
 
   const roleCards = Object.values(ROLES);
