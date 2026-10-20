@@ -161,7 +161,7 @@ export default function CinematicIntro({ onComplete }) {
             />
           </motion.div>
 
-          {/* Smooth Expanding Brand Text: "Netbound Placement LLC" */}
+          {/* Smooth Expanding Brand Text: "NetBounce Placement LLP" */}
           <motion.div
             initial={{ width: 0, opacity: 0, x: -20 }}
             animate={{
@@ -176,7 +176,7 @@ export default function CinematicIntro({ onComplete }) {
             className="overflow-hidden whitespace-nowrap flex items-center"
           >
             <span className="font-semibold text-white tracking-wide text-2xl sm:text-3xl md:text-4xl lg:text-[44px] ml-5 sm:ml-7 md:ml-9 font-sans leading-none">
-              Netbound Placement LLC
+              NetBounce Placement LLP
             </span>
           </motion.div>
         </div>
