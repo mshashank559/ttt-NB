@@ -1,0 +1,22 @@
+{
+  "short_name": "NetBounce TTT",
+  "name": "Tech Team Tracker | NetBounce Operations",
+  "icons": [
+    {
+      "src": "/intro-assets/nb_logo.png",
+      "type": "image/png",
+      "sizes": "192x192 512x512",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/favicon.png",
+      "type": "image/png",
+      "sizes": "64x64 32x32",
+      "purpose": "any"
+    }
+  ],
+  "start_url": "/#/login",
+  "background_color": "#070C18",
+  "theme_color": "#0B1EE6",
+  "display": "standalone"
+}
