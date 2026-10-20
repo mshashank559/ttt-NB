@@ -506,9 +506,17 @@ const TaskDrawer = ({ task, onClose }) => {
   const { users, reassignTask, changeTaskStatus, assignMarketingSr, currentRole, currentUser, updateInterviewOutcome } = useApp();
   const assignee = users.find(u => u.id === task?.assigneeId);
   const creator = users.find(u => u.id === task?.createdById);
-  const tseUsers = users.filter(u => u.role === 'tse');
+  const tseUsers = (users || []).filter(u => u.role === 'tse');
   const canEdit = roleCanEditAny(currentRole) || task?.assigneeId === currentUser?.id;
   const [completionRemark, setCompletionRemark] = useState(task?.completionRemark || task?.remark || '');
+  const [selectedStatus, setSelectedStatus] = useState(task?.status || 'Pending');
+
+  useEffect(() => {
+    if (task) {
+      setCompletionRemark(task.completionRemark || task.remark || '');
+      setSelectedStatus(task.status || 'Pending');
+    }
+  }, [task]);
 
   const eligibleSrs = useMemo(() => {
     const allSrs = (users || []).filter(u => u.role === 'marketing_sr');
@@ -856,16 +864,17 @@ const TaskDrawer = ({ task, onClose }) => {
                 <div>
                   <label className="text-xs text-slate-600 font-semibold">Update Status</label>
                   <Select
-                    value={task.status}
+                    value={selectedStatus}
                     onValueChange={v => {
+                      setSelectedStatus(v);
                       if (v === 'Done') {
                         if (!completionRemark.trim()) {
-                          toast.error('Please enter completion remarks below before marking Done.');
+                          toast.info('Status set to Done. Please enter TSE completion remarks below to finish.');
                         } else {
                           changeTaskStatus(task.id, 'Done', completionRemark.trim());
                         }
                       } else {
-                        changeTaskStatus(task.id, v);
+                        changeTaskStatus(task.id, v, completionRemark.trim());
                       }
                     }}
                   >
@@ -892,41 +901,44 @@ const TaskDrawer = ({ task, onClose }) => {
                 )}
               </div>
 
-              {/* Completion remarks input */}
-              <div className="pt-2 border-t border-slate-200">
-                <label className="text-xs font-semibold text-slate-700 flex items-center justify-between">
-                  <span>TSE Completion Remarks</span>
-                  <span className="text-[10px] text-slate-500">Visible to all</span>
-                </label>
-                <div className="mt-1.5 flex gap-2">
-                  <Input
-                    data-testid="completion-remark-input"
-                    value={completionRemark}
-                    onChange={e => setCompletionRemark(e.target.value)}
-                    placeholder="Enter candidate evaluation remarks &amp; details..."
-                    className="bg-white border-slate-300 text-xs h-9"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!completionRemark.trim()) {
-                        toast.error('Please enter completion remarks before saving as Done.');
-                        return;
-                      }
-                      changeTaskStatus(task.id, 'Done', completionRemark.trim());
-                      toast.success('Task marked as Done with completion remarks!');
-                    }}
-                    className="px-3.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shrink-0 cursor-pointer transition-colors shadow-2xs"
-                  >
-                    Mark Done
-                  </button>
+              {/* Completion remarks input - ONLY appears when status is changed from Pending to any other status */}
+              {(selectedStatus !== 'Pending' || task.status !== 'Pending') && (
+                <div className="pt-2 border-t border-slate-200">
+                  <label className="text-xs font-semibold text-slate-700 flex items-center justify-between">
+                    <span>TSE Completion Remarks</span>
+                    <span className="text-[10px] text-slate-500">Visible to all</span>
+                  </label>
+                  <div className="mt-1.5 flex gap-2">
+                    <Input
+                      data-testid="completion-remark-input"
+                      value={completionRemark}
+                      onChange={e => setCompletionRemark(e.target.value)}
+                      placeholder="Enter candidate evaluation remarks & details..."
+                      className="bg-white border-slate-300 text-xs h-9"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const targetStatus = selectedStatus === 'Pending' ? 'Done' : selectedStatus;
+                        if (!completionRemark.trim()) {
+                          toast.error('Please enter completion remarks before saving.');
+                          return;
+                        }
+                        changeTaskStatus(task.id, targetStatus, completionRemark.trim());
+                        toast.success(`Task status updated to ${targetStatus} with remarks!`);
+                      }}
+                      className="px-3.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shrink-0 cursor-pointer transition-colors shadow-2xs"
+                    >
+                      {selectedStatus === 'Done' ? 'Mark Done' : 'Save Remarks'}
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           )}
 
-          {/* Milestone 6: Marketing TL & TSM Interview Outcome Selection */}
-          {(currentRole === 'marketing_tl' || currentRole === 'tsm' || currentRole === 'management' || currentRole === 'upper_management') && (
+          {/* Milestone 6: Marketing TL & TSM Interview Outcome Selection (ONLY visible when status is Done) */}
+          {(task.status === 'Done' || selectedStatus === 'Done') && (currentRole === 'marketing_tl' || currentRole === 'tsm' || currentRole === 'management' || currentRole === 'upper_management') && (
             <div className="p-4 rounded-xl bg-purple-50/70 border border-purple-200">
               <label className="text-xs text-purple-900 font-bold block mb-1.5 flex items-center justify-between">
                 <span>🎯 Interview Outcome Decision</span>
