@@ -1039,7 +1039,7 @@ export default function CandidateSaga() {
                 </h3>
 
                 <p className="mt-2 text-xs text-blue-100/75 leading-relaxed max-w-sm mx-auto">
-                  Your feedback has been securely logged into the NetBounce Placement LLP Tech Team Tracker.
+                  Your feedback has been securely logged into the NetBounce Placement LLC Tech Team Tracker.
                 </p>
 
                 <div className="mt-6 pt-5 border-t border-blue-500/20">
@@ -1062,7 +1062,7 @@ export default function CandidateSaga() {
       <footer className="relative z-10 w-full max-w-7xl mx-auto px-6 sm:px-10 py-5 flex flex-col sm:flex-row items-center justify-between text-[11px] text-blue-300/60 border-t border-blue-500/15">
         <div className="flex items-center gap-2">
           <span>Powered by</span>
-          <span className="text-white font-semibold">NetBounce Placement LLP</span>
+          <span className="text-white font-semibold">NetBounce Placement LLC</span>
           <span>•</span>
           <span className="text-blue-300 font-medium">Candidate SAGA</span>
         </div>

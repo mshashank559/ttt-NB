@@ -9,7 +9,7 @@ import { motion, AnimatePresence } from 'framer-motion';
  * 2. Real NB Logo: /intro-assets/nb_logo.png centered horizontally & vertically.
  * 3. Background Waves: Subtle dark navy & midnight-blue (#071426, #0B1F3A), translucent & fluid.
  * 4. White Circular Loader: Exactly 5 seconds beneath logo, silent (no text/timer).
- * 5. Brand Reveal at 5s: Spinner fades out, logo glides left, "NetBounce Placement LLP" reveals.
+ * 5. Brand Reveal at 5s: Spinner fades out, logo glides left, "NetBounce Placement LLC" reveals.
  * 6. Smooth Transition: Fade out to existing login/entry page without flicker or layout shift.
  */
 export default function CinematicIntro({ onComplete }) {
@@ -161,7 +161,7 @@ export default function CinematicIntro({ onComplete }) {
             />
           </motion.div>
 
-          {/* Smooth Expanding Brand Text: "NetBounce Placement LLP" */}
+          {/* Smooth Expanding Brand Text: "NetBounce Placement LLC" */}
           <motion.div
             initial={{ width: 0, opacity: 0, x: -20 }}
             animate={{
@@ -176,7 +176,7 @@ export default function CinematicIntro({ onComplete }) {
             className="overflow-hidden whitespace-nowrap flex items-center"
           >
             <span className="font-semibold text-white tracking-wide text-2xl sm:text-3xl md:text-4xl lg:text-[44px] ml-5 sm:ml-7 md:ml-9 font-sans leading-none">
-              NetBounce Placement LLP
+              NetBounce Placement LLC
             </span>
           </motion.div>
         </div>
