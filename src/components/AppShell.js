@@ -5,7 +5,7 @@ import {
   LayoutDashboard, ClipboardList, UserRoundCheck, CalendarRange, LineChart, Bell,
   Users, FileBarChart, Settings as SettingsIcon, UserCircle, Sliders, LogOut, Search,
   ChevronLeft, PanelLeft, Menu, X, Boxes, MessageSquareQuote,
-  Sun, Moon, Sparkles, ChevronDown, UserPlus,
+  Sparkles, ChevronDown, UserPlus,
 } from 'lucide-react';
 import AvatarPickerModal from './AvatarPickerModal';
 import NbAiPanel from './NbAiPanel';
@@ -347,7 +347,7 @@ const CommandPalette = () => {
 };
 
 const TopBar = ({ onOpenMobileNav, onOpenAvatarModal, onOpenAiPanel }) => {
-  const { currentUser, currentRole, logout, loginAs, notifications, unreadCount, markNotificationRead, markAllRead, setCmdOpen, theme, toggleTheme, userAvatar } = useApp();
+  const { currentUser, currentRole, logout, loginAs, notifications, unreadCount, markNotificationRead, markAllRead, setCmdOpen, userAvatar } = useApp();
   const location = useLocation();
   const navigate = useNavigate();
   const page = breadcrumbMap[location.pathname] || 'Dashboard';
@@ -388,22 +388,6 @@ const TopBar = ({ onOpenMobileNav, onOpenAvatarModal, onOpenAiPanel }) => {
         <div className="h-5 w-5 flex items-center justify-center p-0.5">
           <img src="/intro-assets/nb_mark_white.png" alt="NetBounce Logo" className="w-full h-full object-contain" />
         </div>
-      </button>
-
-      {/* Light / Dark Mode Toggle (Top Right Corner) */}
-      <button
-        type="button"
-        onClick={toggleTheme}
-        data-testid="theme-toggle-btn"
-        title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-        className="h-9 w-9 rounded-xl border border-slate-300 dark:border-white/15 bg-slate-100 dark:bg-[#131D33] hover:bg-slate-200/70 dark:hover:bg-[#182645] text-slate-700 dark:text-amber-400 flex items-center justify-center transition-all shadow-xs cursor-pointer"
-        aria-label="Toggle theme"
-      >
-        {theme === 'dark' ? (
-          <Sun size={17} className="text-amber-400 transition-transform duration-300 hover:rotate-45" />
-        ) : (
-          <Moon size={17} className="text-slate-700 transition-transform duration-300 hover:-rotate-12" />
-        )}
       </button>
 
       <Popover>

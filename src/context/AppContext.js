@@ -210,25 +210,22 @@ export const AppProvider = ({ children }) => {
     toast.success('Profile avatar updated!');
   }, []);
 
-  const [theme, setTheme] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('ttt_theme') || 'light';
-    }
-    return 'light';
-  });
+  const [theme] = useState('light');
 
   React.useEffect(() => {
-    const root = document.documentElement;
-    if (theme === 'dark') {
-      root.classList.add('dark');
-    } else {
-      root.classList.remove('dark');
+    if (typeof document !== 'undefined') {
+      document.documentElement.classList.remove('dark');
     }
-    localStorage.setItem('ttt_theme', theme);
-  }, [theme]);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.removeItem('ttt_theme');
+        localStorage.setItem('ttt_theme', 'light');
+      } catch (e) {}
+    }
+  }, []);
 
   const toggleTheme = useCallback(() => {
-    setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
+    // Dark mode disabled by project requirements
   }, []);
 
   const loginAs = useCallback((roleId, userId) => {
