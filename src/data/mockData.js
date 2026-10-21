@@ -543,7 +543,16 @@ export const PRIORITIES = ['Low', 'Medium', 'High', 'Urgent'];
 export const CATEGORIES = ['Technical Assessment', 'Coding Evaluation', 'Live Interview', 'Demo Session', 'Screening'];
 
 export const INITIAL_TASKS = [];
-export const INTERVIEW_STATUSES = ['Scheduled', 'Interview Completed', 'Feedback Pending', 'Cleared', 'Rejected', 'Hold'];
+export const INTERVIEW_STATUSES = [
+  'Scheduled',
+  'Interview Completed',
+  'Feedback Pending',
+  'Interview Completed - Feedback Received',
+  'Interview Completed - Feedback Pending',
+  'Cleared',
+  'Rejected',
+  'Hold'
+];
 export const INITIAL_INTERVIEWS = [];
 export const INITIAL_NOTIFICATIONS = [];
 export const INITIAL_EVENTS = [];
@@ -832,14 +841,16 @@ export const mapTaskToInterview = (t, feedbacks = []) => {
   let status = 'Scheduled';
   const outcome = t.interviewOutcome || fb?.marketingReview?.decision || fb?.candidateFeedback?.decision;
 
-  if (outcome === 'Cleared' || outcome === 'Passed' || outcome === 'Moved to Next Round' || outcome === 'Offer Received' || t.status === 'Cleared') {
+  if (t.interviewStatus) {
+    status = t.interviewStatus;
+  } else if (outcome === 'Cleared' || outcome === 'Passed' || outcome === 'Moved to Next Round' || outcome === 'Offer Received' || t.status === 'Cleared') {
     status = 'Cleared';
   } else if (outcome === 'Failed' || outcome === 'Rejected' || t.status === 'Rejected') {
     status = 'Rejected';
   } else if (outcome === 'Hold' || t.status === 'Hold') {
     status = 'Hold';
   } else if (t.status === 'Done' || t.status === 'Completed') {
-    status = hasSubmittedFeedback ? 'Interview Completed' : 'Feedback Pending';
+    status = hasSubmittedFeedback ? 'Interview Completed - Feedback Received' : 'Interview Completed - Feedback Pending';
   } else if (t.status === 'Cancel' || t.status === 'Not Possible') {
     status = 'Rejected';
   } else {
@@ -863,12 +874,14 @@ export const mapTaskToInterview = (t, feedbacks = []) => {
     taskId: t.id,
     candidateId: t.candidateId || `CND-${t.id}`,
     candidateName: t.candidateName || t.title?.split('—')?.[0]?.trim() || 'Candidate',
-    position: t.position || 'Software Engineer',
+    position: t.position || '',
     company: t.companyName || t.company || '',
     companyName: t.companyName || t.company || '',
     date,
     time,
     interviewDateTime: t.interviewDateTime,
+    interviewOutcome: outcome || null,
+    outcomeAuditTrail: t.outcomeAuditTrail || [],
     status,
     teamId: t.teamId,
     teamName: t.teamName,
@@ -885,7 +898,6 @@ export const mapTaskToInterview = (t, feedbacks = []) => {
     techSupportId: t.assigneeId,
     codeName: t.codeName,
     employeeName: t.techPerson,
-    interviewOutcome: outcome,
     feedback: fb,
     feedbackSubmitted: hasSubmittedFeedback,
     createdById: t.createdById,
@@ -901,7 +913,19 @@ export const anonymizeInterview = (interview) => ({
 export const getUserById = (id, users = USERS) => users.find(u => u.id === id);
 
 // ----------------- MILESTONE 2: EST TIMING & URGENCY HELPERS -----------------
-export const INTERVIEW_OUTCOMES = ['Passed', 'Failed', 'Moved to Next Round', 'Offer Received'];
+export const INTERVIEW_OUTCOMES = [
+  'Selected',
+  'Rejected',
+  'On Hold',
+  'Next Round',
+  'No Show',
+  'Offer Released',
+  'Joined',
+  'Passed',
+  'Failed',
+  'Moved to Next Round',
+  'Offer Received'
+];
 
 export function getInterviewTimingMeta(interviewDateTime) {
   if (!interviewDateTime) {

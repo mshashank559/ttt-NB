@@ -1104,8 +1104,10 @@ export default function Dashboard() {
       });
     };
 
-    const assigned = visibleInterviews.filter(i => i.interviewerId === currentUser?.id || true).slice(0, 20);
-    const evalRate = assigned.length ? Math.round((assigned.filter(i => i.feedbackSubmitted).length / assigned.length) * 100) : 0;
+    const teamInterviews = (visibleInterviews || []).filter(i => !tlTeam || i.marketingTeam === tlTeam || (tlTeam === 'team-mukesh' && (i.teamName || '').toLowerCase().includes('mukesh')) || (tlTeam === 'team-shivam' && (i.teamName || '').toLowerCase().includes('shivam')) || teamTasks.some(t => t.id === i.id));
+    const teamSelected = teamInterviews.filter(i => i.interviewOutcome === 'Selected' || i.status === 'Cleared').length;
+    const teamFeedbackPending = teamInterviews.filter(i => i.status === 'Interview Completed - Feedback Pending' || i.status === 'Feedback Pending').length;
+    const teamFeedbackReceived = teamInterviews.filter(i => i.status === 'Interview Completed - Feedback Received' || i.feedbackSubmitted).length;
 
     return (
       <div className="space-y-6">
@@ -1147,6 +1149,42 @@ export default function Dashboard() {
             subValue="Completed"
             percentage={teamTasks.length > 0 ? Math.round((teamTasks.filter(t => t.status === 'Done' || t.status === 'Completed').length / teamTasks.length) * 100) : 0}
             ringColor="#10b981"
+          />
+        </div>
+
+        {/* TL Team Real-Time Interview & Outcome KPIs */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <NeumorphicMetricCard
+            testid="kpi-tl-interviews"
+            label="Team Interviews"
+            value={teamInterviews.length}
+            subValue="Pipeline Total"
+            percentage={100}
+            ringColor="#8b5cf6"
+          />
+          <NeumorphicMetricCard
+            testid="kpi-tl-fb-received"
+            label="Feedback Received"
+            value={teamFeedbackReceived}
+            subValue="Evaluated"
+            percentage={teamInterviews.length > 0 ? Math.round((teamFeedbackReceived / teamInterviews.length) * 100) : 0}
+            ringColor="#10b981"
+          />
+          <NeumorphicMetricCard
+            testid="kpi-tl-fb-pending"
+            label="Feedback Pending"
+            value={teamFeedbackPending}
+            subValue="Action Pending"
+            percentage={teamInterviews.length > 0 ? Math.round((teamFeedbackPending / teamInterviews.length) * 100) : 0}
+            ringColor="#f59e0b"
+          />
+          <NeumorphicMetricCard
+            testid="kpi-tl-selected"
+            label="Candidates Selected"
+            value={teamSelected}
+            subValue="Cleared / Offers"
+            percentage={teamInterviews.length > 0 ? Math.round((teamSelected / teamInterviews.length) * 100) : 0}
+            ringColor="#3b82f6"
           />
         </div>
 

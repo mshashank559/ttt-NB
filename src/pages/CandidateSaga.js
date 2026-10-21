@@ -56,6 +56,7 @@ export default function CandidateSaga() {
   const paramCandidate = searchParams.get('candidate');
   const paramCompany = searchParams.get('company');
   const paramType = searchParams.get('type');
+  const paramTechnology = searchParams.get('technology') || searchParams.get('position') || searchParams.get('role') || '';
 
   const isFromDirectLink = Boolean(paramId || paramTseName);
 
@@ -93,14 +94,17 @@ export default function CandidateSaga() {
     return () => clearTimeout(timer);
   }, [introActive, introStage]);
 
-  const { addSagaFeedback, submitCandidateFeedback } = useApp() || {};
+  const { addSagaFeedback, submitCandidateFeedback, tasks } = useApp() || {};
 
-  // FORM DATA STATE (Pre-populated by default from NetBounce link params)
+  const matchingTask = tasks?.find(t => String(t.id) === String(paramId));
+  const initialJobRole = paramTechnology || matchingTask?.position || '';
+
+  // FORM DATA STATE (Pre-populated from NetBounce link params or task, empty if none)
   const [formData, setFormData] = useState({
     candidateName: paramCandidate || '',
     candidateEmail: '',
     recruiterName: paramRecruiter || RECRUITERS[0],
-    jobRole: 'Software Engineer',
+    jobRole: initialJobRole,
     interviewDate: new Date().toISOString().slice(0, 10),
     companyName: paramCompany || 'Client Assessment',
     interviewType: 'Technical Round',
@@ -113,9 +117,11 @@ export default function CandidateSaga() {
     linkRecordId: paramId || null,
   });
 
-  // Sync formData if searchParams change
+  // Sync formData if searchParams change or tasks load
   useEffect(() => {
-    if (paramRecruiter || paramTseName || paramCandidate || paramCompany || paramType || paramId) {
+    const task = tasks?.find(t => String(t.id) === String(paramId));
+    const tech = paramTechnology || task?.position || '';
+    if (paramRecruiter || paramTseName || paramCandidate || paramCompany || paramType || paramId || tech) {
       setFormData(prev => ({
         ...prev,
         candidateName: paramCandidate || prev.candidateName,
@@ -125,9 +131,10 @@ export default function CandidateSaga() {
         tseName: paramTseName || prev.tseName,
         tseId: paramTseId || prev.tseId,
         linkRecordId: paramId || prev.linkRecordId,
+        jobRole: prev.jobRole ? prev.jobRole : tech,
       }));
     }
-  }, [paramCandidate, paramRecruiter, paramCompany, paramType, paramTseName, paramTseId, paramId]);
+  }, [paramCandidate, paramRecruiter, paramCompany, paramType, paramTseName, paramTseId, paramId, paramTechnology, tasks]);
 
   const [errors, setErrors] = useState({});
 
@@ -154,7 +161,7 @@ export default function CandidateSaga() {
         err.candidateEmail = 'Please provide a valid email address';
       }
     } else if (step === 2) {
-      if (!formData.jobRole.trim()) err.jobRole = 'Please specify your job role';
+      if (!formData.jobRole || !formData.jobRole.trim()) err.jobRole = 'Please specify your Technology / Job Role (Required)';
       if (!formData.companyName.trim()) err.companyName = 'Please specify company name';
     }
     setErrors(err);
@@ -729,7 +736,9 @@ export default function CandidateSaga() {
 
                       {/* Job Role (Typeable Input) */}
                       <div>
-                        <label className="text-xs font-semibold text-blue-100">Job Role</label>
+                        <label className="text-xs font-semibold text-blue-100">
+                          Technology / Job Role <span className="text-rose-400">*</span>
+                        </label>
                         <input
                           type="text"
                           list="job-roles-datalist"

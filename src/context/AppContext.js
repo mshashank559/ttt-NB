@@ -179,6 +179,21 @@ export const AppProvider = ({ children }) => {
     };
 
     fetchLiveData();
+    const pollInterval = setInterval(fetchLiveData, 3500);
+
+    const handleFocus = () => {
+      fetchLiveData();
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('focus', handleFocus);
+    }
+
+    return () => {
+      clearInterval(pollInterval);
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('focus', handleFocus);
+      }
+    };
   }, []);
 
   // Sync feedbacks to localStorage whenever changed
@@ -564,17 +579,23 @@ export const AppProvider = ({ children }) => {
   }, [currentUser, updateTask, addMarketingReview]);
 
   const updateInterviewStatus = useCallback((id, status) => {
-    let patch = {};
+    let patch = { interviewStatus: status };
     if (status === 'Cleared') {
-      patch = { status: 'Done', interviewOutcome: 'Cleared' };
+      patch.status = 'Done';
+      patch.interviewOutcome = 'Selected';
     } else if (status === 'Rejected') {
-      patch = { status: 'Done', interviewOutcome: 'Failed' };
+      patch.status = 'Done';
+      patch.interviewOutcome = 'Rejected';
     } else if (status === 'Hold') {
-      patch = { status: 'Done', interviewOutcome: 'Hold' };
-    } else if (status === 'Interview Completed') {
-      patch = { status: 'Done' };
+      patch.status = 'Done';
+      patch.interviewOutcome = 'On Hold';
+    } else if (status === 'Interview Completed' || status === 'Interview Completed - Feedback Received') {
+      patch.status = 'Done';
+    } else if (status === 'Interview Completed - Feedback Pending' || status === 'Feedback Pending') {
+      patch.status = 'Done';
     } else if (status === 'Scheduled') {
-      patch = { status: 'Pending', interviewOutcome: null };
+      patch.status = 'Pending';
+      patch.interviewOutcome = null;
     }
     updateTask(id, patch, `Interview status changed to ${status}`);
     setInterviews(prev => prev.map(iv => iv.id === id ? { ...iv, status } : iv));
@@ -638,14 +659,35 @@ export const AppProvider = ({ children }) => {
   }, []);
 
   const updateInterviewOutcome = useCallback((taskId, outcome) => {
-    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, interviewOutcome: outcome } : t));
+    const currentTask = (tasks || []).find(t => t.id === taskId);
+    const oldOutcome = currentTask?.interviewOutcome || 'Unset';
+    const auditEntry = {
+      changedBy: currentUser?.name || 'User',
+      changedById: currentUser?.id,
+      role: currentRole,
+      at: new Date().toISOString(),
+      oldValue: oldOutcome,
+      newValue: outcome,
+    };
+    const auditTrail = [...(currentTask?.outcomeAuditTrail || []), auditEntry];
+
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, interviewOutcome: outcome, outcomeAuditTrail: auditTrail } : t));
+    setInterviews(prev => prev.map(iv => iv.id === taskId ? { ...iv, interviewOutcome: outcome, outcomeAuditTrail: auditTrail } : iv));
+
     fetch(`/api/tasks/${taskId}/outcome`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ outcome }),
+      body: JSON.stringify({ outcome, outcomeAuditTrail: auditTrail }),
     }).catch(() => {});
+
+    fetch(`/api/tasks/${taskId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ interviewOutcome: outcome, outcomeAuditTrail: auditTrail }),
+    }).catch(() => {});
+
     toast.success(`Interview outcome recorded: ${outcome}`);
-  }, []);
+  }, [tasks, currentUser, currentRole]);
 
   // Milestone 2: 30-Minute Interview Reminder Monitor for TSE
   React.useEffect(() => {

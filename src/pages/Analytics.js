@@ -14,13 +14,114 @@ const tipStyle = { backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', bord
 
 export default function Analytics() {
   const { tasks, visibleInterviews, users } = useApp();
-  const [filters, setFilters] = useState({ range: '7d', team: 'all', tse: 'all', status: 'all', priority: 'all' });
+  const [filters, setFilters] = useState({ range: '7d', team: 'all', tse: 'all', tsm: 'all', status: 'all', priority: 'all' });
 
-  const filtered = useMemo(() => tasks.filter(t =>
-    (filters.tse === 'all' || t.assigneeId === filters.tse) &&
-    (filters.status === 'all' || t.status === filters.status) &&
-    (filters.priority === 'all' || t.priority === filters.priority)
-  ), [tasks, filters]);
+  const tsms = useMemo(() => users.filter(u => u.role === 'tsm'), [users]);
+  const tses = useMemo(() => users.filter(u => u.role === 'tse'), [users]);
+
+  // Date cutoff
+  const cutoffDate = useMemo(() => {
+    if (filters.range === 'all') return null;
+    const days = filters.range === '7d' ? 7 : filters.range === '30d' ? 30 : 90;
+    const d = new Date();
+    d.setDate(d.getDate() - days);
+    return d.toISOString().slice(0, 10);
+  }, [filters.range]);
+
+  const filtered = useMemo(() => tasks.filter(t => {
+    if (filters.tse !== 'all' && t.assigneeId !== filters.tse && t.techPersonId !== filters.tse) return false;
+    if (filters.status !== 'all' && t.status !== filters.status) return false;
+    if (filters.priority !== 'all' && t.priority !== filters.priority) return false;
+    if (cutoffDate) {
+      const taskDate = t.date || t.dueDate || (t.createdAt && t.createdAt.slice(0, 10));
+      if (taskDate && taskDate < cutoffDate) return false;
+    }
+    return true;
+  }), [tasks, filters, cutoffDate]);
+
+  // Filtered interviews matching range, TSE, and TSM
+  const filteredInterviews = useMemo(() => {
+    return (visibleInterviews || []).filter(iv => {
+      if (cutoffDate) {
+        const ivDate = iv.date || (iv.createdAt && iv.createdAt.slice(0, 10));
+        if (ivDate && ivDate < cutoffDate) return false;
+      }
+      if (filters.tse !== 'all') {
+        const tseMatch = iv.interviewerId === filters.tse || iv.assigneeId === filters.tse || iv.techPersonId === filters.tse;
+        if (!tseMatch) return false;
+      }
+      if (filters.tsm !== 'all') {
+        const tsmUser = users.find(u => u.id === filters.tsm);
+        const ivTse = users.find(u => u.id === (iv.interviewerId || iv.assigneeId || iv.techPersonId));
+        if (tsmUser && ivTse && tsmUser.teamId && ivTse.teamId !== tsmUser.teamId) return false;
+      }
+      return true;
+    });
+  }, [visibleInterviews, cutoffDate, filters.tse, filters.tsm, users]);
+
+  // Outcome distribution KPIs (counts & percentages)
+  const outcomeStats = useMemo(() => {
+    const rawOutcomes = filteredInterviews.map(i => {
+      if (i.interviewOutcome) return i.interviewOutcome;
+      if (i.status === 'Cleared') return 'Selected';
+      if (i.status === 'Rejected') return 'Rejected';
+      if (i.status === 'Hold') return 'On Hold';
+      return null;
+    }).filter(Boolean);
+
+    const total = rawOutcomes.length;
+    const standardOutcomes = ['Selected', 'Rejected', 'On Hold', 'Next Round', 'No Show', 'Offer Released', 'Joined'];
+    
+    const dist = standardOutcomes.map(name => {
+      const count = rawOutcomes.filter(o => o === name).length;
+      const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+      return { name, count, pct };
+    });
+
+    return { total, dist };
+  }, [filteredInterviews]);
+
+  // TSE-wise performance based on outcomes received
+  const tsePerformance = useMemo(() => {
+    return tses.map(tse => {
+      const tseIvs = filteredInterviews.filter(iv =>
+        iv.interviewerId === tse.id || iv.assigneeId === tse.id || iv.techPersonId === tse.id
+      );
+      const total = tseIvs.length;
+      const pendingFb = tseIvs.filter(iv =>
+        iv.status === 'Interview Completed - Feedback Pending' ||
+        iv.status === 'Feedback Pending' ||
+        iv.status === 'Scheduled'
+      ).length;
+
+      const outcomes = tseIvs.map(iv => {
+        if (iv.interviewOutcome) return iv.interviewOutcome;
+        if (iv.status === 'Cleared') return 'Selected';
+        if (iv.status === 'Rejected') return 'Rejected';
+        if (iv.status === 'Hold') return 'On Hold';
+        return null;
+      }).filter(Boolean);
+
+      const outcomesCount = outcomes.length;
+      const selectedCount = outcomes.filter(o => ['Selected', 'Offer Released', 'Joined'].includes(o)).length;
+      const rejectedCount = outcomes.filter(o => o === 'Rejected').length;
+
+      const selectionRate = outcomesCount > 0 ? Math.round((selectedCount / outcomesCount) * 100) : 0;
+      const rejectionRate = outcomesCount > 0 ? Math.round((rejectedCount / outcomesCount) * 100) : 0;
+
+      return {
+        id: tse.id,
+        name: tse.name,
+        total,
+        outcomesCount,
+        selectedCount,
+        rejectedCount,
+        pendingFb,
+        selectionRate,
+        rejectionRate,
+      };
+    }).filter(p => filters.tse === 'all' || p.id === filters.tse);
+  }, [tses, filteredInterviews, filters.tse]);
 
   const trend = useMemo(() => {
     const daysCount = filters.range === '7d' ? 7 : filters.range === '30d' ? 14 : 20;
@@ -90,18 +191,28 @@ export default function Analytics() {
     <div className="space-y-6">
       <PageHeader title="Analytics & Performance" subtitle="Interactive dashboards for cross-team operational insights." />
       <SectionCard title="Filters">
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
           <Select value={filters.range} onValueChange={v => setFilters({...filters, range: v})}>
             <SelectTrigger data-testid="an-range" className="bg-white border-slate-300 text-slate-900"><SelectValue /></SelectTrigger>
             <SelectContent className="bg-white border-slate-200 text-slate-900">
-              <SelectItem value="7d">Last 7 days</SelectItem><SelectItem value="30d">Last 30 days</SelectItem><SelectItem value="90d">Last 90 days</SelectItem>
+              <SelectItem value="7d">Last 7 days</SelectItem>
+              <SelectItem value="30d">Last 30 days</SelectItem>
+              <SelectItem value="90d">Last 90 days</SelectItem>
+              <SelectItem value="all">All time</SelectItem>
             </SelectContent>
           </Select>
           <Select value={filters.tse} onValueChange={v => setFilters({...filters, tse: v})}>
             <SelectTrigger data-testid="an-tse" className="bg-white border-slate-300 text-slate-900"><SelectValue placeholder="TSE" /></SelectTrigger>
             <SelectContent className="bg-white border-slate-200 text-slate-900">
               <SelectItem value="all">All TSEs</SelectItem>
-              {users.filter(u => u.role === 'tse').map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}
+              {tses.map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={filters.tsm} onValueChange={v => setFilters({...filters, tsm: v})}>
+            <SelectTrigger data-testid="an-tsm" className="bg-white border-slate-300 text-slate-900"><SelectValue placeholder="TSM" /></SelectTrigger>
+            <SelectContent className="bg-white border-slate-200 text-slate-900">
+              <SelectItem value="all">All TSMs</SelectItem>
+              {tsms.map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={filters.status} onValueChange={v => setFilters({...filters, status: v})}>
@@ -124,6 +235,127 @@ export default function Analytics() {
               <SelectItem value="all">All teams</SelectItem><SelectItem value="ts">Tech Support</SelectItem><SelectItem value="mk">Marketing</SelectItem>
             </SelectContent>
           </Select>
+        </div>
+      </SectionCard>
+
+      {/* INTERVIEW OUTCOME DISTRIBUTION KPIS (COUNTS & PERCENTAGES) */}
+      <SectionCard
+        title="Interview Outcome Distribution & Rates"
+        subtitle={`Outcome metrics from ${outcomeStats.total} finalized interview records across the selected period and team.`}
+      >
+        <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-3 mb-6">
+          {outcomeStats.dist.map((o) => (
+            <div key={o.name} className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+              <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider truncate" title={o.name}>
+                {o.name}
+              </div>
+              <div className="mt-1 flex items-baseline justify-between">
+                <span className="text-xl font-bold text-slate-900">{o.count}</span>
+                <span className="text-xs font-semibold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">
+                  {o.pct}%
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-center">
+          <div className="h-64">
+            <ResponsiveContainer>
+              <PieChart>
+                <Pie
+                  data={outcomeStats.dist.filter(d => d.count > 0)}
+                  dataKey="count"
+                  nameKey="name"
+                  outerRadius={85}
+                  innerRadius={50}
+                  paddingAngle={3}
+                >
+                  {outcomeStats.dist.filter(d => d.count > 0).map((_, i) => (
+                    <Cell key={i} fill={palette[i % palette.length]} />
+                  ))}
+                </Pie>
+                <RTooltip contentStyle={tipStyle} />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div className="space-y-3">
+            <div className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Outcome Percentage Breakdown</div>
+            {outcomeStats.dist.map((o, i) => (
+              <div key={o.name}>
+                <div className="flex justify-between text-xs font-semibold text-slate-700 mb-1">
+                  <span>{o.name}</span>
+                  <span className="tabular-nums font-bold text-slate-900">{o.count} ({o.pct}%)</span>
+                </div>
+                <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all duration-300"
+                    style={{ width: `${o.pct}%`, backgroundColor: palette[i % palette.length] }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </SectionCard>
+
+      {/* TSE-WISE PERFORMANCE BASED ON OUTCOMES RECEIVED */}
+      <SectionCard
+        title="TSE Performance (Outcomes, Selection & Feedback Backlog)"
+        subtitle="Individual TSE outcome metrics: Selection rate, Rejection rate, and pending feedback count."
+      >
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs text-slate-600 uppercase tracking-wider border-b border-slate-200 font-semibold">
+                <th className="py-2.5">TSE Name</th>
+                <th>Total Assigned</th>
+                <th>Outcomes Received</th>
+                <th>Selected</th>
+                <th>Rejected</th>
+                <th>Selection Rate</th>
+                <th>Rejection Rate</th>
+                <th>Pending Feedback</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {tsePerformance.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="py-8 text-center text-xs text-slate-400 italic">No TSE records matching the filter.</td>
+                </tr>
+              ) : tsePerformance.map(tse => (
+                <tr key={tse.id} className="hover:bg-slate-50 transition-colors">
+                  <td className="py-2.5 font-semibold text-slate-900">{tse.name}</td>
+                  <td className="text-slate-700 font-medium">{tse.total}</td>
+                  <td className="text-slate-900 font-bold">{tse.outcomesCount}</td>
+                  <td className="text-emerald-700 font-bold">{tse.selectedCount}</td>
+                  <td className="text-rose-700 font-medium">{tse.rejectedCount}</td>
+                  <td>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-emerald-700 tabular-nums">{tse.selectionRate}%</span>
+                      <div className="w-16 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                        <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${tse.selectionRate}%` }} />
+                      </div>
+                    </div>
+                  </td>
+                  <td>
+                    <span className="text-xs font-semibold text-rose-600 tabular-nums">{tse.rejectionRate}%</span>
+                  </td>
+                  <td>
+                    {tse.pendingFb > 0 ? (
+                      <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                        {tse.pendingFb} pending
+                      </span>
+                    ) : (
+                      <span className="text-xs text-slate-400">0</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </SectionCard>
 

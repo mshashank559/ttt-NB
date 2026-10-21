@@ -59,7 +59,7 @@ function formatDateString(isoString) {
 }
 
 export default function CalendarPage() {
-  const { events, tasks, interviews } = useApp();
+  const { events, tasks, interviews, feedbacks } = useApp();
   const [view, setView] = useState('month');
   const [cursor, setCursor] = useState(new Date());
   
@@ -79,6 +79,14 @@ export default function CalendarPage() {
     // 2. Add or enrich with all tasks
     (tasks || []).forEach(t => {
       const id = `ev-t-${t.id}`;
+      const matchingFeedback = (feedbacks || []).find(f =>
+        String(f.linkRecordId || f.taskId) === String(t.id) ||
+        String(f.id) === `fb-task-${t.id}` ||
+        (f.candidateName && t.candidateName && f.candidateName.toLowerCase() === t.candidateName.toLowerCase())
+      );
+      const candidateFeedbackComment = matchingFeedback?.candidateFeedback?.comments || matchingFeedback?.comments || t.candidateClosingComment || t.candidateFeedback;
+      const candidateRating = matchingFeedback?.candidateFeedback?.performanceRating || matchingFeedback?.candidateFeedback?.experienceRating || matchingFeedback?.overallRating;
+
       map.set(id, {
         id,
         type: 'task',
@@ -94,12 +102,22 @@ export default function CalendarPage() {
         position: t.position,
         status: t.status,
         remark: t.remark,
+        candidateFeedbackComment,
+        candidateRating,
       });
     });
 
     // 3. Add or enrich with all interviews
     (interviews || []).forEach(i => {
       const id = `ev-i-${i.id}`;
+      const matchingFeedback = (feedbacks || []).find(f =>
+        String(f.linkRecordId || f.taskId) === String(i.id) ||
+        String(f.id) === `fb-task-${i.id}` ||
+        (f.candidateName && i.candidateName && f.candidateName.toLowerCase() === i.candidateName.toLowerCase())
+      );
+      const candidateFeedbackComment = matchingFeedback?.candidateFeedback?.comments || matchingFeedback?.comments || i.candidateFeedback?.comments;
+      const candidateRating = matchingFeedback?.candidateFeedback?.performanceRating || matchingFeedback?.candidateFeedback?.experienceRating || matchingFeedback?.overallRating;
+
       map.set(id, {
         id,
         type: 'interview',
@@ -116,11 +134,13 @@ export default function CalendarPage() {
         position: i.position,
         status: i.status,
         remark: i.feedbackSubmitted ? 'Feedback submitted' : 'Interview Scheduled',
+        candidateFeedbackComment,
+        candidateRating,
       });
     });
 
     return Array.from(map.values());
-  }, [events, tasks, interviews]);
+  }, [events, tasks, interviews, feedbacks]);
 
   // Group events by date key (YYYY-MM-DD)
   const eventByDate = useMemo(() => {
@@ -284,6 +304,7 @@ export default function CalendarPage() {
                       {evs.slice(0, 3).map(e => (
                         <div
                           key={e.id}
+                          title={e.candidateFeedbackComment ? `Candidate Feedback: "${e.candidateFeedbackComment}"` : e.title}
                           className={`w-full text-left rounded-md px-1.5 py-0.5 border text-[10px] leading-tight transition-colors ${typeColor[e.type] || 'bg-slate-100 text-slate-700 border-slate-200'}`}
                         >
                           {e.candidateName ? (
@@ -300,6 +321,12 @@ export default function CalendarPage() {
                                 <div className="text-[9px] opacity-75 truncate flex items-center gap-1 mt-0.5">
                                   <Building2 size={9} className="shrink-0" />
                                   <span className="truncate">{e.companyName}</span>
+                                </div>
+                              )}
+                              {e.candidateFeedbackComment && (
+                                <div className="text-[9px] text-emerald-700 truncate flex items-center gap-1 mt-0.5 font-medium">
+                                  <MessageSquare size={8} className="shrink-0 text-emerald-600" />
+                                  <span className="truncate">&ldquo;{e.candidateFeedbackComment}&rdquo;</span>
                                 </div>
                               )}
                             </div>
@@ -547,6 +574,24 @@ export default function CalendarPage() {
                       <div>
                         <span className="font-semibold text-amber-900">Remark / Notes: </span>
                         <span>{act.remark}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Candidate Feedback live display */}
+                  {act.candidateFeedbackComment && (
+                    <div className="flex items-start gap-2.5 p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-950 text-xs">
+                      <MessageSquare size={15} className="shrink-0 mt-0.5 text-emerald-600" />
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-emerald-900">Candidate Feedback</span>
+                          {act.candidateRating && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                              ★ {act.candidateRating}/5
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-emerald-900 italic font-medium">&ldquo;{act.candidateFeedbackComment}&rdquo;</p>
                       </div>
                     </div>
                   )}

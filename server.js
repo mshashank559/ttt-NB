@@ -73,7 +73,9 @@ const TaskSchema = new mongoose.Schema({
   description: String,
   notes: String,
   interviewDateTime: String,
-  interviewOutcome: String, // 'Passed', 'Failed', 'Moved to Next Round', 'Offer Received'
+  interviewOutcome: String,
+  interviewStatus: String,
+  outcomeAuditTrail: Array,
   isUrgent: Boolean,
   isElevated: Boolean,
   timeline: Array,
@@ -445,8 +447,8 @@ app.post('/api/tasks', async (req, res) => {
         teamId: task.teamId || (isShivam ? 'team-shivam' : 'team-mukesh'),
         teamLeadId: task.teamLeadId || fallbackLeadId,
         teamName: task.teamName || fallbackTeamName,
-        jobRole: task.position || 'Software Engineer',
-        company: task.companyName || 'Amazon',
+        jobRole: task.position || '',
+        company: task.companyName || '',
         round: task.taskType || 'Interview',
         techSupportType: task.taskType || 'Interview',
         timestamp: new Date().toLocaleString('en-GB'),
@@ -478,6 +480,19 @@ app.put('/api/tasks/:id', async (req, res) => {
       );
     }
 
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/tasks/:id/outcome', async (req, res) => {
+  try {
+    const { outcome, outcomeAuditTrail } = req.body;
+    const patch = { interviewOutcome: outcome };
+    if (outcomeAuditTrail) patch.outcomeAuditTrail = outcomeAuditTrail;
+    const updated = await Task.findOneAndUpdate({ id: req.params.id }, { $set: patch }, { new: true });
+    if (!updated) return res.status(404).json({ error: 'Task not found' });
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: err.message });

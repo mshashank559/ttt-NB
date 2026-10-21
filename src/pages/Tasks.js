@@ -533,7 +533,7 @@ const TaskDrawer = ({ task, onClose }) => {
     const recruiter = t.assignedSrName || t.recruiterName || 'Marketing SR';
     const tseId = t.assigneeId || 'TSE-NB-001';
     const tseName = t.techPerson || 'Technical Support';
-    const link = `${origin}${pathname}#/candidate-saga?id=fb-task-${t.id}&recruiter=${encodeURIComponent(recruiter)}&tseId=${encodeURIComponent(tseId)}&tseName=${encodeURIComponent(tseName)}&candidate=${encodeURIComponent(t.candidateName || '')}&company=${encodeURIComponent(t.companyName || '')}&type=${encodeURIComponent(t.taskType || 'Interview')}`;
+    const link = `${origin}${pathname}#/candidate-saga?id=fb-task-${t.id}&recruiter=${encodeURIComponent(recruiter)}&tseId=${encodeURIComponent(tseId)}&tseName=${encodeURIComponent(tseName)}&candidate=${encodeURIComponent(t.candidateName || '')}&company=${encodeURIComponent(t.companyName || '')}&type=${encodeURIComponent(t.taskType || 'Interview')}&technology=${encodeURIComponent(t.position || '')}`;
 
     try {
       if (navigator.clipboard) {
@@ -980,12 +980,21 @@ const TaskDrawer = ({ task, onClose }) => {
 };
 
 export default function Tasks() {
-  const { tasks, users, currentRole, currentUser } = useApp();
+  const { tasks, users, feedbacks, currentRole, currentUser } = useApp();
   const navigate = useNavigate();
   const location = useLocation();
-  const [filters, setFilters] = useState({ status: 'all', taskType: 'all', assignee: 'all', q: '' });
+  const [filters, setFilters] = useState({ status: 'all', taskType: 'all', assignee: 'all', sr: 'all', q: '' });
   const [createOpen, setCreateOpen] = useState(false);
   const [activeTask, setActiveTask] = useState(null);
+
+  const isMarketingTl = currentRole === 'marketing_tl';
+  const tlTeam = currentUser?.team || (
+    currentUser?.id === 'u-1791911058812' || (currentUser?.name || '').toLowerCase().includes('mukesh') ? 'team-mukesh' :
+    currentUser?.id === 'u-1791911115518' || (currentUser?.name || '').toLowerCase().includes('shivam') ? 'team-shivam' : ''
+  );
+  const myTeamSrs = useMemo(() => {
+    return (users || []).filter(u => u.role === 'marketing_sr' && (!tlTeam || u.team === tlTeam));
+  }, [users, tlTeam]);
 
   useEffect(() => {
     if (location.search.includes('create=1')) {
@@ -1003,6 +1012,7 @@ export default function Tasks() {
       const matchStatus = filters.status === 'all' || t.status === filters.status;
       const matchType = filters.taskType === 'all' || t.taskType === filters.taskType;
       const matchAssignee = filters.assignee === 'all' || t.assigneeId === filters.assignee;
+      const matchSr = !isMarketingTl || filters.sr === 'all' || t.assignedSrId === filters.sr;
       const query = filters.q.toLowerCase().trim();
       const matchQ = !query ||
         (t.candidateName && t.candidateName.toLowerCase().includes(query)) ||
@@ -1013,9 +1023,9 @@ export default function Tasks() {
         (t.remark && t.remark.toLowerCase().includes(query)) ||
         (t.taskType && t.taskType.toLowerCase().includes(query)) ||
         (t.id && t.id.toLowerCase().includes(query));
-      return matchStatus && matchType && matchAssignee && matchQ;
+      return matchStatus && matchType && matchAssignee && matchSr && matchQ;
     });
-  }, [tasks, filters, currentRole, currentUser]);
+  }, [tasks, filters, currentRole, currentUser, isMarketingTl]);
 
   // Milestone 2: Automated Priority Sorting (Urgent & Elevated at the top)
   const sortedTasks = useMemo(() => {
@@ -1047,7 +1057,7 @@ export default function Tasks() {
               data-testid="task-filter-search"
               value={filters.q}
               onChange={e => setFilters({ ...filters, q: e.target.value })}
-              placeholder="Search candidate, company, position, tech person, remark..."
+              placeholder="Search candidate, company, position, tech person, comment..."
               className="pl-9 bg-white border-slate-300 text-slate-900 placeholder:text-slate-400"
             />
           </div>
@@ -1069,7 +1079,23 @@ export default function Tasks() {
               {TASK_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
             </SelectContent>
           </Select>
-          {currentRole !== 'tse' && (
+          
+          {/* Requirement 2: For Marketing TL, show Senior Recruiters filter instead of Tech Persons */}
+          {isMarketingTl ? (
+            <Select value={filters.sr} onValueChange={v => setFilters({ ...filters, sr: v })}>
+              <SelectTrigger data-testid="task-filter-sr" className="bg-white border-slate-300 text-slate-900">
+                <SelectValue placeholder="All Senior Recruiters" />
+              </SelectTrigger>
+              <SelectContent className="bg-white border-slate-200 text-slate-900">
+                <SelectItem value="all">All Senior Recruiters</SelectItem>
+                {myTeamSrs.map(sr => (
+                  <SelectItem key={sr.id} value={sr.id}>
+                    {sr.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : currentRole !== 'tse' && (
             <Select value={filters.assignee} onValueChange={v => setFilters({ ...filters, assignee: v })}>
               <SelectTrigger data-testid="task-filter-assignee" className="bg-white border-slate-300 text-slate-900">
                 <SelectValue placeholder="All Tech Persons" />
@@ -1097,23 +1123,29 @@ export default function Tasks() {
               <thead className="sticky top-0 bg-slate-50 border-b border-slate-200 z-10">
                 <tr className="text-left text-xs text-slate-600 uppercase tracking-wider">
                   <th className="py-3 px-4 font-semibold">Date / EST Timing</th>
-                  <th className="py-3 px-4 font-semibold">{roleIsMarketing(currentRole) ? 'Tech ID' : 'Tech Person'}</th>
+                  <th className="py-3 px-4 font-semibold">
+                    {isMarketingTl ? 'Pseudo Name' : (roleIsMarketing(currentRole) ? 'Tech ID' : 'Tech Person')}
+                  </th>
                   <th className="py-3 px-3 font-semibold">Duration</th>
                   <th className="py-3 px-3 font-semibold">Task</th>
                   <th className="py-3 px-4 font-semibold">Candidate Name</th>
                   <th className="py-3 px-4 font-semibold">Position</th>
                   <th className="py-3 px-4 font-semibold">Company name</th>
                   <th className="py-3 px-4 font-semibold">Status / Outcome</th>
-                  <th className="py-3 px-4 font-semibold">Remark</th>
+                  <th className="py-3 px-4 font-semibold">Comment</th>
+                  <th className="py-3 px-4 font-semibold">Candidate Feedback</th>
                 </tr>
               </thead>
               <tbody>
                 {sortedTasks.map(t => {
                   const a = users.find(u => u.id === t.assigneeId);
                   const isMarketing = roleIsMarketing(currentRole);
-                  const techName = isMarketing
-                    ? (a?.empId || a?.tttNbId || t.techPersonId || t.assigneeId || 'TSE-ID')
-                    : (a?.name || t.techPerson || 'Unassigned');
+                  const pseudoName = t.codeName || a?.codeName || getTseCodeName(a?.name || t.techPerson) || 'TSE-Code-***';
+                  const techName = isMarketingTl
+                    ? pseudoName
+                    : (isMarketing
+                      ? (a?.empId || a?.tttNbId || t.techPersonId || t.assigneeId || 'TSE-ID')
+                      : (a?.name || t.techPerson || 'Unassigned'));
                   const timing = t.interviewDateTime ? getInterviewTimingMeta(t.interviewDateTime) : null;
 
                   return (
@@ -1154,7 +1186,7 @@ export default function Tasks() {
                         )}
                       </td>
 
-                      {/* Tech Person */}
+                      {/* Tech Person / Pseudo Name */}
                       <td className="py-3 px-4 text-slate-900">
                         <div className="flex items-center gap-2">
                           <span className="h-6 w-6 rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold flex items-center justify-center shrink-0">
@@ -1204,14 +1236,31 @@ export default function Tasks() {
                         </div>
                       </td>
 
-                      {/* Remark */}
-                      <td className="py-3 px-4 text-xs text-slate-500 max-w-[200px] truncate" title={t.remark}>
+                      {/* Comment (formerly Remark) */}
+                      <td className="py-3 px-4 text-xs text-slate-600 max-w-[200px] truncate" title={t.remark}>
                         {t.remark ? (
                           <span className="text-amber-800 font-medium">{t.remark}</span>
                         ) : (
                           <span className="text-slate-400">—</span>
                         )}
                       </td>
+
+                      {/* Candidate Feedback */}
+                      {(() => {
+                        const fb = (feedbacks || []).find(f => f.taskId === t.id || (t.candidateName && (f.candidateName || '').toLowerCase() === t.candidateName.toLowerCase()));
+                        const closingComment = fb?.candidateFeedback?.closingComment || fb?.candidateClosingComment || fb?.candidateFeedback?.additionalFeedback;
+                        return (
+                          <td className="py-3 px-4 text-xs max-w-[220px]" title={closingComment || 'No feedback submitted yet'}>
+                            {closingComment ? (
+                              <span className="text-emerald-800 font-semibold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 line-clamp-2 block leading-relaxed">
+                                💬 {closingComment}
+                              </span>
+                            ) : (
+                              <span className="text-slate-400 italic">Pending</span>
+                            )}
+                          </td>
+                        );
+                      })()}
                     </motion.tr>
                   );
                 })}
