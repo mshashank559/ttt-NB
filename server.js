@@ -474,14 +474,28 @@ app.put('/api/tasks/:id', async (req, res) => {
     const updated = await Task.findOneAndUpdate({ id: req.params.id }, req.body, { new: true });
     if (!updated) return res.status(404).json({ error: 'Task not found' });
 
-    // Sync to linked feedback record if assignedSr or completion status changed
-    if (req.body.assignedSrName || req.body.assignedSrId) {
+    // Sync to linked feedback record when assignedSr, TSE assignment, or position changed
+    const feedbackPatch = {};
+    if (req.body.assignedSrName) feedbackPatch.recruiterName = req.body.assignedSrName;
+    if (req.body.assignedSrId) feedbackPatch.pocId = req.body.assignedSrId;
+    if (req.body.position) feedbackPatch.jobRole = req.body.position;
+    if (req.body.companyName) feedbackPatch.company = req.body.companyName;
+    if (req.body.candidateName) feedbackPatch.candidateName = req.body.candidateName;
+
+    if (req.body.assigneeId || req.body.techPerson) {
+      const { tseRealName, tseCodeName } = await resolveTseAndTsm(
+        req.body.assigneeId || updated.assigneeId,
+        req.body.techPerson || updated.techPerson
+      );
+      feedbackPatch.techSupport = tseCodeName;
+      feedbackPatch.techSupportId = updated.techPersonId || req.body.techPersonId || tseCodeName;
+      feedbackPatch.employeeName = tseRealName;
+    }
+
+    if (Object.keys(feedbackPatch).length > 0) {
       await Feedback.findOneAndUpdate(
         { $or: [{ id: `fb-task-${updated.id}` }, { taskId: updated.id }] },
-        { 
-          recruiterName: req.body.assignedSrName, 
-          pocId: req.body.assignedSrId 
-        }
+        { $set: feedbackPatch }
       );
     }
 
@@ -586,6 +600,11 @@ async function resolveTseAndTsm(tseIdentifier, employeeName) {
 
 app.post('/api/feedbacks', async (req, res) => {
   try {
+    const callerRole = req.headers['x-user-role'] || req.body.callerRole;
+    if (callerRole === 'tsm' || callerRole === 'tse') {
+      return res.status(403).json({ error: 'TSM is not authorized to generate Candidate SAGA feedback links.' });
+    }
+
     const feedback = new Feedback(req.body);
     await feedback.save();
 
@@ -699,6 +718,11 @@ app.put('/api/feedbacks/:id/candidate', async (req, res) => {
 // Marketing Review Submission
 app.put('/api/feedbacks/:id/marketing', async (req, res) => {
   try {
+    const callerRole = req.headers['x-user-role'] || req.body.role;
+    if (callerRole === 'marketing_tl') {
+      return res.status(403).json({ error: 'Marketing TL is not authorized to submit internal TSE reviews.' });
+    }
+
     const reviewData = req.body;
     const nowFormatted = new Date().toLocaleString('en-GB', {
       day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',

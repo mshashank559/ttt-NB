@@ -10,7 +10,7 @@ import { toast } from 'sonner';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip as RTooltip, CartesianGrid, BarChart, Bar, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 import { useApp } from '../context/AppContext';
 import { KpiCard, PageHeader, StatusBadge, TaskTypeBadge, SectionCard, EmptyState, ArcGaugeCard, NeumorphicMetricCard, CircularProgressRing } from '../components/common';
-import { ROLES, USERS, getInterviewTimingMeta, getSmartTseRecommendations, roleIsMarketing } from '../data/mockData';
+import { ROLES, USERS, TECH_SUPPORT_TEAM, getInterviewTimingMeta, getSmartTseRecommendations, roleIsMarketing } from '../data/mockData';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
@@ -86,7 +86,7 @@ const InterviewFunnel = ({ interviews }) => {
 };
 
 export default function Dashboard() {
-  const { currentRole, currentUser, tasks, visibleInterviews, interviews, users, feedbacks, slaTickets, updateSlaTicket, assignMarketingSr } = useApp();
+  const { currentRole, currentUser, tasks, visibleInterviews, interviews, users, feedbacks, slaTickets, updateSlaTicket, assignMarketingSr, reassignTask } = useApp();
   const navigate = useNavigate();
 
   const [selectedWorkloadDate, setSelectedWorkloadDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -892,18 +892,26 @@ export default function Dashboard() {
               <thead>
                 <tr className="text-left text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-white/10">
                   <th className="py-2.5 font-bold">Date</th>
-                  <th className="font-bold">Tech Person</th>
+                  <th className="font-bold">Tech Person (TSE)</th>
                   <th className="font-bold">Task</th>
                   <th className="font-bold">Candidate Name</th>
                   <th className="font-bold">Position</th>
                   <th className="font-bold">Company</th>
                   <th className="font-bold">Status</th>
+                  <th className="font-bold text-right">Assign TSE</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-white/5">
                 {tasks.slice(0, 8).map(t => {
                   const a = users.find(u => u.id === t.assigneeId);
-                  const techName = a?.name || t.techPerson || 'Unassigned';
+                  const matchingTse = TECH_SUPPORT_TEAM.find(tse => 
+                    tse.id === t.assigneeId || 
+                    (a && tse.employeeName.toLowerCase().includes(a.name.toLowerCase())) ||
+                    tse.supportName.toLowerCase() === (a?.codeName || t.techPerson || '').toLowerCase()
+                  );
+                  const codeName = a?.codeName || matchingTse?.supportName || t.techPerson || 'Unassigned';
+                  const realName = a?.name || matchingTse?.employeeName || (codeName !== 'Unassigned' ? codeName : '');
+
                   return (
                     <tr
                       key={t.id}
@@ -911,12 +919,21 @@ export default function Dashboard() {
                       onClick={() => navigate('/tasks')}
                     >
                       <td className="py-2.5 mono text-xs text-slate-600 dark:text-slate-400 whitespace-nowrap">{t.date || t.dueDate}</td>
-                      <td className="text-slate-800 dark:text-slate-200">
-                        <div className="flex items-center gap-1.5">
-                          <span className="h-6 w-6 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-[10px] font-bold flex items-center justify-center">
-                            {techName.split(' ').map(p => p[0]).slice(0, 2).join('')}
+                      <td className="text-slate-800 dark:text-slate-200 py-2.5">
+                        <div className="flex items-center gap-2">
+                          <span className="h-7 w-7 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-[10px] font-bold flex items-center justify-center shrink-0">
+                            {codeName.slice(0, 2).toUpperCase()}
                           </span>
-                          <span className="text-xs font-semibold">{techName}</span>
+                          <div>
+                            <div className="text-xs font-bold text-slate-900 dark:text-white leading-tight">
+                              {codeName}
+                            </div>
+                            {realName && realName !== codeName && (
+                              <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+                                {realName}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </td>
                       <td><TaskTypeBadge value={t.taskType || t.category} /></td>
@@ -927,6 +944,30 @@ export default function Dashboard() {
                       <td className="text-xs text-slate-600 dark:text-slate-400">{t.position || '—'}</td>
                       <td className="text-xs font-medium text-slate-800 dark:text-slate-200">{t.companyName || '—'}</td>
                       <td><StatusBadge value={t.status} /></td>
+                      <td className="py-2.5 text-right" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-end">
+                          <Select
+                            value={t.assigneeId || ''}
+                            onValueChange={(val) => {
+                              reassignTask(t.id, val);
+                            }}
+                          >
+                            <SelectTrigger className="h-8 text-xs bg-white dark:bg-slate-900 border-slate-300 dark:border-white/20 w-36 focus:ring-1 focus:ring-blue-500">
+                              <SelectValue placeholder="Assign TSE" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 text-slate-900 dark:text-white">
+                              {users.filter(u => u.role === 'tse').map(u => (
+                                <SelectItem key={u.id} value={u.id} className="text-xs">
+                                  <span className="font-bold">{u.codeName || u.name}</span>
+                                  {u.name && u.codeName && u.name !== u.codeName && (
+                                    <span className="text-[10px] text-slate-400 ml-1">({u.name})</span>
+                                  )}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </td>
                     </tr>
                   );
                 })}

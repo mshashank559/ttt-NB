@@ -28,11 +28,17 @@ const RECRUITERS = [
 ];
 
 const JOB_ROLES = [
+  'Data Science',
+  'DS',
+  'Data Analytics',
   'Software Engineer',
   'Tech Support Engineer',
   'Technical Support Specialist',
   'Solutions Architect',
   'Customer Support Representative',
+  'Frontend Developer',
+  'Backend Developer',
+  'Full Stack Engineer',
   'Other',
 ];
 
@@ -94,10 +100,12 @@ export default function CandidateSaga() {
     return () => clearTimeout(timer);
   }, [introActive, introStage]);
 
-  const { addSagaFeedback, submitCandidateFeedback, tasks } = useApp() || {};
+  const { addSagaFeedback, submitCandidateFeedback, tasks, feedbacks } = useApp() || {};
 
-  const matchingTask = tasks?.find(t => String(t.id) === String(paramId));
-  const initialJobRole = paramTechnology || matchingTask?.position || '';
+  const rawTaskId = (paramId || '').replace(/^fb-task-/, '');
+  const matchingTask = (tasks || []).find(t => String(t.id) === String(rawTaskId) || String(t.id) === String(paramId));
+  const matchingFeedback = (feedbacks || []).find(f => f.id === paramId || f.taskId === rawTaskId);
+  const initialJobRole = paramTechnology || matchingFeedback?.jobRole || matchingTask?.position || '';
 
   // FORM DATA STATE (Pre-populated from NetBounce link params or task, empty if none)
   const [formData, setFormData] = useState({
@@ -117,10 +125,12 @@ export default function CandidateSaga() {
     linkRecordId: paramId || null,
   });
 
-  // Sync formData if searchParams change or tasks load
+  // Sync formData if searchParams change or tasks/feedbacks load
   useEffect(() => {
-    const task = tasks?.find(t => String(t.id) === String(paramId));
-    const tech = paramTechnology || task?.position || '';
+    const rId = (paramId || '').replace(/^fb-task-/, '');
+    const task = (tasks || []).find(t => String(t.id) === String(rId) || String(t.id) === String(paramId));
+    const fb = (feedbacks || []).find(f => f.id === paramId || f.taskId === rId);
+    const tech = paramTechnology || fb?.jobRole || task?.position || '';
     if (paramRecruiter || paramTseName || paramCandidate || paramCompany || paramType || paramId || tech) {
       setFormData(prev => ({
         ...prev,
@@ -134,7 +144,7 @@ export default function CandidateSaga() {
         jobRole: prev.jobRole ? prev.jobRole : tech,
       }));
     }
-  }, [paramCandidate, paramRecruiter, paramCompany, paramType, paramTseName, paramTseId, paramId, paramTechnology, tasks]);
+  }, [paramCandidate, paramRecruiter, paramCompany, paramType, paramTseName, paramTseId, paramId, paramTechnology, tasks, feedbacks]);
 
   const [errors, setErrors] = useState({});
 

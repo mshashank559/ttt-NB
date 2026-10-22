@@ -19,6 +19,7 @@ import {
   sanitizeForIdentityPrivacy,
   anonymizeInterview,
   getUserById,
+  getTseId,
 } from '../data/mockData';
 import { DEFAULT_AVATAR } from '../data/avatars';
 
@@ -494,9 +495,42 @@ export const AppProvider = ({ children }) => {
   }, [currentUser, currentRole, tasks, updateTask]);
 
   const reassignTask = useCallback((id, newAssigneeId) => {
-    const newUser = getUserById(newAssigneeId);
-    updateTask(id, { assigneeId: newAssigneeId }, `Reassigned to ${newUser?.name}`);
-  }, [updateTask]);
+    const newUser = users.find(u => u.id === newAssigneeId) || getUserById(newAssigneeId);
+    if (!newUser) return;
+
+    // Resolve code name, real name, and authoritative official TSE ID
+    const matchingTse = TECH_SUPPORT_TEAM.find(t =>
+      t.id === newUser.id ||
+      t.employeeName.toLowerCase().includes((newUser.name || '').toLowerCase()) ||
+      t.supportName.toLowerCase() === (newUser.codeName || newUser.name || '').toLowerCase()
+    );
+
+    const codeName = newUser.codeName || matchingTse?.supportName || newUser.name;
+    const realName = newUser.name || matchingTse?.employeeName || codeName;
+    const officialId = newUser.empId || newUser.tttNbId || matchingTse?.id || getTseId(codeName) || getTseId(realName);
+
+    const patch = {
+      assigneeId: newAssigneeId,
+      techPerson: codeName,
+      codeName: codeName,
+      techPersonId: officialId,
+    };
+
+    updateTask(id, patch, `Reassigned to ${codeName} (${realName})`);
+
+    // Synchronously sync to linked feedback record in state
+    updateFeedbacksWithStorage(prev => prev.map(f => {
+      if (f.taskId === id || f.id === `fb-task-${id}`) {
+        return {
+          ...f,
+          techSupport: codeName,
+          techSupportId: officialId,
+          employeeName: realName,
+        };
+      }
+      return f;
+    }));
+  }, [users, updateTask, updateFeedbacksWithStorage]);
 
   const changeTaskStatus = useCallback((id, status, completionRemark) => {
     const patch = { status };
@@ -511,6 +545,11 @@ export const AppProvider = ({ children }) => {
   }, [currentUser, updateTask]);
 
   const addMarketingReview = useCallback((feedbackId, reviewData) => {
+    if (currentRole === 'marketing_tl') {
+      toast.error('Marketing TL is not authorized to submit internal TSE reviews.');
+      return;
+    }
+
     updateFeedbacksWithStorage(prev => prev.map(item => {
       if (item.id !== feedbackId) return item;
       return {
@@ -527,12 +566,15 @@ export const AppProvider = ({ children }) => {
     // Update in MongoDB Atlas
     fetch(`/api/feedbacks/${feedbackId}/marketing`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(reviewData),
+      headers: { 
+        'Content-Type': 'application/json',
+        'x-user-role': currentRole || '',
+      },
+      body: JSON.stringify({ ...reviewData, role: currentRole }),
     }).catch(() => { });
 
     toast.success('Marketing Review saved successfully.');
-  }, [currentUser, updateFeedbacksWithStorage]);
+  }, [currentRole, currentUser, updateFeedbacksWithStorage]);
 
   const submitInterviewFeedback = useCallback((interviewId, feedback) => {
     const outcome = feedback.decision; // 'Cleared', 'Rejected', 'Hold', etc.
@@ -835,17 +877,25 @@ export const AppProvider = ({ children }) => {
   }, [updateFeedbacksWithStorage, users, addSlaTicket]);
 
   const createPendingFeedbackLink = useCallback((newRecord) => {
+    if (currentRole === 'tsm' || currentRole === 'tse') {
+      toast.error('TSM is not authorized to generate Candidate SAGA feedback links.');
+      return;
+    }
+
     updateFeedbacksWithStorage(prev => [newRecord, ...prev]);
 
     // Save in MongoDB Atlas
     fetch('/api/feedbacks', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newRecord),
+      headers: { 
+        'Content-Type': 'application/json',
+        'x-user-role': currentRole || '',
+      },
+      body: JSON.stringify({ ...newRecord, callerRole: currentRole }),
     }).catch(() => { });
 
     toast.success(`Feedback link created for ${newRecord.candidateName || 'Candidate'}`);
-  }, [updateFeedbacksWithStorage]);
+  }, [currentRole, updateFeedbacksWithStorage]);
 
   // Centrally Scoped Datasets Enforcing Role-Based Visibility, Team Isolation & Identity Privacy
   const scopedTasks = useMemo(() => {

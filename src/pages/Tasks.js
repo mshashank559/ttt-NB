@@ -5,7 +5,7 @@ import { Plus, Search, UserRound, Calendar as CalIcon, Clock, Building2, Briefca
 import { toast } from 'sonner';
 import { useApp } from '../context/AppContext';
 import { PageHeader, StatusBadge, TaskTypeBadge, SectionCard, EmptyState } from '../components/common';
-import { TASK_TYPES, TASK_STATUSES, MARKETING_TEAMS, getTseCodeName, getTsmCodeName, roleIsMarketing, getInterviewTimingMeta, sortTasksByInterviewPriority, getSmartTseRecommendations, INTERVIEW_OUTCOMES } from '../data/mockData';
+import { TASK_TYPES, TASK_STATUSES, MARKETING_TEAMS, getTseCodeName, getTsmCodeName, roleIsMarketing, getInterviewTimingMeta, sortTasksByInterviewPriority, getSmartTseRecommendations, INTERVIEW_OUTCOMES, TSE_IDS, getTseId } from '../data/mockData';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
@@ -528,12 +528,22 @@ const TaskDrawer = ({ task, onClose }) => {
   }, [users, task?.teamId]);
 
   const handleCopyFeedbackLink = (t) => {
+    if (['tsm', 'tse'].includes(currentRole)) {
+      toast.error('TSM is not authorized to generate Candidate SAGA feedback links.');
+      return;
+    }
     const origin = window.location.origin;
     const pathname = window.location.pathname;
     const recruiter = t.assignedSrName || t.recruiterName || 'Marketing SR';
-    const tseId = t.assigneeId || 'TSE-NB-001';
-    const tseName = t.techPerson || 'Technical Support';
-    const link = `${origin}${pathname}#/candidate-saga?id=fb-task-${t.id}&recruiter=${encodeURIComponent(recruiter)}&tseId=${encodeURIComponent(tseId)}&tseName=${encodeURIComponent(tseName)}&candidate=${encodeURIComponent(t.candidateName || '')}&company=${encodeURIComponent(t.companyName || '')}&type=${encodeURIComponent(t.taskType || 'Interview')}&technology=${encodeURIComponent(t.position || '')}`;
+
+    // Authoritative TSE lookup
+    const assigneeUser = (users || []).find(u => u.id === t.assigneeId || u.empId === t.assigneeId || u.tttNbId === t.assigneeId) ||
+                         (users || []).find(u => u.name?.toLowerCase() === (t.techPerson || '').toLowerCase());
+    const tseCodeName = assigneeUser?.codeName || assigneeUser?.name || t.techPerson || 'Technical Support';
+    const officialTseId = assigneeUser?.empId || assigneeUser?.tttNbId || TSE_IDS[tseCodeName] || t.assigneeId || 'TTT-NB-TSE';
+    const jobRole = t.position || 'Software Engineer';
+
+    const link = `${origin}${pathname}#/candidate-saga?id=fb-task-${t.id}&recruiter=${encodeURIComponent(recruiter)}&tseId=${encodeURIComponent(officialTseId)}&tseName=${encodeURIComponent(tseCodeName)}&candidate=${encodeURIComponent(t.candidateName || '')}&company=${encodeURIComponent(t.companyName || '')}&type=${encodeURIComponent(t.taskType || 'Interview')}&technology=${encodeURIComponent(jobRole)}&role=${encodeURIComponent(jobRole)}`;
 
     try {
       if (navigator.clipboard) {
@@ -541,7 +551,7 @@ const TaskDrawer = ({ task, onClose }) => {
       }
     } catch (e) {}
 
-    toast.success(`Feedback Link generated & copied for candidate: ${t.candidateName}!`);
+    toast.success(`Feedback Link generated & copied! Recruiter: ${recruiter} • TSE: ${tseCodeName} (${officialTseId}) • Role: ${jobRole}`);
   };
 
   if (!task) return null;
@@ -801,8 +811,18 @@ const TaskDrawer = ({ task, onClose }) => {
             </div>
           )}
 
-          {/* Step 5: Automatically Enable Feedback Form Generation */}
-          {task.status === 'Done' ? (
+          {/* Step 5: Automatically Enable Feedback Form Generation (Marketing SR / TL only) */}
+          {['tsm', 'tse'].includes(currentRole) ? (
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Sparkles size={14} className="text-blue-500" />
+                <span className="font-semibold text-slate-800">Candidate Feedback Form</span>
+              </div>
+              <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-md border border-slate-200">
+                Managed by Marketing SR / TL
+              </span>
+            </div>
+          ) : task.status === 'Done' ? (
             <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-100 border border-emerald-300 shadow-sm space-y-2">
               <div className="flex items-center justify-between">
                 <div className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">

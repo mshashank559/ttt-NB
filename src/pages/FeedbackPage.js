@@ -9,7 +9,7 @@ import {
 import { toast } from 'sonner';
 import { useApp } from '../context/AppContext';
 import { PageHeader, SectionCard, StatusBadge } from '../components/common';
-import { calculateOverallRating, TECH_SUPPORT_TEAM, ROLES, roleIsMarketing } from '../data/mockData';
+import { calculateOverallRating, TECH_SUPPORT_TEAM, ROLES, roleIsMarketing, TSE_IDS, getTseId } from '../data/mockData';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import { Textarea } from '../components/ui/textarea';
 
@@ -92,8 +92,9 @@ const InteractiveStarPicker = ({ value, onChange, label }) => {
 };
 
 export default function FeedbackPage() {
-  const { feedbacks, addMarketingReview, submitCandidateFeedback, currentRole, currentUser, createPendingFeedbackLink, slaTickets, updateSlaTicket } = useApp();
+  const { feedbacks, addMarketingReview, submitCandidateFeedback, currentRole, currentUser, createPendingFeedbackLink, slaTickets, updateSlaTicket, tasks, users } = useApp();
   const canViewRealName = ['upper_management', 'management', 'tsm'].includes(currentRole);
+  const canSubmitReview = currentRole !== 'marketing_tl' && ['marketing_sr', 'recruiter', 'management', 'upper_management'].includes(currentRole);
 
   // Filters state
   const [search, setSearch] = useState('');
@@ -119,14 +120,15 @@ export default function FeedbackPage() {
     comments: '',
   });
 
-  // Helper to build sharable candidate link
+  // Helper to build sharable candidate link with dynamic job role and authoritative TSE ID
   const buildCandidateLink = (record) => {
     const origin = window.location.origin;
     const pathname = window.location.pathname;
     const recruiter = record.recruiterName || 'Aditi Sharma';
-    const tseId = record.techSupportId || 'TSE-NB-001';
+    const tseId = record.techSupportId || 'TTT-NB-008';
     const tseName = record.techSupport || 'Abhishek';
-    return `${origin}${pathname}#/candidate-saga?id=${record.id}&recruiter=${encodeURIComponent(recruiter)}&tseId=${encodeURIComponent(tseId)}&tseName=${encodeURIComponent(tseName)}&candidate=${encodeURIComponent(record.candidateName || '')}&company=${encodeURIComponent(record.company || '')}&type=${encodeURIComponent(record.techSupportType || 'TQC')}`;
+    const jobRole = record.jobRole || 'Software Engineer';
+    return `${origin}${pathname}#/candidate-saga?id=${record.id}&recruiter=${encodeURIComponent(recruiter)}&tseId=${encodeURIComponent(tseId)}&tseName=${encodeURIComponent(tseName)}&candidate=${encodeURIComponent(record.candidateName || '')}&company=${encodeURIComponent(record.company || '')}&type=${encodeURIComponent(record.techSupportType || 'TQC')}&technology=${encodeURIComponent(jobRole)}&role=${encodeURIComponent(jobRole)}`;
   };
 
   const handleCopyLink = (url) => {
@@ -140,23 +142,42 @@ export default function FeedbackPage() {
     }
   };
 
-  // 1-Click: Fetches DB details (recruiter name, TSE name & ID, candidate, company) directly from the row and generates link
+  // 1-Click: Fetches DB details (recruiter name, TSE name & official ID, candidate, company, role) directly from the row / linked task and generates link
   const handleGenerateAndCopyRowLink = (row) => {
-    const selectedTse = TECH_SUPPORT_TEAM.find(t => 
-      t.supportName.toLowerCase() === (row.techSupport || '').toLowerCase() ||
-      t.id === row.techSupportId
-    ) || TECH_SUPPORT_TEAM[0];
+    if (['tsm', 'tse'].includes(currentRole)) {
+      toast.error('TSM is not authorized to generate Candidate SAGA feedback links.');
+      return;
+    }
 
-    const recruiter = row.recruiterName || 'Aditi Sharma';
-    const team = row.teamName || 'Team Mukesh';
-    const tseId = row.techSupportId || selectedTse.id;
-    const tseName = row.techSupport || selectedTse.supportName;
+    const linkedTask = (tasks || []).find(t => 
+      t.id === row.taskId || 
+      `fb-task-${t.id}` === row.id || 
+      (row.candidateName && t.candidateName === row.candidateName)
+    );
+
+    // Authoritative TSE resolution from users & TECH_SUPPORT_TEAM
+    const assignedUserId = linkedTask?.assigneeId || row.assigneeId || row.techSupportId;
+    const assignedUser = (users || []).find(u => u.id === assignedUserId || u.empId === assignedUserId || u.tttNbId === assignedUserId) ||
+                         (users || []).find(u => u.name?.toLowerCase() === (row.techSupport || linkedTask?.techPerson || '').toLowerCase());
+
+    const matchingTse = TECH_SUPPORT_TEAM.find(t =>
+      t.id === assignedUserId ||
+      (assignedUser && t.employeeName.toLowerCase().includes(assignedUser.name.toLowerCase())) ||
+      t.supportName.toLowerCase() === (assignedUser?.codeName || row.techSupport || '').toLowerCase()
+    );
+
+    const tseCodeName = assignedUser?.codeName || matchingTse?.supportName || row.techSupport || 'TSE-ID';
+    const officialTseId = assignedUser?.empId || assignedUser?.tttNbId || TSE_IDS[tseCodeName] || matchingTse?.id || row.techSupportId || 'TTT-NB-TSE';
+    const jobRole = linkedTask?.position || row.jobRole || 'Software Engineer';
+    const recruiter = row.recruiterName || linkedTask?.assignedSrName || 'Senior Recruiter';
+    const team = row.teamName || linkedTask?.teamName || 'Team Mukesh';
 
     const link = buildCandidateLink({
       ...row,
       recruiterName: recruiter,
-      techSupportId: tseId,
-      techSupport: tseName,
+      techSupportId: officialTseId,
+      techSupport: tseCodeName,
+      jobRole,
     });
 
     try {
@@ -165,14 +186,15 @@ export default function FeedbackPage() {
       }
     } catch (err) {}
 
-    toast.success(`Feedback link generated & copied! Recruiter: ${recruiter} • TSE: ${tseName} (${tseId})`);
+    toast.success(`Feedback link generated & copied! Recruiter: ${recruiter} • TSE: ${tseCodeName} (${officialTseId}) • Role: ${jobRole}`);
     setActiveLinkModal({
       record: {
         ...row,
         recruiterName: recruiter,
         teamName: team,
-        techSupportId: tseId,
-        techSupport: tseName,
+        techSupportId: officialTseId,
+        techSupport: tseCodeName,
+        jobRole,
       },
       link,
     });
@@ -294,6 +316,10 @@ export default function FeedbackPage() {
   // Submit marketing review
   const handleSaveMarketingReview = () => {
     if (!activeMarketingReviewModal) return;
+    if (currentRole === 'marketing_tl') {
+      toast.error('Marketing TL is not authorized to submit TSE reviews.');
+      return;
+    }
     const reviewerRoleLabel = ROLES[currentRole]?.label || 'Marketing';
     const reviewerName = currentUser?.name || 'Marketing Evaluator';
     const reviewerIdentity = `${reviewerName} (${reviewerRoleLabel})`;
@@ -323,13 +349,15 @@ export default function FeedbackPage() {
             </div>
             <div>
               <div className="text-xs font-bold text-slate-900 flex items-center gap-2">
-                <span>Marketing Evaluation Console</span>
+                <span>Marketing Console</span>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-100 text-purple-800 border border-purple-200">
                   {currentUser?.name || 'Marketing Lead'} ({ROLES[currentRole]?.label || 'Marketing'})
                 </span>
               </div>
               <p className="text-[11px] text-slate-600 mt-0.5">
-                Generate feedback links for each candidate session below, track live submissions, and log TSE reviews.
+                {currentRole === 'marketing_tl'
+                  ? 'Generate candidate feedback links for technical sessions and track candidate submissions in real time.'
+                  : 'Generate feedback links for each candidate session below, track live submissions, and log TSE reviews.'}
               </p>
             </div>
           </div>
@@ -591,41 +619,52 @@ export default function FeedbackPage() {
                       {/* Column 5: Actions (Generate Link + Log TSE Review) */}
                       <td className="py-3.5 px-4 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-2">
-                          {/* Generate Link Button for SR / TL right next to TSE review */}
-                          <button
-                            type="button"
-                            onClick={() => handleGenerateAndCopyRowLink(row)}
-                            className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-sm shadow-blue-600/25 flex items-center gap-1.5 transition-all hover:scale-[1.02] active:scale-[0.98]"
-                            title="Fetch details from DB and copy candidate feedback link"
-                          >
-                            <Link2 size={12} />
-                            <span>Generate Link</span>
-                          </button>
+                          {/* Generate Link Button for Marketing SR / TL */}
+                          {!['tsm', 'tse'].includes(currentRole) && (
+                            <button
+                              type="button"
+                              onClick={() => handleGenerateAndCopyRowLink(row)}
+                              className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-sm shadow-blue-600/25 flex items-center gap-1.5 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                              title="Fetch details from DB and copy candidate feedback link"
+                            >
+                              <Link2 size={12} />
+                              <span>Generate Link</span>
+                            </button>
+                          )}
 
-                          {/* TSE Review Button */}
-                          {row.marketingReview?.reviewed ? (
-                            <div className="flex items-center gap-2">
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-50 text-purple-700 border border-purple-200 hidden sm:inline-flex">
-                                <Check size={10} className="text-purple-600" />
-                                Reviewed
-                              </span>
+                          {/* TSE Review Button (Restricted: Marketing TL cannot log or edit reviews) */}
+                          {canSubmitReview ? (
+                            row.marketingReview?.reviewed ? (
+                              <div className="flex items-center gap-2">
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-50 text-purple-700 border border-purple-200 hidden sm:inline-flex">
+                                  <Check size={10} className="text-purple-600" />
+                                  Reviewed
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenMarketingReview(row)}
+                                  className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 transition-colors shadow-xs"
+                                >
+                                  Edit Review
+                                </button>
+                              </div>
+                            ) : (
                               <button
                                 type="button"
                                 onClick={() => handleOpenMarketingReview(row)}
-                                className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 transition-colors shadow-xs"
+                                className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-sm shadow-purple-600/30 flex items-center gap-1.5 transition-all hover:scale-[1.02] active:scale-[0.98]"
                               >
-                                Edit Review
+                                <ShieldCheck size={12} />
+                                <span>Log TSE Review</span>
                               </button>
-                            </div>
+                            )
                           ) : (
-                            <button
-                              type="button"
-                              onClick={() => handleOpenMarketingReview(row)}
-                              className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-sm shadow-purple-600/30 flex items-center gap-1.5 transition-all hover:scale-[1.02] active:scale-[0.98]"
-                            >
-                              <ShieldCheck size={12} />
-                              <span>Log TSE Review</span>
-                            </button>
+                            row.marketingReview?.reviewed ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-200">
+                                <Check size={11} className="text-purple-600" />
+                                Reviewed
+                              </span>
+                            ) : null
                           )}
                         </div>
                       </td>
@@ -761,18 +800,25 @@ export default function FeedbackPage() {
                               </button>
 
                               {/* Marketing Review Button */}
-                              <button
-                                type="button"
-                                onClick={() => handleOpenMarketingReview(item)}
-                                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all flex items-center gap-1.5 ${
-                                  marketingReviewed
-                                    ? 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100'
-                                    : 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white border-transparent hover:from-purple-500 hover:to-indigo-500 shadow-xs'
-                                }`}
-                              >
-                                <span>{marketingReviewed ? 'Edit Mkt Review' : 'Marketing Review'}</span>
-                                {marketingReviewed && <Check size={12} className="text-purple-600" />}
-                              </button>
+                              {canSubmitReview ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenMarketingReview(item)}
+                                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all flex items-center gap-1.5 ${
+                                    marketingReviewed
+                                      ? 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100'
+                                      : 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white border-transparent hover:from-purple-500 hover:to-indigo-500 shadow-xs'
+                                  }`}
+                                >
+                                  <span>{marketingReviewed ? 'Edit Mkt Review' : 'Marketing Review'}</span>
+                                  {marketingReviewed && <Check size={12} className="text-purple-600" />}
+                                </button>
+                              ) : marketingReviewed ? (
+                                <span className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-200 flex items-center gap-1.5">
+                                  <Check size={12} className="text-purple-600" />
+                                  <span>Reviewed</span>
+                                </span>
+                              ) : null}
                             </div>
                           </td>
                         </tr>
@@ -1234,7 +1280,8 @@ export default function FeedbackPage() {
                   <button
                     type="button"
                     onClick={() => {
-                      const msg = `Hi ${activeLinkModal.record.candidateName}, please share your valuable feedback for your technical session with ${activeLinkModal.record.techSupport} (${activeLinkModal.record.techSupportId}) from NetBounce:\n${activeLinkModal.link}`;
+                      const roleSuffix = activeLinkModal.record.jobRole ? ` for the position of ${activeLinkModal.record.jobRole}` : '';
+                      const msg = `Hi ${activeLinkModal.record.candidateName}, please share your valuable feedback for your technical session${roleSuffix} with ${activeLinkModal.record.techSupport} (${activeLinkModal.record.techSupportId}) from NetBounce:\n${activeLinkModal.link}`;
                       handleCopyLink(msg);
                     }}
                     className="text-xs font-semibold text-[#1416c1] hover:underline flex items-center gap-1"
@@ -1243,7 +1290,7 @@ export default function FeedbackPage() {
                   </button>
                 </div>
                 <div className="p-3 rounded-lg bg-white border border-slate-200 text-xs text-slate-700 leading-relaxed font-mono text-[11px]">
-                  Hi {activeLinkModal.record.candidateName}, please share your valuable feedback for your technical session with {activeLinkModal.record.techSupport} (NetBounce):<br />
+                  Hi {activeLinkModal.record.candidateName}, please share your valuable feedback for your technical session{activeLinkModal.record.jobRole ? ` for ${activeLinkModal.record.jobRole}` : ''} with {activeLinkModal.record.techSupport} ({activeLinkModal.record.techSupportId}):<br />
                   <span className="text-[#1416c1] break-all">{activeLinkModal.link}</span>
                 </div>
               </div>
