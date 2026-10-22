@@ -1,11 +1,10 @@
 import React, { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Star, Shield, UserRound } from 'lucide-react';
+import { Shield, UserRound } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { PageHeader, StatusBadge, SectionCard, EmptyState, KpiCard } from '../components/common';
 import { INTERVIEW_STATUSES, roleIsMarketing } from '../data/mockData';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
-import { Textarea } from '../components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 
 const STAGES = [
@@ -32,35 +31,8 @@ const stageTint = {
 
 const OUTCOMES = ['Selected', 'Rejected', 'On Hold', 'Next Round', 'No Show', 'Offer Released', 'Joined'];
 
-const RatingStars = ({ value, onChange, label, testid }) => (
-  <div data-testid={testid}>
-    <div className="text-xs uppercase tracking-wider text-slate-400 mb-1.5">{label}</div>
-    <div className="flex items-center gap-1">
-      {[1,2,3,4,5].map(n => (
-        <button
-          key={n}
-          type="button"
-          onClick={() => onChange(n)}
-          className="transition-transform hover:scale-110"
-          data-testid={`${testid}-${n}`}
-        >
-          <Star
-            size={20}
-            className={n <= value ? 'text-amber-400 fill-amber-400' : 'text-slate-600'}
-          />
-        </button>
-      ))}
-      <span className="ml-2 text-xs text-slate-500 tabular-nums">{value}/5</span>
-    </div>
-  </div>
-);
-
 const EvaluationModal = ({ interview, onClose }) => {
   const { submitInterviewFeedback, updateInterviewOutcome } = useApp();
-  const [form, setForm] = useState({
-    technical: 4, communication: 4, problem_solving: 4, ts_understanding: 4, overall: 4,
-    strengths: '', concerns: '', remarks: '', decision: 'Selected',
-  });
   const [stage, setStage] = useState('Scheduled');
   const [outcome, setOutcome] = useState('Selected');
 
@@ -69,20 +41,6 @@ const EvaluationModal = ({ interview, onClose }) => {
       setStage(interview.status || 'Scheduled');
       const currentOutcome = interview.interviewOutcome || interview.outcome || 'Selected';
       setOutcome(currentOutcome);
-
-      if (interview.feedback?.marketingReview) {
-        const mr = interview.feedback.marketingReview;
-        setForm(f => ({
-          ...f,
-          overall: mr.overallRating || 4,
-          technical: mr.technical || 4,
-          communication: mr.communication || 4,
-          remarks: mr.feedbackRemarks || '',
-          decision: mr.decision || currentOutcome,
-        }));
-      } else {
-        setForm(f => ({ ...f, decision: currentOutcome }));
-      }
     }
   }, [interview]);
 
@@ -92,7 +50,7 @@ const EvaluationModal = ({ interview, onClose }) => {
     if (outcome && outcome !== interview.interviewOutcome) {
       updateInterviewOutcome(interview.id, outcome);
     }
-    submitInterviewFeedback(interview.id, { ...form, stage, decision: outcome, outcome });
+    submitInterviewFeedback(interview.id, { stage, decision: outcome, outcome });
     onClose();
   };
 
@@ -102,57 +60,71 @@ const EvaluationModal = ({ interview, onClose }) => {
 
   return (
     <Dialog open={!!interview} onOpenChange={o => !o && onClose()}>
-      <DialogContent className="bg-white border-slate-200 text-slate-900 max-w-3xl shadow-2xl max-h-[90vh] overflow-y-auto" data-testid="evaluation-modal">
-        <DialogHeader>
-          <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-md bg-blue-50 border border-blue-200 text-blue-700 flex items-center justify-center"><UserRound size={16} /></div>
+      <DialogContent className="bg-white border border-slate-200 text-slate-900 max-w-md w-full shadow-2xl rounded-2xl p-6" data-testid="evaluation-modal">
+        <DialogHeader className="pb-3 border-b border-slate-100">
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-9 rounded-xl bg-blue-50 border border-blue-200 text-[#1416c1] flex items-center justify-center shrink-0">
+              <UserRound size={18} />
+            </div>
             <div>
-              <DialogTitle className="text-slate-900">Interview {interview.id}</DialogTitle>
-              <DialogDescription className="text-slate-500">
-                {interview.company ? `${interview.company} · ` : ''}{interview.position} · {interview.date} {interview.time}
+              <DialogTitle className="text-slate-900 text-base font-bold">Interview {interview.id}</DialogTitle>
+              <DialogDescription className="text-slate-500 text-xs mt-0.5">
+                {interview.company ? `${interview.company} · ` : ''}{interview.position || interview.technology || 'Candidate'} · {interview.date} {interview.time || ''}
               </DialogDescription>
             </div>
           </div>
         </DialogHeader>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mt-2">
+
+        <div className="space-y-4 my-3">
+          {/* Stage / Status */}
           <div>
-            <label className="text-xs uppercase tracking-wider text-slate-600 font-semibold">Stage / Status</label>
+            <label className="text-xs uppercase tracking-wider text-slate-700 font-bold block mb-1.5">
+              Stage / Status
+            </label>
             <Select value={stage} onValueChange={setStage}>
-              <SelectTrigger data-testid="feedback-stage" className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900"><SelectValue /></SelectTrigger>
+              <SelectTrigger data-testid="feedback-stage" className="bg-slate-50 border-slate-300 text-slate-900 h-10 rounded-xl focus:bg-white text-xs font-medium">
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent className="bg-white border-slate-200 text-slate-900">
                 {STAGES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
+
+          {/* Interview Outcome */}
           <div>
-            <label className="text-xs uppercase tracking-wider text-slate-600 font-semibold flex items-center justify-between">
+            <label className="text-xs uppercase tracking-wider text-slate-700 font-bold flex items-center justify-between mb-1.5">
               <span>Interview Outcome</span>
               {isCompletedStage && (
-                <span className="text-[10px] text-emerald-600 font-bold uppercase tracking-wider">Active</span>
+                <span className="text-[10px] text-emerald-700 font-bold uppercase tracking-wider bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                  Active
+                </span>
               )}
             </label>
-            <Select value={outcome} onValueChange={v => { setOutcome(v); setForm(f => ({ ...f, decision: v })); }}>
-              <SelectTrigger data-testid="feedback-outcome" className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900"><SelectValue /></SelectTrigger>
+            <Select value={outcome} onValueChange={v => setOutcome(v)}>
+              <SelectTrigger data-testid="feedback-outcome" className="bg-slate-50 border-slate-300 text-slate-900 h-10 rounded-xl focus:bg-white text-xs font-semibold">
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent className="bg-white border-slate-200 text-slate-900">
                 {OUTCOMES.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
 
-          {/* Audit trail of outcome changes */}
+          {/* Audit trail of outcome changes (if available) */}
           {interview.outcomeAuditTrail && interview.outcomeAuditTrail.length > 0 && (
-            <div className="md:col-span-2 p-3 bg-slate-50 rounded-xl border border-slate-200">
-              <div className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Outcome Audit Trail</div>
-              <div className="space-y-1.5 max-h-28 overflow-y-auto pr-1">
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+              <div className="text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1.5">Outcome History</div>
+              <div className="space-y-1.5 max-h-24 overflow-y-auto pr-1">
                 {interview.outcomeAuditTrail.map((trail, idx) => (
-                  <div key={idx} className="text-xs text-slate-600 flex items-center justify-between border-b border-slate-100 pb-1">
+                  <div key={idx} className="text-xs text-slate-600 flex items-center justify-between border-b border-slate-100 last:border-0 pb-1">
                     <div>
                       <span className="font-semibold text-slate-800">{trail.changedBy}</span>
                       <span className="text-slate-400"> ({trail.role || 'User'}): </span>
                       {trail.oldValue && trail.oldValue !== 'Unset' ? <span className="line-through text-slate-400 mr-1">{trail.oldValue}</span> : null}
                       <span className="font-semibold text-blue-700">{trail.newValue}</span>
                     </div>
-                    <span className="text-[11px] text-slate-400">
+                    <span className="text-[10px] text-slate-400">
                       {trail.at ? new Date(trail.at).toLocaleDateString() : ''} {trail.at ? new Date(trail.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                     </span>
                   </div>
@@ -160,31 +132,29 @@ const EvaluationModal = ({ interview, onClose }) => {
               </div>
             </div>
           )}
-
-          <RatingStars testid="rate-technical" label="Technical Knowledge" value={form.technical} onChange={v => setForm({...form, technical: v})} />
-          <RatingStars testid="rate-communication" label="Communication" value={form.communication} onChange={v => setForm({...form, communication: v})} />
-          <RatingStars testid="rate-problem" label="Problem Solving" value={form.problem_solving} onChange={v => setForm({...form, problem_solving: v})} />
-          <RatingStars testid="rate-ts" label="Technical Support Understanding" value={form.ts_understanding} onChange={v => setForm({...form, ts_understanding: v})} />
-          <div className="md:col-span-2"><RatingStars testid="rate-overall" label="Overall Rating" value={form.overall} onChange={v => setForm({...form, overall: v})} /></div>
-          
-          <div>
-            <label className="text-xs uppercase tracking-wider text-slate-600 font-semibold">Strengths</label>
-            <Textarea data-testid="feedback-strengths" rows={3} value={form.strengths} onChange={e => setForm({...form, strengths: e.target.value})} className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white resize-none" placeholder="Highlight standout qualities..." />
-          </div>
-          <div>
-            <label className="text-xs uppercase tracking-wider text-slate-600 font-semibold">Areas of Concern</label>
-            <Textarea data-testid="feedback-concerns" rows={3} value={form.concerns} onChange={e => setForm({...form, concerns: e.target.value})} className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white resize-none" placeholder="Growth areas or risks..." />
-          </div>
-          <div className="md:col-span-2">
-            <label className="text-xs uppercase tracking-wider text-slate-600 font-semibold">Interview Remarks</label>
-            <Textarea data-testid="feedback-remarks" rows={3} value={form.remarks} onChange={e => setForm({...form, remarks: e.target.value})} className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white resize-none" placeholder="Document overall evaluation feedback..." />
-          </div>
         </div>
-        <div className="flex items-center justify-between gap-2 mt-5 pt-4 border-t border-slate-200">
-          <div className="flex items-center gap-2 text-xs text-slate-500"><Shield size={12} /> Candidate identity hidden for Marketing roles</div>
-          <div className="flex gap-2">
-            <button onClick={onClose} className="h-9 px-4 rounded-lg bg-slate-100 border border-slate-200 text-slate-700 text-sm hover:bg-slate-200 font-medium cursor-pointer">Cancel</button>
-            <button data-testid="feedback-submit" onClick={submit} className="btn-primary h-9 px-4 rounded-lg text-sm font-medium cursor-pointer">Submit Feedback</button>
+
+        <div className="flex items-center justify-between gap-2 mt-4 pt-4 border-t border-slate-200">
+          <div className="flex items-center gap-1.5 text-xs text-slate-500">
+            <Shield size={12} className="text-slate-400" />
+            <span>Identity Protected</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="h-9 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 text-xs font-semibold cursor-pointer transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              data-testid="feedback-submit"
+              onClick={submit}
+              className="h-9 px-5 rounded-xl bg-[#1416c1] hover:bg-[#191bf0] text-white text-xs font-bold cursor-pointer transition-all shadow-sm shadow-blue-600/25 active:scale-[0.98]"
+            >
+              Update Status
+            </button>
           </div>
         </div>
       </DialogContent>

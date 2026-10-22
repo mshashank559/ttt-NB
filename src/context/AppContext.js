@@ -577,31 +577,48 @@ export const AppProvider = ({ children }) => {
   }, [currentRole, currentUser, updateFeedbacksWithStorage]);
 
   const submitInterviewFeedback = useCallback((interviewId, feedback) => {
-    const outcome = feedback.decision; // 'Cleared', 'Rejected', 'Hold', etc.
+    const outcome = feedback.decision || feedback.outcome || 'Selected';
     const newStatus = feedback.stage || (
-      ['Cleared', 'Passed', 'Moved to Next Round', 'Offer Received'].includes(outcome)
+      ['Cleared', 'Passed', 'Moved to Next Round', 'Offer Received', 'Selected'].includes(outcome)
         ? 'Cleared'
         : (outcome === 'Rejected' || outcome === 'Failed') ? 'Rejected' : 'Hold'
     );
 
     // 1. Update task in MongoDB & App state
     const taskId = interviewId;
+    const isDone = ['Cleared', 'Rejected', 'Hold', 'Interview Completed', 'Interview Completed - Feedback Received', 'Interview Completed - Feedback Pending', 'Selected', 'Offer Released', 'Joined'].includes(newStatus) ||
+                   ['Cleared', 'Rejected', 'Selected', 'Offer Released', 'Joined'].includes(outcome);
+
     updateTask(taskId, {
       interviewOutcome: outcome,
-      status: ['Cleared', 'Rejected', 'Hold', 'Interview Completed'].includes(newStatus) ? 'Done' : 'Pending',
+      interviewStatus: newStatus,
+      status: isDone ? 'Done' : 'Pending',
       completionRemark: feedback.remarks || `Interview evaluation: ${outcome}`,
-    }, `Interview evaluated by ${currentUser?.name || 'Reviewer'}: ${outcome}`);
+    }, `Interview status updated by ${currentUser?.name || 'Reviewer'}: ${newStatus} (${outcome})`);
 
     // 2. Also record in feedbacks state and /api/feedbacks
     const fbId = `fb-task-${taskId}`;
-    addMarketingReview(fbId, {
-      technical: feedback.technical,
-      communication: feedback.communication,
-      overallRating: feedback.overall,
-      feedbackRemarks: feedback.remarks,
-      decision: outcome,
-      reviewerName: currentUser?.name || 'Reviewer',
-    });
+    if (currentRole !== 'marketing_tl' && (feedback.technical || feedback.overall)) {
+      addMarketingReview(fbId, {
+        technical: feedback.technical,
+        communication: feedback.communication,
+        overallRating: feedback.overall,
+        feedbackRemarks: feedback.remarks,
+        decision: outcome,
+        reviewerName: currentUser?.name || 'Reviewer',
+      });
+    } else {
+      updateFeedbacksWithStorage(prev => prev.map(f => {
+        if (f.taskId === taskId || f.id === fbId) {
+          return {
+            ...f,
+            interviewOutcome: outcome,
+            decision: outcome,
+          };
+        }
+        return f;
+      }));
+    }
 
     // 3. Update local standalone interview state if any
     setInterviews(prev => prev.map(iv => {
@@ -612,13 +629,13 @@ export const AppProvider = ({ children }) => {
     setNotifications(prev => [{
       id: `n-${Date.now()}`,
       type: 'interview',
-      title: 'Feedback submitted',
-      message: `${interviewId} evaluated: ${feedback.decision}`,
+      title: 'Interview updated',
+      message: `${interviewId}: ${newStatus} (${outcome})`,
       time: 'just now',
       read: false,
     }, ...prev]);
-    toast.success('Interview feedback and stage updated successfully.');
-  }, [currentUser, updateTask, addMarketingReview]);
+    toast.success('Interview status and outcome updated successfully.');
+  }, [currentUser, currentRole, updateTask, addMarketingReview, updateFeedbacksWithStorage]);
 
   const updateInterviewStatus = useCallback((id, status) => {
     let patch = { interviewStatus: status };
