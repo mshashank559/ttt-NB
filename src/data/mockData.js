@@ -730,6 +730,68 @@ export const getTseId = (name, record) => {
   return 'TSE-NB-001';
 };
 
+export const TSE_REAL_NAMES = {
+  'Abhishek': 'Harit Verma',
+  'Harit verma': 'Harit Verma',
+  'Harit Verma': 'Harit Verma',
+  'Harit': 'Harit Verma',
+  'u-1791910812799': 'Harit Verma',
+  'TSE-NB-001': 'Harit Verma',
+  'Kiran': 'Prem Makwana',
+  'Prem makwana': 'Prem Makwana',
+  'Prem Makwana': 'Prem Makwana',
+  'Prem': 'Prem Makwana',
+  'u-1791910844293': 'Prem Makwana',
+  'TSE-NB-002': 'Prem Makwana',
+  'Henil': 'Shaurya Mishra',
+  'Shaurya mishra': 'Shaurya Mishra',
+  'Shaurya Mishra': 'Shaurya Mishra',
+  'Shaurya': 'Shaurya Mishra',
+  'u-1791910865708': 'Shaurya Mishra',
+  'TSE-NB-003': 'Shaurya Mishra',
+  'Saurav': 'Nikunj Kataria',
+  'Nikunj kataria': 'Nikunj Kataria',
+  'Nikunj Kataria': 'Nikunj Kataria',
+  'Nikunj': 'Nikunj Kataria',
+  'u-1791910900310': 'Nikunj Kataria',
+  'TSE-NB-004': 'Nikunj Kataria',
+  'Divya': 'Jindal Patel',
+  'Jindal patel': 'Jindal Patel',
+  'Jindal Patel': 'Jindal Patel',
+  'Jindal': 'Jindal Patel',
+  'u-1791910926064': 'Jindal Patel',
+  'TSE-NB-005': 'Jindal Patel',
+  'Smriti': 'Amber Afreen',
+  'Amber Afreen': 'Amber Afreen',
+  'Amber': 'Amber Afreen',
+  'u-1791910948923': 'Amber Afreen',
+  'TSE-NB-006': 'Amber Afreen',
+  'jemimah': 'Rashika Sharma',
+  'Jemimah': 'Rashika Sharma',
+  'Rashika Sharma': 'Rashika Sharma',
+  'Rashika': 'Rashika Sharma',
+  'u-1791910976518': 'Rashika Sharma',
+  'TSE-NB-007': 'Rashika Sharma',
+  'Shreya': 'Aarti Vishwakarma',
+  'AARTI VISHWAKARMA': 'Aarti Vishwakarma',
+  'Aarti Vishwakarma': 'Aarti Vishwakarma',
+  'Aarti': 'Aarti Vishwakarma',
+  'u-1791910998393': 'Aarti Vishwakarma',
+  'TSE-NB-008': 'Aarti Vishwakarma',
+};
+
+export const getTseRealName = (nameOrId) => {
+  if (!nameOrId) return '';
+  const clean = String(nameOrId).trim();
+  if (TSE_REAL_NAMES[clean]) return TSE_REAL_NAMES[clean];
+  const matching = TECH_SUPPORT_TEAM.find(t =>
+    t.id === clean ||
+    t.supportName.toLowerCase() === clean.toLowerCase() ||
+    t.employeeName.toLowerCase().includes(clean.toLowerCase())
+  );
+  return matching?.employeeName || '';
+};
+
 export const TSM_IDS = {
   'Abhishek': 'TTT-NB-008',
   'Rohan Kapoor': 'TTT-NB-008',

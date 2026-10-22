@@ -5,7 +5,7 @@ import { Plus, Search, UserRound, Calendar as CalIcon, Clock, Building2, Briefca
 import { toast } from 'sonner';
 import { useApp } from '../context/AppContext';
 import { PageHeader, StatusBadge, TaskTypeBadge, SectionCard, EmptyState } from '../components/common';
-import { TASK_TYPES, TASK_STATUSES, MARKETING_TEAMS, getTseCodeName, getTsmCodeName, roleIsMarketing, getInterviewTimingMeta, sortTasksByInterviewPriority, getSmartTseRecommendations, INTERVIEW_OUTCOMES, TSE_IDS, getTseId } from '../data/mockData';
+import { TASK_TYPES, TASK_STATUSES, MARKETING_TEAMS, getTseCodeName, getTsmCodeName, roleIsMarketing, getInterviewTimingMeta, sortTasksByInterviewPriority, getSmartTseRecommendations, INTERVIEW_OUTCOMES, TSE_IDS, getTseId, getTseRealName } from '../data/mockData';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
@@ -18,6 +18,7 @@ const roleCanEditAny = (r) => r === 'tsm' || r === 'management';
 const CreateTaskModal = ({ open, onOpenChange }) => {
   const { users, addTask, tasks, feedbacks, currentRole, currentUser } = useApp();
   const tseUsers = users.filter(u => u.role === 'tse');
+  const canViewRealName = ['tsm', 'management', 'upper_management'].includes(currentRole);
   const todayStr = new Date().toISOString().slice(0, 10);
 
   const isMarketingUser = roleIsMarketing(currentRole) || currentRole === 'marketing_tl' || currentRole === 'marketing_sr';
@@ -306,12 +307,18 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
                 <SelectTrigger data-testid="task-form-assignee" className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white">
                   <SelectValue placeholder="Select TSE" />
                 </SelectTrigger>
-                <SelectContent className="bg-white border-slate-200 text-slate-900">
-                  {tseUsers.map(u => (
-                    <SelectItem key={u.id} value={u.id}>
-                      {u.name} ({u.codeName || getTseCodeName(u.name)})
-                    </SelectItem>
-                  ))}
+                <SelectContent className="bg-white border-slate-200 text-slate-900 max-h-56">
+                  {tseUsers.map(u => {
+                    const codeName = u.codeName || u.name;
+                    const realName = getTseRealName(u.name) || getTseRealName(u.id);
+                    return (
+                      <SelectItem key={u.id} value={u.id}>
+                        {canViewRealName && realName && realName.toLowerCase() !== codeName.toLowerCase()
+                          ? `${codeName} (${realName})`
+                          : codeName}
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             </div>
@@ -504,6 +511,7 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
 
 const TaskDrawer = ({ task, onClose }) => {
   const { users, reassignTask, changeTaskStatus, assignMarketingSr, currentRole, currentUser, updateInterviewOutcome } = useApp();
+  const canViewRealName = ['tsm', 'management', 'upper_management'].includes(currentRole);
   const assignee = users.find(u => u.id === task?.assigneeId);
   const creator = users.find(u => u.id === task?.createdById);
   const tseUsers = (users || []).filter(u => u.role === 'tse');
@@ -748,7 +756,16 @@ const TaskDrawer = ({ task, onClose }) => {
               <div className="text-sm font-semibold text-slate-900">
                 {roleIsMarketing(currentRole)
                   ? (assignee?.empId || assignee?.tttNbId || task.techPersonId || task.assigneeId || 'TSE-ID')
-                  : (assignee?.name || task.techPerson || 'Unassigned')}
+                  : (
+                    <div>
+                      <div>{task.codeName || assignee?.codeName || task.techPerson || assignee?.name || 'Unassigned'}</div>
+                      {canViewRealName && (getTseRealName(task.techPerson) || getTseRealName(assignee?.name)) && (
+                        <div className="text-xs text-slate-500 font-normal mt-0.5">
+                          ({getTseRealName(task.techPerson) || getTseRealName(assignee?.name)})
+                        </div>
+                      )}
+                    </div>
+                  )}
               </div>
             </div>
             <div>
@@ -914,7 +931,17 @@ const TaskDrawer = ({ task, onClose }) => {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent className="bg-white border-slate-200 text-slate-900">
-                        {tseUsers.map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}
+                        {tseUsers.map(u => {
+                          const codeName = u.codeName || u.name;
+                          const realName = getTseRealName(u.name) || getTseRealName(u.id);
+                          return (
+                            <SelectItem key={u.id} value={u.id}>
+                              {canViewRealName && realName && realName.toLowerCase() !== codeName.toLowerCase()
+                                ? `${codeName} (${realName})`
+                                : codeName}
+                            </SelectItem>
+                          );
+                        })}
                       </SelectContent>
                     </Select>
                   </div>
@@ -1009,6 +1036,7 @@ export default function Tasks() {
 
   const tseUsers = useMemo(() => (users || []).filter(u => u.role === 'tse'), [users]);
   const canAssignTse = ['tsm', 'management', 'upper_management', 'marketing_tl', 'marketing_sr', 'recruiter', 'admin'].includes(currentRole) || roleCanEditAny(currentRole);
+  const canViewRealName = ['tsm', 'management', 'upper_management'].includes(currentRole);
 
   const isMarketingTl = currentRole === 'marketing_tl';
   const tlTeam = currentUser?.team || (
@@ -1169,7 +1197,8 @@ export default function Tasks() {
                     ? pseudoName
                     : (isMarketing
                       ? (a?.empId || a?.tttNbId || t.techPersonId || t.assigneeId || 'TSE-ID')
-                      : (a?.name || t.techPerson || 'Unassigned'));
+                      : (t.codeName || a?.codeName || a?.name || t.techPerson || 'Unassigned'));
+                  const realName = getTseRealName(t.techPerson) || getTseRealName(a?.name) || getTseRealName(t.assigneeId);
                   const timing = t.interviewDateTime ? getInterviewTimingMeta(t.interviewDateTime) : null;
                   const currentAssigneeId = t.assigneeId || tseUsers.find(u =>
                     (u.name && u.name.toLowerCase() === (t.techPerson || '').toLowerCase()) ||
@@ -1217,10 +1246,19 @@ export default function Tasks() {
                       {/* Tech Person / Pseudo Name */}
                       <td className="py-3 px-4 text-slate-900">
                         <div className="flex items-center gap-2">
-                          <span className="h-6 w-6 rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold flex items-center justify-center shrink-0">
-                            {techName.split(' ').map(p => p[0]).slice(0, 2).join('')}
+                          <span className="h-7 w-7 rounded-full bg-blue-100 text-blue-700 text-[11px] font-bold flex items-center justify-center shrink-0">
+                            {(techName || 'U').charAt(0).toUpperCase()}
                           </span>
-                          <span className="font-semibold whitespace-nowrap">{techName}</span>
+                          <div>
+                            <div className="font-semibold whitespace-nowrap text-slate-900 text-xs">
+                              {techName}
+                            </div>
+                            {canViewRealName && realName && realName.toLowerCase() !== techName.toLowerCase() && (
+                              <div className="text-[11px] text-slate-500 font-medium whitespace-nowrap mt-0.5">
+                                ({realName})
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </td>
 
@@ -1305,14 +1343,18 @@ export default function Tasks() {
                                 <SelectValue placeholder="Assign TSE" />
                               </SelectTrigger>
                               <SelectContent className="bg-white border-slate-200 text-slate-900 max-h-60 z-50">
-                                {tseUsers.map(u => (
-                                  <SelectItem key={u.id} value={u.id} className="text-xs">
-                                    <span className="font-bold">{u.codeName || u.name}</span>
-                                    {!isMarketing && u.name && u.codeName && u.name !== u.codeName && (
-                                      <span className="text-[10px] text-slate-400 ml-1">({u.name})</span>
-                                    )}
-                                  </SelectItem>
-                                ))}
+                                {tseUsers.map(u => {
+                                  const cName = u.codeName || u.name;
+                                  const rName = getTseRealName(u.name) || getTseRealName(u.id);
+                                  return (
+                                    <SelectItem key={u.id} value={u.id} className="text-xs">
+                                      <span className="font-bold">{cName}</span>
+                                      {canViewRealName && rName && rName.toLowerCase() !== cName.toLowerCase() && (
+                                        <span className="text-[11px] text-slate-500 ml-1.5 font-normal">({rName})</span>
+                                      )}
+                                    </SelectItem>
+                                  );
+                                })}
                               </SelectContent>
                             </Select>
                           ) : (
