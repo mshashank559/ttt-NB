@@ -1000,12 +1000,15 @@ const TaskDrawer = ({ task, onClose }) => {
 };
 
 export default function Tasks() {
-  const { tasks, users, feedbacks, currentRole, currentUser } = useApp();
+  const { tasks, users, feedbacks, currentRole, currentUser, reassignTask } = useApp();
   const navigate = useNavigate();
   const location = useLocation();
   const [filters, setFilters] = useState({ status: 'all', taskType: 'all', assignee: 'all', sr: 'all', q: '' });
   const [createOpen, setCreateOpen] = useState(false);
   const [activeTask, setActiveTask] = useState(null);
+
+  const tseUsers = useMemo(() => (users || []).filter(u => u.role === 'tse'), [users]);
+  const canAssignTse = ['tsm', 'management', 'upper_management', 'marketing_tl', 'marketing_sr', 'recruiter', 'admin'].includes(currentRole) || roleCanEditAny(currentRole);
 
   const isMarketingTl = currentRole === 'marketing_tl';
   const tlTeam = currentUser?.team || (
@@ -1154,6 +1157,7 @@ export default function Tasks() {
                   <th className="py-3 px-4 font-semibold">Status / Outcome</th>
                   <th className="py-3 px-4 font-semibold">Comment</th>
                   <th className="py-3 px-4 font-semibold">Candidate Feedback</th>
+                  <th className="py-3 px-4 font-semibold text-right">Assign TSE</th>
                 </tr>
               </thead>
               <tbody>
@@ -1167,6 +1171,10 @@ export default function Tasks() {
                       ? (a?.empId || a?.tttNbId || t.techPersonId || t.assigneeId || 'TSE-ID')
                       : (a?.name || t.techPerson || 'Unassigned'));
                   const timing = t.interviewDateTime ? getInterviewTimingMeta(t.interviewDateTime) : null;
+                  const currentAssigneeId = t.assigneeId || tseUsers.find(u =>
+                    (u.name && u.name.toLowerCase() === (t.techPerson || '').toLowerCase()) ||
+                    (u.codeName && u.codeName.toLowerCase() === (t.techPerson || '').toLowerCase())
+                  )?.id || '';
 
                   return (
                     <motion.tr
@@ -1281,6 +1289,37 @@ export default function Tasks() {
                           </td>
                         );
                       })()}
+
+                      {/* Assign TSE Dropdown */}
+                      <td className="py-3 px-4 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-end">
+                          {canAssignTse ? (
+                            <Select
+                              value={currentAssigneeId || undefined}
+                              onValueChange={(val) => reassignTask(t.id, val)}
+                            >
+                              <SelectTrigger
+                                data-testid={`task-assign-select-${t.id}`}
+                                className="h-8 text-xs bg-white border border-slate-300 rounded-lg w-40 font-semibold text-slate-800 shadow-xs focus:ring-1 focus:ring-blue-500 hover:border-blue-400"
+                              >
+                                <SelectValue placeholder="Assign TSE" />
+                              </SelectTrigger>
+                              <SelectContent className="bg-white border-slate-200 text-slate-900 max-h-60 z-50">
+                                {tseUsers.map(u => (
+                                  <SelectItem key={u.id} value={u.id} className="text-xs">
+                                    <span className="font-bold">{u.codeName || u.name}</span>
+                                    {!isMarketing && u.name && u.codeName && u.name !== u.codeName && (
+                                      <span className="text-[10px] text-slate-400 ml-1">({u.name})</span>
+                                    )}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <span className="text-xs text-slate-500 font-medium">{techName}</span>
+                          )}
+                        </div>
+                      </td>
                     </motion.tr>
                   );
                 })}
