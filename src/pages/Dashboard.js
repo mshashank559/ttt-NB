@@ -715,50 +715,85 @@ export default function Dashboard() {
                     <th className="font-bold">Candidate</th>
                     <th className="font-bold">Assigned TSE</th>
                     <th className="font-bold">Rating</th>
+                    <th className="font-bold">24h SLA Status</th>
                     <th className="font-bold">Feedback / Concerns</th>
                     <th className="font-bold">Status</th>
                     <th className="font-bold text-right">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {slaTickets.map(ticket => (
-                    <tr key={ticket.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
-                      <td className="py-3 mono text-xs font-bold text-rose-600">{ticket.id}</td>
-                      <td className="font-bold text-slate-900">{ticket.candidateName}</td>
-                      <td className="text-xs text-slate-700 font-semibold">{ticket.techPerson}</td>
-                      <td className="whitespace-nowrap">
-                        <span className="px-2 py-0.5 rounded bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold">
-                          ⭐ {ticket.rating}/5
-                        </span>
-                      </td>
-                      <td className="text-xs text-slate-600 max-w-xs truncate" title={ticket.remarks || ticket.feedbackDetails}>
-                        {ticket.remarks || ticket.feedbackDetails || 'Candidate reported low satisfaction.'}
-                      </td>
-                      <td>
-                        <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${
-                          ticket.status === 'Resolved'
-                            ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
-                            : ticket.status === 'In Review'
-                            ? 'bg-amber-100 text-amber-800 border-amber-200'
-                            : 'bg-rose-100 text-rose-800 border-rose-200'
-                        }`}>
-                          {ticket.status}
-                        </span>
-                      </td>
-                      <td className="text-right">
-                        <button
-                          onClick={() => {
-                            setActiveSlaTicketModal(ticket);
-                            setSlaResolutionStatus(ticket.status || 'Resolved');
-                            setSlaResolutionNote(ticket.resolutionNotes || '');
-                          }}
-                          className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold cursor-pointer border border-slate-200"
-                        >
-                          Manage →
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {slaTickets.map(ticket => {
+                    const deadlineDate = ticket.deadline ? new Date(ticket.deadline) : new Date(new Date(ticket.createdAt || Date.now()).getTime() + 24 * 60 * 60 * 1000);
+                    const isOverdue = ticket.status !== 'Resolved' && (ticket.isOverdue || deadlineDate < new Date());
+                    const hoursRemaining = Math.round((deadlineDate.getTime() - Date.now()) / (1000 * 60 * 60));
+                    const canViewReal = ['upper_management', 'management', 'tsm'].includes(currentRole);
+
+                    return (
+                      <tr key={ticket.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                        <td className="py-3 mono text-xs font-bold text-rose-600">{ticket.id}</td>
+                        <td className="font-bold text-slate-900">{ticket.candidateName}</td>
+                        <td className="text-xs">
+                          {canViewReal ? (
+                            <div>
+                              <div className="font-bold text-slate-900">{ticket.tseCodeName || ticket.techSupportId || 'TSE-ID'}</div>
+                              <div className="text-[11px] text-slate-500">{ticket.tseRealName || ticket.techPerson || ticket.techSupport}</div>
+                            </div>
+                          ) : (
+                            <div className="font-mono font-bold text-blue-700">{ticket.tseCodeName || ticket.techSupportId || 'TSE-ID'}</div>
+                          )}
+                        </td>
+                        <td className="whitespace-nowrap">
+                          <span className="px-2 py-0.5 rounded bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold">
+                            ⭐ {ticket.rating}/5
+                          </span>
+                        </td>
+                        <td className="whitespace-nowrap text-xs">
+                          {ticket.status === 'Resolved' ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
+                              ✓ SLA Met
+                            </span>
+                          ) : isOverdue ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-300 text-[10px] font-black animate-pulse">
+                              🚨 OVERDUE ({Math.abs(hoursRemaining)}h breached)
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-semibold">
+                              ⏱️ {hoursRemaining}h remaining
+                            </span>
+                          )}
+                          <div className="text-[10px] text-slate-400 mt-0.5">
+                            Due: {deadlineDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}, {deadlineDate.toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                          </div>
+                        </td>
+                        <td className="text-xs text-slate-600 max-w-xs truncate" title={ticket.remarks || ticket.feedbackDetails || ticket.comments}>
+                          {ticket.remarks || ticket.feedbackDetails || ticket.comments || 'Candidate reported low satisfaction.'}
+                        </td>
+                        <td>
+                          <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${
+                            ticket.status === 'Resolved'
+                              ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                              : ticket.status === 'In Review'
+                              ? 'bg-amber-100 text-amber-800 border-amber-200'
+                              : 'bg-rose-100 text-rose-800 border-rose-200'
+                          }`}>
+                            {ticket.status}
+                          </span>
+                        </td>
+                        <td className="text-right">
+                          <button
+                            onClick={() => {
+                              setActiveSlaTicketModal(ticket);
+                              setSlaResolutionStatus(ticket.status || 'Resolved');
+                              setSlaResolutionNote(ticket.resolutionNotes || ticket.resolutionDetails || '');
+                            }}
+                            className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold cursor-pointer border border-slate-200"
+                          >
+                            Manage →
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -911,10 +946,20 @@ export default function Dashboard() {
             </DialogHeader>
             {activeSlaTicketModal && (
               <div className="space-y-4 mt-2">
-                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-950 space-y-1">
-                  <div><strong>TSE Assigned:</strong> {activeSlaTicketModal.techPerson}</div>
+                <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-950 space-y-1.5">
+                  <div>
+                    <strong>TSE Assigned: </strong>
+                    <span className="font-bold text-[#1416c1]">{activeSlaTicketModal.tseCodeName || activeSlaTicketModal.techSupportId || 'TSE-ID'}</span>
+                    {['upper_management', 'management', 'tsm'].includes(currentRole) && (activeSlaTicketModal.tseRealName || activeSlaTicketModal.techPerson) && (
+                      <span className="text-slate-600 font-medium ml-1.5">({activeSlaTicketModal.tseRealName || activeSlaTicketModal.techPerson})</span>
+                    )}
+                  </div>
                   <div><strong>Rating Given:</strong> ⭐ {activeSlaTicketModal.rating} / 5</div>
-                  <div><strong>Candidate Feedback:</strong> {activeSlaTicketModal.remarks || activeSlaTicketModal.feedbackDetails || 'No additional remarks.'}</div>
+                  <div>
+                    <strong>24-Hour SLA Target: </strong>
+                    <span>24 Hours · Deadline: {activeSlaTicketModal.deadline ? new Date(activeSlaTicketModal.deadline).toLocaleString() : '24h from submission'}</span>
+                  </div>
+                  <div><strong>Candidate Feedback:</strong> {activeSlaTicketModal.remarks || activeSlaTicketModal.feedbackDetails || activeSlaTicketModal.comments || 'No additional remarks.'}</div>
                 </div>
 
                 <div>

@@ -560,7 +560,7 @@ export const INITIAL_EVENTS = [];
 export const permissionsByRole = {
   upper_management: ['dashboard', 'feedback', 'analytics', 'reports', 'notifications', 'profile'],
   management: ['dashboard', 'tasks', 'interviews', 'calendar', 'feedback', 'analytics', 'notifications', 'team', 'reports', 'users', 'settings', 'profile'],
-  tsm: ['dashboard', 'tasks', 'interviews', 'calendar', 'analytics', 'notifications', 'team', 'profile'],
+  tsm: ['dashboard', 'tasks', 'interviews', 'calendar', 'feedback', 'analytics', 'notifications', 'team', 'profile'],
   tse: ['dashboard', 'tasks', 'calendar', 'notifications', 'profile'],
   marketing_tl: ['dashboard', 'tasks', 'interviews', 'calendar', 'feedback', 'reports', 'notifications', 'profile'],
   marketing_sr: ['dashboard', 'tasks', 'interviews', 'calendar', 'feedback', 'notifications', 'profile'],

@@ -92,8 +92,8 @@ const InteractiveStarPicker = ({ value, onChange, label }) => {
 };
 
 export default function FeedbackPage() {
-  const { feedbacks, addMarketingReview, submitCandidateFeedback, currentRole, currentUser, createPendingFeedbackLink } = useApp();
-  const canViewRealName = ['upper_management', 'management'].includes(currentRole);
+  const { feedbacks, addMarketingReview, submitCandidateFeedback, currentRole, currentUser, createPendingFeedbackLink, slaTickets, updateSlaTicket } = useApp();
+  const canViewRealName = ['upper_management', 'management', 'tsm'].includes(currentRole);
 
   // Filters state
   const [search, setSearch] = useState('');
@@ -487,24 +487,32 @@ export default function FeedbackPage() {
                             {roleIsMarketing(currentRole) ? '#' : (row.techSupport?.charAt(0) || 'T')}
                           </div>
                           <div>
-                            <div className="font-bold text-slate-900 group-hover/btn:text-[#1416c1] transition-colors flex items-center gap-1.5">
-                              {roleIsMarketing(currentRole) ? (
-                                <span className="font-mono text-[#1416c1] font-semibold">{row.techSupportId || 'TSE-ID'}</span>
-                              ) : (
-                                <>
-                                  <span>{row.techSupport}</span>
+                            {roleIsMarketing(currentRole) ? (
+                              <div className="font-bold text-[#1416c1] font-mono text-xs group-hover/btn:underline flex items-center gap-1">
+                                <span>{row.techSupportId || row.codeName || 'TSE-ID'}</span>
+                                <ChevronRight size={13} className="opacity-0 group-hover/btn:opacity-100 -translate-x-1 group-hover/btn:translate-x-0 transition-all text-[#1416c1]" />
+                              </div>
+                            ) : (
+                              <div>
+                                <div className="font-bold text-slate-900 group-hover/btn:text-[#1416c1] transition-colors flex items-center gap-1.5">
+                                  <span>{row.techSupport || row.codeName}</span>
                                   {row.techSupportId && (
                                     <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-blue-50 border border-blue-200 text-[#1416c1]">
                                       {row.techSupportId}
                                     </span>
                                   )}
-                                </>
-                              )}
-                              <ChevronRight size={13} className="opacity-0 group-hover/btn:opacity-100 -translate-x-1 group-hover/btn:translate-x-0 transition-all text-[#1416c1]" />
-                            </div>
-                            {!roleIsMarketing(currentRole) && (
-                              <div className="text-[10px] text-slate-500 truncate mt-0.5">
-                                {row.techSupportEmail || (TECH_SUPPORT_TEAM.find(t => t.supportName === row.techSupport)?.email) || 'nbtech@netbounceplacement.com'}
+                                  <ChevronRight size={13} className="opacity-0 group-hover/btn:opacity-100 -translate-x-1 group-hover/btn:translate-x-0 transition-all text-[#1416c1]" />
+                                </div>
+                                {canViewRealName && (row.employeeName || TECH_SUPPORT_TEAM.find(t => t.supportName === row.techSupport)?.employeeName) && (
+                                  <div className="text-[11px] font-normal text-slate-500 mt-0.5">
+                                    {row.employeeName || TECH_SUPPORT_TEAM.find(t => t.supportName === row.techSupport)?.employeeName}
+                                  </div>
+                                )}
+                                {canViewRealName && (
+                                  <div className="text-[10px] text-slate-400 truncate">
+                                    {row.techSupportEmail || (TECH_SUPPORT_TEAM.find(t => t.supportName === row.techSupport)?.email) || ''}
+                                  </div>
+                                )}
                               </div>
                             )}
                           </div>
@@ -540,8 +548,8 @@ export default function FeedbackPage() {
                       {/* Column 4: Candidate Status & Overall Stars */}
                       <td className="py-3.5 px-4">
                         {row.candidateFeedback?.submitted ? (
-                          <div className="flex flex-col gap-1">
-                            <div className="flex items-center gap-2">
+                          <div className="flex flex-col gap-1.5">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-xs">
                                 <CheckCircle2 size={11} className="text-emerald-600" />
                                 Submitted ✓
@@ -549,19 +557,21 @@ export default function FeedbackPage() {
                               <StarDisplay score={rating.score} state={rating.state} size={14} />
                               {Number(row.candidateFeedback?.performanceRating || row.candidateFeedback?.experienceRating || 5) <= 3 && (
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-100 text-rose-800 border border-rose-300">
-                                  🚨 SLA Escalated (≤ 3★)
+                                  🚨 24h SLA Escalation (≤ 3★)
                                 </span>
                               )}
                             </div>
-                            <div className="text-[10px] text-slate-500 flex items-center gap-1.5 flex-wrap">
+                            <div className="flex items-center gap-3">
+                              <button
+                                type="button"
+                                onClick={() => setActiveCandidateFeedback(row)}
+                                className="text-[11px] font-semibold text-[#1416c1] hover:underline flex items-center gap-1 cursor-pointer bg-blue-50/70 hover:bg-blue-100/70 px-2 py-0.5 rounded-md border border-blue-200/60"
+                              >
+                                <span>View SAGA Details</span>
+                                <ChevronRight size={11} />
+                              </button>
                               {rating.state === 'COMBINED' && (
-                                <span className="text-emerald-700 font-semibold">Combined (70% Cnd / 30% Mkt)</span>
-                              )}
-                              {rating.state === 'CANDIDATE_ONLY' && (
-                                <span className="text-blue-700 font-semibold">Candidate Feedback Only</span>
-                              )}
-                              {rating.state === 'MARKETING_ONLY' && (
-                                <span className="text-amber-700 font-semibold">Marketing Review (Cnd Pending)</span>
+                                <span className="text-[10px] text-emerald-700 font-semibold">Combined (70/30)</span>
                               )}
                             </div>
                           </div>
@@ -899,6 +909,82 @@ export default function FeedbackPage() {
                     "{activeCandidateFeedback.candidateFeedback.comments || 'No additional comments provided by candidate.'}"
                   </blockquote>
                 </div>
+
+                {/* Strict 24-Hour SLA Escalation Status Card */}
+                {(() => {
+                  const ratingVal = Number(activeCandidateFeedback.candidateFeedback?.performanceRating || activeCandidateFeedback.candidateFeedback?.experienceRating || 5);
+                  const ticket = (slaTickets || []).find(t => t.interviewId === activeCandidateFeedback.id || t.id === activeCandidateFeedback.id);
+                  if (ratingVal > 3 && !ticket) return null;
+
+                  const createdAt = ticket?.createdAt || activeCandidateFeedback.candidateFeedback?.timestamp || activeCandidateFeedback.timestamp || new Date().toISOString();
+                  const deadlineStr = ticket?.deadline || new Date(new Date(createdAt).getTime() + 24 * 60 * 60 * 1000).toISOString();
+                  const deadlineDate = new Date(deadlineStr);
+                  const isOverdue = ticket?.status !== 'Resolved' && (ticket?.isOverdue || deadlineDate < new Date());
+                  const hoursLeft = Math.round((deadlineDate.getTime() - Date.now()) / (1000 * 60 * 60));
+
+                  return (
+                    <div className={`p-4 rounded-xl border ${isOverdue ? 'bg-rose-50 border-rose-300' : ticket?.status === 'Resolved' ? 'bg-emerald-50 border-emerald-300' : 'bg-amber-50 border-amber-300'} space-y-2.5`}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <AlertCircle size={16} className={isOverdue ? 'text-rose-600' : ticket?.status === 'Resolved' ? 'text-emerald-600' : 'text-amber-600'} />
+                          <span className="font-bold text-xs uppercase tracking-wide">
+                            {isOverdue ? '🚨 24-Hour SLA Breached (Action Overdue)' : ticket?.status === 'Resolved' ? '✅ 24-Hour SLA Escalation Resolved' : '⏱️ Active 24-Hour SLA Escalation'}
+                          </span>
+                        </div>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${isOverdue ? 'bg-rose-600 text-white' : ticket?.status === 'Resolved' ? 'bg-emerald-600 text-white' : 'bg-amber-600 text-white'}`}>
+                          {ticket?.status || 'Open'}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11px] pt-1">
+                        <div>
+                          <span className="text-slate-500 font-bold uppercase text-[9px] block">SLA Target</span>
+                          <span className="font-semibold text-slate-800">24 Hours (Strict SLA)</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-500 font-bold uppercase text-[9px] block">SLA Deadline</span>
+                          <span className="font-semibold text-slate-800">{deadlineDate.toLocaleString()}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-500 font-bold uppercase text-[9px] block">Responsible TSM</span>
+                          <span className="font-semibold text-slate-800">{ticket?.responsibleTsm || 'Tech Support Manager'}</span>
+                        </div>
+                      </div>
+
+                      {ticket?.actionTaken && (
+                        <div className="p-2 rounded-lg bg-white border border-slate-200 text-slate-700 text-xs">
+                          <strong>Action Taken: </strong>{ticket.actionTaken}
+                        </div>
+                      )}
+                      {ticket?.resolutionDetails && (
+                        <div className="p-2 rounded-lg bg-white border border-slate-200 text-slate-700 text-xs">
+                          <strong>Resolution Details: </strong>{ticket.resolutionDetails}
+                        </div>
+                      )}
+
+                      {(currentRole === 'tsm' || currentRole === 'management' || currentRole === 'upper_management') && ticket && ticket.status !== 'Resolved' && (
+                        <div className="pt-2 border-t border-slate-200/80 flex items-center justify-between text-xs">
+                          <span className="text-slate-500 font-medium">
+                            {isOverdue ? `Overdue by ${Math.abs(hoursLeft)} hours. Immediate resolution required.` : `${hoursLeft} hours remaining to resolve ticket.`}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const note = prompt('Enter resolution details:');
+                              if (note) {
+                                updateSlaTicket(ticket.id, { status: 'Resolved', resolutionDetails: note, actionTaken: 'Resolved by TSM via Candidate SAGA modal' });
+                                toast.success('SLA ticket marked as Resolved!');
+                              }
+                            }}
+                            className="px-3 py-1 rounded-lg bg-[#1416c1] hover:bg-blue-700 text-white font-bold text-xs shadow-xs"
+                          >
+                            Resolve Ticket ✓
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </>
             ) : (
               <div className="py-12 text-center space-y-3">

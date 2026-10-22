@@ -130,9 +130,14 @@ const SlaTicketSchema = new mongoose.Schema({
   interviewId: String,
   techSupport: String,
   techSupportId: String,
+  tseCodeName: String,
+  tseRealName: String,
   rating: Number,
   comments: String,
-  responsibleTsm: { type: String, default: 'Shashank Mishra' },
+  slaHours: { type: Number, default: 24 },
+  deadline: String,
+  isOverdue: { type: Boolean, default: false },
+  responsibleTsm: { type: String, default: 'Tech Support Manager' },
   responsibleTsmId: String,
   status: { type: String, default: 'Open' }, // 'Open', 'In Follow-up', 'Resolved'
   actionTaken: { type: String, default: '' },
@@ -545,32 +550,79 @@ app.get('/api/feedbacks', async (req, res) => {
   }
 });
 
+// Helper: Dynamically resolve TSE Code/Real Name and responsible TSM
+async function resolveTseAndTsm(tseIdentifier, employeeName) {
+  let tseUser = null;
+  if (tseIdentifier) {
+    tseUser = await User.findOne({
+      $or: [
+        { id: tseIdentifier },
+        { empId: tseIdentifier },
+        { tttNbId: tseIdentifier },
+        { name: tseIdentifier },
+        { codeName: tseIdentifier },
+      ],
+    });
+  }
+  if (!tseUser && employeeName) {
+    tseUser = await User.findOne({ name: employeeName });
+  }
+
+  const tseRealName = tseUser?.name || employeeName || tseIdentifier || 'TSE';
+  const tseCodeName = tseUser?.codeName || tseUser?.tttNbId || tseUser?.empId || 'TSE-ID';
+
+  let tsmUser = null;
+  if (tseUser?.teamId) {
+    tsmUser = await User.findOne({ role: 'tsm', teamId: tseUser.teamId });
+  }
+  if (!tsmUser) {
+    tsmUser = await User.findOne({ role: 'tsm' });
+  }
+  const responsibleTsm = tsmUser?.name || 'Tech Support Manager';
+  const responsibleTsmId = tsmUser?.id || 'u-tsm-01';
+
+  return { tseUser, tseRealName, tseCodeName, responsibleTsm, responsibleTsmId };
+}
+
 app.post('/api/feedbacks', async (req, res) => {
   try {
     const feedback = new Feedback(req.body);
     await feedback.save();
 
-    // Auto-create SLA Ticket if rating <= 3
+    // Auto-create SLA Ticket if rating <= 3 stars with strict 24-hour SLA
     const cRating = feedback.candidateFeedback?.performanceRating || feedback.candidateFeedback?.experienceRating;
     if (cRating && Number(cRating) <= 3) {
-      const ticketId = `SLA-${Date.now()}`;
-      const slaTicket = new SlaTicket({
-        id: ticketId,
-        ticketNumber: `TKT-${Math.floor(1000 + Math.random() * 9000)}`,
-        candidateName: feedback.candidateName || 'Candidate',
-        companyName: feedback.company || 'Client',
-        interviewId: feedback.id,
-        techSupport: feedback.employeeName || feedback.techSupport || 'TSE',
-        techSupportId: feedback.techSupportId || 'TSE-ID',
-        rating: Number(cRating),
-        comments: feedback.candidateFeedback?.comments || 'Low rating logged on feedback creation.',
-        responsibleTsm: 'Shashank Mishra',
-        responsibleTsmId: 'u-shashank-01',
-        status: 'Open',
-        actionTaken: '',
-        resolutionDetails: '',
-      });
-      await slaTicket.save();
+      const existingTicket = await SlaTicket.findOne({ interviewId: feedback.id });
+      if (!existingTicket) {
+        const ticketId = `SLA-${Date.now()}`;
+        const { tseRealName, tseCodeName, responsibleTsm, responsibleTsmId } = await resolveTseAndTsm(
+          feedback.techSupportId || feedback.techSupport,
+          feedback.employeeName
+        );
+        const deadline = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+        const slaTicket = new SlaTicket({
+          id: ticketId,
+          ticketNumber: `TKT-${Math.floor(1000 + Math.random() * 9000)}`,
+          candidateName: feedback.candidateName || 'Candidate',
+          companyName: feedback.company || 'Client',
+          interviewId: feedback.id,
+          techSupport: tseRealName,
+          techSupportId: feedback.techSupportId || tseCodeName,
+          tseCodeName,
+          tseRealName,
+          rating: Number(cRating),
+          comments: feedback.candidateFeedback?.comments || 'Low rating logged on feedback creation.',
+          slaHours: 24,
+          deadline,
+          responsibleTsm,
+          responsibleTsmId,
+          status: 'Open',
+          actionTaken: '',
+          resolutionDetails: '',
+        });
+        await slaTicket.save();
+      }
     }
 
     res.status(201).json(feedback);
@@ -603,23 +655,33 @@ app.put('/api/feedbacks/:id/candidate', async (req, res) => {
       { new: true, upsert: true }
     );
 
-    // Milestone 6: Automatically create SLA Ticket if rating <= 3 stars
+    // Strict 24-Hour SLA Ticket creation if rating <= 3 stars
     if (ratingNum <= 3) {
       const existingTicket = await SlaTicket.findOne({ interviewId: req.params.id });
       if (!existingTicket) {
         const ticketId = `SLA-${Date.now()}`;
+        const { tseRealName, tseCodeName, responsibleTsm, responsibleTsmId } = await resolveTseAndTsm(
+          updated.techSupportId || updated.techSupport,
+          updated.employeeName
+        );
+        const deadline = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
         const slaTicket = new SlaTicket({
           id: ticketId,
           ticketNumber: `TKT-${Math.floor(1000 + Math.random() * 9000)}`,
           candidateName: updated.candidateName || 'Candidate',
           companyName: updated.company || 'Client Assessment',
           interviewId: req.params.id,
-          techSupport: updated.employeeName || updated.techSupport || 'TSE',
-          techSupportId: updated.techSupportId || 'TSE-ID',
+          techSupport: tseRealName,
+          techSupportId: updated.techSupportId || tseCodeName,
+          tseCodeName,
+          tseRealName,
           rating: ratingNum,
           comments: comments || 'Candidate reported unsatisfactory rating (3 stars or below).',
-          responsibleTsm: 'Shashank Mishra',
-          responsibleTsmId: 'u-shashank-01',
+          slaHours: 24,
+          deadline,
+          responsibleTsm,
+          responsibleTsmId,
           status: 'Open',
           actionTaken: '',
           resolutionDetails: '',
@@ -662,11 +724,18 @@ app.put('/api/feedbacks/:id/marketing', async (req, res) => {
   }
 });
 
-// ----------------- SLA TICKETS ENDPOINTS (Milestone 6) -----------------
+// ----------------- SLA TICKETS ENDPOINTS (Milestone 6 - 24-Hour SLA) -----------------
 app.get('/api/sla-tickets', async (req, res) => {
   try {
+    const now = new Date();
     const tickets = await SlaTicket.find().sort({ createdAt: -1 });
-    res.json(tickets);
+    const mapped = tickets.map(t => {
+      const obj = t.toObject();
+      const isOverdue = obj.status !== 'Resolved' && Boolean(obj.deadline && new Date(obj.deadline) < now);
+      obj.isOverdue = isOverdue;
+      return obj;
+    });
+    res.json(mapped);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -675,11 +744,20 @@ app.get('/api/sla-tickets', async (req, res) => {
 app.post('/api/sla-tickets', async (req, res) => {
   try {
     const data = req.body;
+    if (data.interviewId) {
+      const existing = await SlaTicket.findOne({ interviewId: data.interviewId });
+      if (existing) return res.status(200).json(existing);
+    }
+
     const ticketId = data.id || `SLA-${Date.now()}`;
+    const deadline = data.deadline || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
     const newTicket = new SlaTicket({
       ...data,
       id: ticketId,
       ticketNumber: data.ticketNumber || `TKT-${Math.floor(1000 + Math.random() * 9000)}`,
+      slaHours: 24,
+      deadline,
     });
     await newTicket.save();
     res.status(201).json(newTicket);
@@ -690,9 +768,13 @@ app.post('/api/sla-tickets', async (req, res) => {
 
 app.put('/api/sla-tickets/:id', async (req, res) => {
   try {
+    const patch = { ...req.body };
+    if (patch.status === 'Resolved') {
+      patch.isOverdue = false;
+    }
     const updated = await SlaTicket.findOneAndUpdate(
       { id: req.params.id },
-      { $set: req.body },
+      { $set: patch },
       { new: true }
     );
     if (!updated) return res.status(404).json({ error: 'SLA Ticket not found' });

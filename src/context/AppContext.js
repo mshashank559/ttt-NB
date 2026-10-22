@@ -611,15 +611,22 @@ export const AppProvider = ({ children }) => {
     toast.success('All notifications marked as read.');
   }, []);
 
-  // Milestone 6: SLA Ticket Management & Auto-Escalation
+  // Milestone 6: Strict 24-Hour SLA Ticket Management & Auto-Escalation
   const addSlaTicket = useCallback((ticketData) => {
     const id = ticketData.id || `SLA-${Date.now()}`;
+    const createdAt = ticketData.createdAt || new Date().toISOString();
+    const deadline = ticketData.deadline || new Date(new Date(createdAt).getTime() + 24 * 60 * 60 * 1000).toISOString();
+    const isOverdue = ticketData.status !== 'Resolved' && new Date(deadline) < new Date();
+
     const newTicket = {
       ...ticketData,
       id,
       ticketNumber: ticketData.ticketNumber || `TKT-${Math.floor(1000 + Math.random() * 9000)}`,
       status: ticketData.status || 'Open',
-      createdAt: ticketData.createdAt || new Date().toISOString(),
+      slaHours: 24,
+      deadline,
+      isOverdue,
+      createdAt,
       actionTaken: ticketData.actionTaken || '',
       resolutionDetails: ticketData.resolutionDetails || '',
     };
@@ -638,7 +645,7 @@ export const AppProvider = ({ children }) => {
       body: JSON.stringify(newTicket),
     }).catch(() => {});
 
-    toast.error(`⚠️ Low Rating Escalation: SLA Ticket ${newTicket.ticketNumber} created for TSM review.`);
+    toast.error(`⚠️ Low Rating Escalation (24h SLA): Ticket ${newTicket.ticketNumber} created for TSM resolution.`);
     return newTicket;
   }, []);
 
@@ -727,20 +734,42 @@ export const AppProvider = ({ children }) => {
       };
     }));
 
-    // Auto-escalate if rating <= 3 stars
+    // Auto-escalate if rating <= 3 stars with strict 24-hour SLA
     const rating = Number(feedbackData.performanceRating) || Number(feedbackData.experienceRating) || 5;
     if (rating <= 3) {
       const session = feedbacks.find(f => f.id === feedbackId);
+      const matchingUser = users.find(u =>
+        u.id === session?.techSupportId ||
+        u.empId === session?.techSupportId ||
+        u.tttNbId === session?.techSupportId ||
+        u.name === session?.employeeName ||
+        u.name === session?.techSupport ||
+        u.codeName === session?.techSupport
+      );
+      const matchingTse = TECH_SUPPORT_TEAM.find(t =>
+        t.id === session?.techSupportId ||
+        t.supportName.toLowerCase() === (session?.techSupport || '').toLowerCase() ||
+        t.employeeName.toLowerCase().includes((session?.employeeName || '').toLowerCase())
+      );
+      const tseCodeName = matchingUser?.codeName || matchingTse?.supportName || session?.techSupport || 'TSE-ID';
+      const tseRealName = matchingUser?.name || matchingTse?.employeeName || session?.employeeName || session?.techSupport || 'TSE';
+      const tsmUser = users.find(u => u.role === 'tsm' && (matchingUser?.teamId ? u.teamId === matchingUser.teamId : true)) || users.find(u => u.role === 'tsm');
+      const responsibleTsm = tsmUser?.name || 'Tech Support Manager';
+      const responsibleTsmId = tsmUser?.id || 'u-tsm-01';
+
       addSlaTicket({
         candidateName: session?.candidateName || feedbackData.candidateName || 'Candidate',
         companyName: session?.company || 'Client Assessment',
         interviewId: feedbackId,
-        techSupport: session?.employeeName || session?.techSupport || 'TSE',
-        techSupportId: session?.techSupportId || 'TSE-ID',
+        techSupport: tseRealName,
+        techSupportId: session?.techSupportId || tseCodeName,
+        tseCodeName,
+        tseRealName,
         rating,
         comments: feedbackData.comments || 'Low rating logged by candidate (<= 3 stars).',
-        responsibleTsm: 'Shashank Mishra',
-        responsibleTsmId: 'u-shashank-01',
+        slaHours: 24,
+        responsibleTsm,
+        responsibleTsmId,
       });
     }
 
@@ -752,24 +781,46 @@ export const AppProvider = ({ children }) => {
     }).catch(() => { });
 
     toast.success('Candidate feedback updated successfully.');
-  }, [updateFeedbacksWithStorage, feedbacks, addSlaTicket]);
+  }, [updateFeedbacksWithStorage, feedbacks, users, addSlaTicket]);
 
   const addSagaFeedback = useCallback((newRecord) => {
     updateFeedbacksWithStorage(prev => [newRecord, ...prev]);
 
-    // Auto-escalate if rating <= 3 stars
+    // Auto-escalate if rating <= 3 stars with strict 24-hour SLA
     const cRating = Number(newRecord.candidateFeedback?.performanceRating) || Number(newRecord.candidateFeedback?.experienceRating) || 5;
     if (cRating <= 3) {
+      const matchingUser = users.find(u =>
+        u.id === newRecord.techSupportId ||
+        u.empId === newRecord.techSupportId ||
+        u.tttNbId === newRecord.techSupportId ||
+        u.name === newRecord.employeeName ||
+        u.name === newRecord.techSupport ||
+        u.codeName === newRecord.techSupport
+      );
+      const matchingTse = TECH_SUPPORT_TEAM.find(t =>
+        t.id === newRecord.techSupportId ||
+        t.supportName.toLowerCase() === (newRecord.techSupport || '').toLowerCase() ||
+        t.employeeName.toLowerCase().includes((newRecord.employeeName || '').toLowerCase())
+      );
+      const tseCodeName = matchingUser?.codeName || matchingTse?.supportName || newRecord.techSupport || 'TSE-ID';
+      const tseRealName = matchingUser?.name || matchingTse?.employeeName || newRecord.employeeName || newRecord.techSupport || 'TSE';
+      const tsmUser = users.find(u => u.role === 'tsm' && (matchingUser?.teamId ? u.teamId === matchingUser.teamId : true)) || users.find(u => u.role === 'tsm');
+      const responsibleTsm = tsmUser?.name || 'Tech Support Manager';
+      const responsibleTsmId = tsmUser?.id || 'u-tsm-01';
+
       addSlaTicket({
         candidateName: newRecord.candidateName || 'Candidate',
         companyName: newRecord.company || 'Client Assessment',
         interviewId: newRecord.id,
-        techSupport: newRecord.employeeName || newRecord.techSupport || 'TSE',
-        techSupportId: newRecord.techSupportId || 'TSE-ID',
+        techSupport: tseRealName,
+        techSupportId: newRecord.techSupportId || tseCodeName,
+        tseCodeName,
+        tseRealName,
         rating: cRating,
         comments: newRecord.candidateFeedback?.comments || 'Low rating submitted in Candidate SAGA.',
-        responsibleTsm: 'Shashank Mishra',
-        responsibleTsmId: 'u-shashank-01',
+        slaHours: 24,
+        responsibleTsm,
+        responsibleTsmId,
       });
     }
 
@@ -781,7 +832,7 @@ export const AppProvider = ({ children }) => {
     }).catch(() => { });
 
     toast.success(`Feedback recorded successfully.`);
-  }, [updateFeedbacksWithStorage, addSlaTicket]);
+  }, [updateFeedbacksWithStorage, users, addSlaTicket]);
 
   const createPendingFeedbackLink = useCallback((newRecord) => {
     updateFeedbacksWithStorage(prev => [newRecord, ...prev]);
