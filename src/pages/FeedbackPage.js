@@ -511,39 +511,57 @@ export default function FeedbackPage() {
                           onClick={() => setSelectedTechSupport({ name: row.techSupport, date: row.date })}
                           className="flex items-center gap-2 text-left group/btn"
                         >
-                          <div className="h-7 w-7 rounded-lg bg-blue-50 border border-blue-200 text-[#1416c1] flex items-center justify-center font-bold text-xs shrink-0 group-hover/btn:border-[#1416c1]">
-                            {roleIsMarketing(currentRole) ? '#' : (row.techSupport?.charAt(0) || 'T')}
-                          </div>
-                          <div>
-                            {roleIsMarketing(currentRole) ? (
-                              <div className="font-bold text-[#1416c1] font-mono text-xs group-hover/btn:underline flex items-center gap-1">
-                                <span>{row.techSupportId || row.codeName || 'TSE-ID'}</span>
-                                <ChevronRight size={13} className="opacity-0 group-hover/btn:opacity-100 -translate-x-1 group-hover/btn:translate-x-0 transition-all text-[#1416c1]" />
-                              </div>
-                            ) : (
-                              <div>
-                                <div className="font-bold text-slate-900 group-hover/btn:text-[#1416c1] transition-colors flex items-center gap-1.5">
-                                  <span>{row.techSupport || row.codeName}</span>
-                                  {row.techSupportId && (
-                                    <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-blue-50 border border-blue-200 text-[#1416c1]">
-                                      {row.techSupportId}
-                                    </span>
-                                  )}
-                                  <ChevronRight size={13} className="opacity-0 group-hover/btn:opacity-100 -translate-x-1 group-hover/btn:translate-x-0 transition-all text-[#1416c1]" />
+                          {(() => {
+                            const matchingTse = TECH_SUPPORT_TEAM.find(t => 
+                              t.id === row.techSupportId || 
+                              (row.employeeName && t.employeeName.toLowerCase().includes(row.employeeName.toLowerCase())) ||
+                              t.supportName.toLowerCase() === (row.techSupport || '').toLowerCase()
+                            );
+                            const codeNameDisplay = (row.techSupport && row.techSupport !== 'Code Name Unassigned')
+                              ? row.techSupport
+                              : (matchingTse?.supportName || row.codeName || 'TSE-ID');
+                            const officialIdDisplay = row.techSupportId || matchingTse?.id || 'TTT-NB-TSE';
+                            const realNameDisplay = row.employeeName || matchingTse?.employeeName || '';
+                            const emailDisplay = row.techSupportEmail || matchingTse?.email || '';
+
+                            return (
+                              <>
+                                <div className="h-7 w-7 rounded-lg bg-blue-50 border border-blue-200 text-[#1416c1] flex items-center justify-center font-bold text-xs shrink-0 group-hover/btn:border-[#1416c1]">
+                                  {roleIsMarketing(currentRole) ? '#' : (codeNameDisplay?.charAt(0) || 'T')}
                                 </div>
-                                {canViewRealName && (row.employeeName || TECH_SUPPORT_TEAM.find(t => t.supportName === row.techSupport)?.employeeName) && (
-                                  <div className="text-[11px] font-normal text-slate-500 mt-0.5">
-                                    {row.employeeName || TECH_SUPPORT_TEAM.find(t => t.supportName === row.techSupport)?.employeeName}
-                                  </div>
-                                )}
-                                {canViewRealName && (
-                                  <div className="text-[10px] text-slate-400 truncate">
-                                    {row.techSupportEmail || (TECH_SUPPORT_TEAM.find(t => t.supportName === row.techSupport)?.email) || ''}
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          </div>
+                                <div>
+                                  {roleIsMarketing(currentRole) ? (
+                                    <div className="font-bold text-[#1416c1] font-mono text-xs group-hover/btn:underline flex items-center gap-1">
+                                      <span>{officialIdDisplay || codeNameDisplay}</span>
+                                      <ChevronRight size={13} className="opacity-0 group-hover/btn:opacity-100 -translate-x-1 group-hover/btn:translate-x-0 transition-all text-[#1416c1]" />
+                                    </div>
+                                  ) : (
+                                    <div>
+                                      <div className="font-bold text-slate-900 group-hover/btn:text-[#1416c1] transition-colors flex items-center gap-1.5">
+                                        <span>{codeNameDisplay}</span>
+                                        {officialIdDisplay && (
+                                          <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-blue-50 border border-blue-200 text-[#1416c1]">
+                                            {officialIdDisplay}
+                                          </span>
+                                        )}
+                                        <ChevronRight size={13} className="opacity-0 group-hover/btn:opacity-100 -translate-x-1 group-hover/btn:translate-x-0 transition-all text-[#1416c1]" />
+                                      </div>
+                                      {canViewRealName && realNameDisplay && (
+                                        <div className="text-[11px] font-normal text-slate-500 mt-0.5">
+                                          {realNameDisplay}
+                                        </div>
+                                      )}
+                                      {canViewRealName && emailDisplay && (
+                                        <div className="text-[10px] text-slate-400 truncate">
+                                          {emailDisplay}
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              </>
+                            );
+                          })()}
                         </button>
                       </td>
 

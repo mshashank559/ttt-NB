@@ -23,20 +23,39 @@ export const POC_USERS_BY_TEAM = {
 
 // Stable Code Name Lookup Mappings
 export const TSE_CODE_NAMES = {
-  'Amber': 'Smriti',
-  'Shaurya': 'Henil',
-  'Nikunj': 'Saurav',
-  'Prem': 'Kiran',
+  // Real Name -> Code Name mappings
+  'Harit verma': 'Abhishek',
   'Harit': 'Abhishek',
+  'Prem makwana': 'Kiran',
+  'Prem': 'Kiran',
+  'Shaurya mishra': 'Henil',
+  'Shaurya': 'Henil',
+  'Nikunj kataria': 'Saurav',
+  'Nikunj': 'Saurav',
+  'Jindal patel': 'Divya',
+  'Jindal': 'Divya',
+  'Amber Afreen': 'Smriti',
+  'Amber': 'Smriti',
+  'Rashika Sharma': 'Jemimah',
+  'Rashika': 'Jemimah',
+  'AARTI VISHWAKARMA': 'Shreya',
+  'Aarti Vishwakarma': 'Shreya',
+  'Aarti': 'Shreya',
   'Rahul Sharma': 'Rishi',
   'Ananya Verma': 'Aria',
   'Vikram Singh': 'Vivan',
   'Sana Qureshi': 'Sara',
-  'Smriti': 'Smriti',
+
+  // Code Name -> Code Name mappings
+  'Abhishek': 'Abhishek',
+  'Kiran': 'Kiran',
   'Henil': 'Henil',
   'Saurav': 'Saurav',
-  'Kiran': 'Kiran',
-  'Abhishek': 'Abhishek',
+  'Divya': 'Divya',
+  'Smriti': 'Smriti',
+  'Jemimah': 'Jemimah',
+  'jemimah': 'Jemimah',
+  'Shreya': 'Shreya',
   'Rishi': 'Rishi',
   'Aria': 'Aria',
   'Vivan': 'Vivan',
@@ -44,15 +63,26 @@ export const TSE_CODE_NAMES = {
 };
 
 export const TSM_CODE_NAMES = {
+  'Aditya Mishra': 'TSM Titan',
+  'Aditya': 'TSM Titan',
   'Rohan Kapoor': 'TSM Titan',
+  'Rohan': 'TSM Titan',
   'Neha Iyer': 'TSM Nova',
+  'Neha': 'TSM Nova',
   'TSM Titan': 'TSM Titan',
   'TSM Nova': 'TSM Nova',
 };
 
 export const getTseCodeName = (name) => {
   if (!name) return 'Code Name Unassigned';
-  return TSE_CODE_NAMES[name] || 'Code Name Unassigned';
+  if (TSE_CODE_NAMES[name]) return TSE_CODE_NAMES[name];
+  const matching = TECH_SUPPORT_TEAM.find(t => 
+    t.employeeName.toLowerCase().includes(name.toLowerCase()) || 
+    t.supportName.toLowerCase() === name.toLowerCase() ||
+    t.id === name
+  );
+  if (matching) return matching.supportName;
+  return 'Code Name Unassigned';
 };
 
 export const getTsmCodeName = (name) => {
