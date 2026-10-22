@@ -464,8 +464,8 @@ export const USERS = [
     password: 'TSM@123',
     role: 'tse',
     dept: 'Tech Support',
-    empId: 'TTT-NB-008',
-    tttNbId: 'TTT-NB-008',
+    empId: 'TSE-NB-001',
+    tttNbId: 'TSE-NB-001',
     codeName: 'Abhishek',
     status: 'Active',
     avatar: 'https://api.dicebear.com/7.x/lorelei/svg?seed=port_Blake_26',
@@ -477,8 +477,8 @@ export const USERS = [
     password: 'TSE@123',
     role: 'tse',
     dept: 'Tech Support',
-    empId: 'TTT-NB-010',
-    tttNbId: 'TTT-NB-010',
+    empId: 'TSE-NB-003',
+    tttNbId: 'TSE-NB-003',
     codeName: 'Henil',
     status: 'Active',
     avatar: 'https://api.dicebear.com/7.x/personas/svg?seed=crea_Dakota_12',
@@ -490,8 +490,8 @@ export const USERS = [
     password: 'TSE@123',
     role: 'tse',
     dept: 'Tech Support',
-    empId: 'TTT-NB-009',
-    tttNbId: 'TTT-NB-009',
+    empId: 'TSE-NB-002',
+    tttNbId: 'TSE-NB-002',
     codeName: 'Kiran',
     status: 'Active',
     avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=avt_Rowan_14',
@@ -503,8 +503,8 @@ export const USERS = [
     password: 'TSE@123',
     role: 'tse',
     dept: 'Tech Support',
-    empId: 'TTT-NB-011',
-    tttNbId: 'TTT-NB-011',
+    empId: 'TSE-NB-004',
+    tttNbId: 'TSE-NB-004',
     codeName: 'Saurav',
     status: 'Active',
     avatar: 'https://api.dicebear.com/7.x/personas/svg?seed=crea_Jordan_2',
@@ -516,8 +516,8 @@ export const USERS = [
     password: 'TSE@123',
     role: 'tse',
     dept: 'Tech Support',
-    empId: 'TTT-NB-012',
-    tttNbId: 'TTT-NB-012',
+    empId: 'TSE-NB-005',
+    tttNbId: 'TSE-NB-005',
     codeName: 'Divya',
     status: 'Active',
     avatar: 'https://api.dicebear.com/7.x/notionists/svg?seed=tech_Finley_19',
@@ -529,8 +529,8 @@ export const USERS = [
     password: 'TSE@123',
     role: 'tse',
     dept: 'Tech Support',
-    empId: 'TTT-NB-013',
-    tttNbId: 'TTT-NB-013',
+    empId: 'TSE-NB-006',
+    tttNbId: 'TSE-NB-006',
     codeName: 'Smriti',
     status: 'Active',
     avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=avt_Kai_21',
@@ -542,8 +542,8 @@ export const USERS = [
     password: 'TSE@123',
     role: 'tse',
     dept: 'Tech Support',
-    empId: 'TTT-NB-014',
-    tttNbId: 'TTT-NB-014',
+    empId: 'TSE-NB-007',
+    tttNbId: 'TSE-NB-007',
     codeName: 'jemimah',
     status: 'Active',
     avatar: 'https://api.dicebear.com/7.x/personas/svg?seed=crea_Peyton_16',
@@ -555,8 +555,8 @@ export const USERS = [
     password: 'TSE@123',
     role: 'tse',
     dept: 'Tech Support',
-    empId: 'TTT-NB-015',
-    tttNbId: 'TTT-NB-015',
+    empId: 'TSE-NB-008',
+    tttNbId: 'TSE-NB-008',
     codeName: 'Shreya',
     status: 'Active',
     avatar: 'https://api.dicebear.com/7.x/notionists/svg?seed=tech_Logan_8',
@@ -668,42 +668,66 @@ export const INITIAL_FEEDBACK_RECORDS = [];
 export const roleIsMarketing = (role) => role === 'marketing_tl' || role === 'marketing_sr' || role === 'recruiter';
 
 export const TSE_IDS = {
-  'Abhishek': 'TTT-NB-008',
-  'Harit verma': 'TTT-NB-008',
-  'Harit': 'TTT-NB-008',
-  'Kiran': 'TTT-NB-009',
-  'Prem makwana': 'TTT-NB-009',
-  'Prem': 'TTT-NB-009',
-  'Henil': 'TTT-NB-010',
-  'Shaurya mishra': 'TTT-NB-010',
-  'Shaurya': 'TTT-NB-010',
-  'Saurav': 'TTT-NB-011',
-  'Nikunj kataria': 'TTT-NB-011',
-  'Nikunj': 'TTT-NB-011',
-  'Divya': 'TTT-NB-012',
-  'Jindal patel': 'TTT-NB-012',
-  'Jindal': 'TTT-NB-012',
-  'Smriti': 'TTT-NB-013',
-  'Amber Afreen': 'TTT-NB-013',
-  'Amber': 'TTT-NB-013',
-  'jemimah': 'TTT-NB-014',
-  'Jemimah': 'TTT-NB-014',
-  'Rashika Sharma': 'TTT-NB-014',
-  'Rashika': 'TTT-NB-014',
-  'Shreya': 'TTT-NB-015',
-  'AARTI VISHWAKARMA': 'TTT-NB-015',
-  'Aarti': 'TTT-NB-015',
+  'Abhishek': 'TSE-NB-001',
+  'Harit verma': 'TSE-NB-001',
+  'Harit Verma': 'TSE-NB-001',
+  'Harit': 'TSE-NB-001',
+  'u-1791910812799': 'TSE-NB-001',
+  'Kiran': 'TSE-NB-002',
+  'Prem makwana': 'TSE-NB-002',
+  'Prem Makwana': 'TSE-NB-002',
+  'Prem': 'TSE-NB-002',
+  'u-1791910844293': 'TSE-NB-002',
+  'Henil': 'TSE-NB-003',
+  'Shaurya mishra': 'TSE-NB-003',
+  'Shaurya Mishra': 'TSE-NB-003',
+  'Shaurya': 'TSE-NB-003',
+  'u-1791910865708': 'TSE-NB-003',
+  'Saurav': 'TSE-NB-004',
+  'Nikunj kataria': 'TSE-NB-004',
+  'Nikunj Kataria': 'TSE-NB-004',
+  'Nikunj': 'TSE-NB-004',
+  'u-1791910900310': 'TSE-NB-004',
+  'Divya': 'TSE-NB-005',
+  'Jindal patel': 'TSE-NB-005',
+  'Jindal Patel': 'TSE-NB-005',
+  'Jindal': 'TSE-NB-005',
+  'u-1791910926064': 'TSE-NB-005',
+  'Smriti': 'TSE-NB-006',
+  'Amber Afreen': 'TSE-NB-006',
+  'Amber': 'TSE-NB-006',
+  'u-1791910948923': 'TSE-NB-006',
+  'jemimah': 'TSE-NB-007',
+  'Jemimah': 'TSE-NB-007',
+  'Rashika Sharma': 'TSE-NB-007',
+  'Rashika': 'TSE-NB-007',
+  'u-1791910976518': 'TSE-NB-007',
+  'Shreya': 'TSE-NB-008',
+  'AARTI VISHWAKARMA': 'TSE-NB-008',
+  'Aarti Vishwakarma': 'TSE-NB-008',
+  'Aarti': 'TSE-NB-008',
+  'u-1791910998393': 'TSE-NB-008',
 };
 
 export const getTseId = (name, record) => {
-  if (record && (record.techSupportId || record.assigneeId || record.empId || record.tttNbId)) {
-    const idVal = record.empId || record.tttNbId || record.techSupportId || record.assigneeId;
-    if (typeof idVal === 'string' && idVal.startsWith('TTT-NB')) return idVal;
+  if (record && record.techSupportId && record.techSupportId.startsWith('TSE-NB')) {
+    return record.techSupportId;
   }
-  if (name && TSE_IDS[name]) return TSE_IDS[name];
-  if (record?.techPerson && TSE_IDS[record.techPerson]) return TSE_IDS[record.techPerson];
-  if (record?.techSupport && TSE_IDS[record.techSupport]) return TSE_IDS[record.techSupport];
-  return record?.techSupportId || record?.assigneeId || 'TTT-NB-TSE';
+  const cleanName = (name || record?.techPerson || record?.techSupport || record?.employeeName || '').trim();
+  if (cleanName && TSE_IDS[cleanName]) return TSE_IDS[cleanName];
+
+  const assignedId = record?.assigneeId || record?.techSupportId || record?.id;
+  if (assignedId && TSE_IDS[assignedId]) return TSE_IDS[assignedId];
+
+  const matchingTse = TECH_SUPPORT_TEAM.find(t =>
+    (cleanName && t.supportName.toLowerCase() === cleanName.toLowerCase()) ||
+    (cleanName && t.employeeName.toLowerCase().includes(cleanName.toLowerCase())) ||
+    t.id === record?.techSupportId ||
+    t.id === record?.assigneeId
+  );
+  if (matchingTse) return matchingTse.id;
+
+  return 'TSE-NB-001';
 };
 
 export const TSM_IDS = {

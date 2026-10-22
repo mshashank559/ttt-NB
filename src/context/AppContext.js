@@ -498,16 +498,17 @@ export const AppProvider = ({ children }) => {
     const newUser = users.find(u => u.id === newAssigneeId) || getUserById(newAssigneeId);
     if (!newUser) return;
 
-    // Resolve code name, real name, and authoritative official TSE ID
+    // Resolve code name, real name, and authoritative official TSE ID (TSE-NB-001 to TSE-NB-008)
     const matchingTse = TECH_SUPPORT_TEAM.find(t =>
       t.id === newUser.id ||
-      t.employeeName.toLowerCase().includes((newUser.name || '').toLowerCase()) ||
-      t.supportName.toLowerCase() === (newUser.codeName || newUser.name || '').toLowerCase()
+      t.id === newUser.empId ||
+      t.supportName.toLowerCase() === (newUser.codeName || newUser.name || '').toLowerCase() ||
+      t.employeeName.toLowerCase().includes((newUser.name || '').toLowerCase())
     );
 
-    const codeName = newUser.codeName || matchingTse?.supportName || newUser.name;
-    const realName = newUser.name || matchingTse?.employeeName || codeName;
-    const officialId = newUser.empId || newUser.tttNbId || matchingTse?.id || getTseId(codeName) || getTseId(realName);
+    const codeName = matchingTse?.supportName || newUser.codeName || newUser.name;
+    const realName = matchingTse?.employeeName || newUser.name || codeName;
+    const officialId = matchingTse?.id || TSE_IDS[newUser.id] || TSE_IDS[codeName] || TSE_IDS[realName] || 'TSE-NB-008';
 
     const patch = {
       assigneeId: newAssigneeId,
@@ -520,17 +521,18 @@ export const AppProvider = ({ children }) => {
 
     // Synchronously sync to linked feedback record in state
     updateFeedbacksWithStorage(prev => prev.map(f => {
-      if (f.taskId === id || f.id === `fb-task-${id}`) {
+      if (f.taskId === id || f.id === `fb-task-${id}` || (f.candidateName && f.candidateName.toLowerCase() === (tasks.find(t => t.id === id)?.candidateName || '').toLowerCase())) {
         return {
           ...f,
           techSupport: codeName,
           techSupportId: officialId,
           employeeName: realName,
+          codeName: codeName,
         };
       }
       return f;
     }));
-  }, [users, updateTask, updateFeedbacksWithStorage]);
+  }, [users, tasks, updateTask, updateFeedbacksWithStorage]);
 
   const changeTaskStatus = useCallback((id, status, completionRemark) => {
     const patch = { status };

@@ -483,18 +483,19 @@ app.put('/api/tasks/:id', async (req, res) => {
     if (req.body.candidateName) feedbackPatch.candidateName = req.body.candidateName;
 
     if (req.body.assigneeId || req.body.techPerson) {
-      const { tseRealName, tseCodeName } = await resolveTseAndTsm(
+      const { tseRealName, tseCodeName, tseOfficialId } = await resolveTseAndTsm(
         req.body.assigneeId || updated.assigneeId,
         req.body.techPerson || updated.techPerson
       );
       feedbackPatch.techSupport = tseCodeName;
-      feedbackPatch.techSupportId = updated.techPersonId || req.body.techPersonId || tseCodeName;
+      feedbackPatch.techSupportId = tseOfficialId;
       feedbackPatch.employeeName = tseRealName;
+      feedbackPatch.codeName = tseCodeName;
     }
 
     if (Object.keys(feedbackPatch).length > 0) {
       await Feedback.findOneAndUpdate(
-        { $or: [{ id: `fb-task-${updated.id}` }, { taskId: updated.id }] },
+        { $or: [{ id: `fb-task-${updated.id}` }, { taskId: updated.id }, { candidateName: updated.candidateName }] },
         { $set: feedbackPatch }
       );
     }
@@ -545,18 +546,46 @@ app.get('/api/feedbacks', async (req, res) => {
 
     let feedbacks = await Feedback.find(filter).sort({ createdAt: -1 });
 
-    // Sanitize identity privacy for Marketing roles: ONLY show IDs, never real names or aliases
-    if (role === 'marketing_tl' || role === 'marketing_sr') {
-      feedbacks = feedbacks.map(fb => {
-        const obj = fb.toObject ? fb.toObject() : { ...fb };
-        const safeId = obj.techSupportId || 'TTT-NB-TSE';
+    const allTasks = await Task.find({}).lean();
+    const taskMap = new Map();
+    allTasks.forEach(t => {
+      if (t.id) taskMap.set(t.id, t);
+      if (t.candidateName) taskMap.set(t.candidateName.trim().toLowerCase(), t);
+    });
+
+    const { TECH_SUPPORT_TEAM, TSE_IDS } = await import('./src/data/mockData.js');
+
+    feedbacks = feedbacks.map(fb => {
+      const obj = fb.toObject ? fb.toObject() : { ...fb };
+      const rawTaskId = obj.taskId || (obj.id ? obj.id.replace('fb-task-', '') : '');
+      const linkedTask = taskMap.get(rawTaskId) || (obj.candidateName ? taskMap.get(obj.candidateName.trim().toLowerCase()) : null);
+
+      if (linkedTask) {
+        const assignedName = linkedTask.techPerson || linkedTask.codeName;
+        const matchingTse = TECH_SUPPORT_TEAM.find(t =>
+          (assignedName && t.supportName.toLowerCase() === assignedName.toLowerCase()) ||
+          (linkedTask.assigneeId && (t.id === linkedTask.assigneeId || TSE_IDS[linkedTask.assigneeId] === t.id))
+        );
+        if (matchingTse) {
+          obj.techSupportId = matchingTse.id;
+          obj.techSupport = matchingTse.supportName;
+          obj.employeeName = matchingTse.employeeName;
+        } else if (linkedTask.techPersonId && linkedTask.techPersonId.startsWith('TSE-NB')) {
+          obj.techSupportId = linkedTask.techPersonId;
+        }
+      }
+
+      // Sanitize identity privacy for Marketing roles: ONLY show IDs, never real names or aliases
+      if (role === 'marketing_tl' || role === 'marketing_sr') {
+        const safeId = obj.techSupportId || 'TSE-NB-008';
         obj.techSupport = safeId;
         obj.employeeName = safeId;
         obj.codeName = safeId;
         obj.techSupportEmail = 'techsupport@netbounceplacement.com';
-        return obj;
-      });
-    }
+      }
+
+      return obj;
+    });
 
     res.json(feedbacks);
   } catch (err) {
@@ -566,6 +595,16 @@ app.get('/api/feedbacks', async (req, res) => {
 
 // Helper: Dynamically resolve TSE Code/Real Name and responsible TSM
 async function resolveTseAndTsm(tseIdentifier, employeeName) {
+  const { TECH_SUPPORT_TEAM, TSE_IDS } = await import('./src/data/mockData.js');
+
+  const matchingTse = TECH_SUPPORT_TEAM.find(t =>
+    (tseIdentifier && t.id === tseIdentifier) ||
+    (tseIdentifier && TSE_IDS[tseIdentifier] === t.id) ||
+    (tseIdentifier && t.supportName.toLowerCase() === tseIdentifier.toLowerCase()) ||
+    (employeeName && t.employeeName.toLowerCase().includes(employeeName.toLowerCase())) ||
+    (employeeName && t.supportName.toLowerCase() === employeeName.toLowerCase())
+  );
+
   let tseUser = null;
   if (tseIdentifier) {
     tseUser = await User.findOne({
@@ -582,8 +621,9 @@ async function resolveTseAndTsm(tseIdentifier, employeeName) {
     tseUser = await User.findOne({ name: employeeName });
   }
 
-  const tseRealName = tseUser?.name || employeeName || tseIdentifier || 'TSE';
-  const tseCodeName = tseUser?.codeName || tseUser?.tttNbId || tseUser?.empId || 'TSE-ID';
+  const tseRealName = matchingTse?.employeeName || tseUser?.name || employeeName || tseIdentifier || 'TSE';
+  const tseCodeName = matchingTse?.supportName || tseUser?.codeName || tseUser?.name || 'Shreya';
+  const tseOfficialId = matchingTse?.id || TSE_IDS[tseCodeName] || 'TSE-NB-008';
 
   let tsmUser = null;
   if (tseUser?.teamId) {
@@ -595,7 +635,7 @@ async function resolveTseAndTsm(tseIdentifier, employeeName) {
   const responsibleTsm = tsmUser?.name || 'Tech Support Manager';
   const responsibleTsmId = tsmUser?.id || 'u-tsm-01';
 
-  return { tseUser, tseRealName, tseCodeName, responsibleTsm, responsibleTsmId };
+  return { tseUser, tseRealName, tseCodeName, tseOfficialId, responsibleTsm, responsibleTsmId };
 }
 
 app.post('/api/feedbacks', async (req, res) => {

@@ -125,8 +125,8 @@ export default function FeedbackPage() {
     const origin = window.location.origin;
     const pathname = window.location.pathname;
     const recruiter = record.recruiterName || 'Aditi Sharma';
-    const tseId = record.techSupportId || 'TTT-NB-008';
-    const tseName = record.techSupport || 'Abhishek';
+    const tseId = record.techSupportId || 'TSE-NB-008';
+    const tseName = record.techSupport || 'Shreya';
     const jobRole = record.jobRole || 'Software Engineer';
     return `${origin}${pathname}#/candidate-saga?id=${record.id}&recruiter=${encodeURIComponent(recruiter)}&tseId=${encodeURIComponent(tseId)}&tseName=${encodeURIComponent(tseName)}&candidate=${encodeURIComponent(record.candidateName || '')}&company=${encodeURIComponent(record.company || '')}&type=${encodeURIComponent(record.techSupportType || 'TQC')}&technology=${encodeURIComponent(jobRole)}&role=${encodeURIComponent(jobRole)}`;
   };
@@ -162,12 +162,14 @@ export default function FeedbackPage() {
 
     const matchingTse = TECH_SUPPORT_TEAM.find(t =>
       t.id === assignedUserId ||
+      (assignedUserId && TSE_IDS[assignedUserId] === t.id) ||
+      (assignedUser && (assignedUser.codeName === t.supportName || assignedUser.empId === t.id)) ||
       (assignedUser && t.employeeName.toLowerCase().includes(assignedUser.name.toLowerCase())) ||
       t.supportName.toLowerCase() === (assignedUser?.codeName || row.techSupport || '').toLowerCase()
     );
 
-    const tseCodeName = assignedUser?.codeName || matchingTse?.supportName || row.techSupport || 'TSE-ID';
-    const officialTseId = assignedUser?.empId || assignedUser?.tttNbId || TSE_IDS[tseCodeName] || matchingTse?.id || row.techSupportId || 'TTT-NB-TSE';
+    const tseCodeName = assignedUser?.codeName || matchingTse?.supportName || row.techSupport || 'Shreya';
+    const officialTseId = matchingTse?.id || (assignedUserId && TSE_IDS[assignedUserId]) || (assignedUser?.empId?.startsWith('TSE-NB') ? assignedUser.empId : '') || TSE_IDS[tseCodeName] || row.techSupportId || 'TSE-NB-008';
     const jobRole = linkedTask?.position || row.jobRole || 'Software Engineer';
     const recruiter = row.recruiterName || linkedTask?.assignedSrName || 'Senior Recruiter';
     const team = row.teamName || linkedTask?.teamName || 'Team Mukesh';
@@ -512,17 +514,31 @@ export default function FeedbackPage() {
                           className="flex items-center gap-2 text-left group/btn"
                         >
                           {(() => {
-                            const matchingTse = TECH_SUPPORT_TEAM.find(t => 
-                              t.id === row.techSupportId || 
-                              (row.employeeName && t.employeeName.toLowerCase().includes(row.employeeName.toLowerCase())) ||
-                              t.supportName.toLowerCase() === (row.techSupport || '').toLowerCase()
+                            // Dynamically cross-reference with linked task to guarantee correct assigned TSE
+                            const linkedTask = (tasks || []).find(t => 
+                              t.id === row.taskId || 
+                              row.id === `fb-task-${t.id}` || 
+                              (row.candidateName && t.candidateName && t.candidateName.trim().toLowerCase() === row.candidateName.trim().toLowerCase())
                             );
-                            const codeNameDisplay = (row.techSupport && row.techSupport !== 'Code Name Unassigned')
-                              ? row.techSupport
-                              : (matchingTse?.supportName || row.codeName || 'TSE-ID');
-                            const officialIdDisplay = row.techSupportId || matchingTse?.id || 'TTT-NB-TSE';
-                            const realNameDisplay = row.employeeName || matchingTse?.employeeName || '';
-                            const emailDisplay = row.techSupportEmail || matchingTse?.email || '';
+
+                            const assignedTseName = (linkedTask?.techPerson && linkedTask.techPerson !== 'Unassigned')
+                              ? linkedTask.techPerson
+                              : (row.techSupport && row.techSupport !== 'Code Name Unassigned' && !row.techSupport.startsWith('TSE-NB') ? row.techSupport : '');
+
+                            const assignedUserId = linkedTask?.assigneeId;
+
+                            const matchingTse = TECH_SUPPORT_TEAM.find(t => 
+                              (assignedUserId && (t.id === assignedUserId || TSE_IDS[assignedUserId] === t.id)) ||
+                              (assignedTseName && t.supportName.toLowerCase() === assignedTseName.toLowerCase()) ||
+                              t.id === row.techSupportId ||
+                              (row.techSupport && t.supportName.toLowerCase() === row.techSupport.toLowerCase()) ||
+                              (row.employeeName && t.employeeName.toLowerCase().includes(row.employeeName.toLowerCase()))
+                            );
+
+                            const officialIdDisplay = matchingTse?.id || (row.techSupportId && row.techSupportId.startsWith('TSE-NB') ? row.techSupportId : '') || (assignedUserId && TSE_IDS[assignedUserId]) || (assignedTseName && TSE_IDS[assignedTseName]) || 'TSE-NB-008';
+                            const codeNameDisplay = matchingTse?.supportName || assignedTseName || (row.techSupport && !row.techSupport.startsWith('TSE-NB') ? row.techSupport : 'Shreya');
+                            const realNameDisplay = matchingTse?.employeeName || row.employeeName || '';
+                            const emailDisplay = matchingTse?.email || row.techSupportEmail || '';
 
                             return (
                               <>
@@ -532,7 +548,7 @@ export default function FeedbackPage() {
                                 <div>
                                   {roleIsMarketing(currentRole) ? (
                                     <div className="font-bold text-[#1416c1] font-mono text-xs group-hover/btn:underline flex items-center gap-1">
-                                      <span>{officialIdDisplay || codeNameDisplay}</span>
+                                      <span>{officialIdDisplay}</span>
                                       <ChevronRight size={13} className="opacity-0 group-hover/btn:opacity-100 -translate-x-1 group-hover/btn:translate-x-0 transition-all text-[#1416c1]" />
                                     </div>
                                   ) : (
