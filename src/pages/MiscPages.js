@@ -38,8 +38,15 @@ export const Users = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   const isManagement = currentRole === 'management' || currentRole === 'upper_management';
+  const isTsm = currentRole === 'tsm';
+  const canManageUsers = isManagement || isTsm;
 
-  const filteredUsers = (users || []).filter(u => {
+  // TSM can ONLY view and manage TSE and TSM accounts. All other roles are hidden and protected.
+  const baseUsers = isTsm
+    ? (users || []).filter(u => u.role === 'tse' || u.role === 'tsm')
+    : (users || []);
+
+  const filteredUsers = baseUsers.filter(u => {
     const matchesSearch =
       !searchQuery ||
       u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -50,13 +57,17 @@ export const Users = () => {
     return matchesSearch && matchesRole;
   });
 
+  const availableFilterRoles = isTsm
+    ? ASSIGNABLE_ROLES.filter(r => r.id === 'tse' || r.id === 'tsm')
+    : ASSIGNABLE_ROLES;
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="Users"
-        subtitle="Manage access across the organization."
+        subtitle={isTsm ? "Manage TSE and TSM credentials and accounts." : "Manage access across the organization."}
         actions={
-          isManagement && (
+          canManageUsers && (
             <button
               type="button"
               data-testid="btn-open-create-user"
@@ -149,8 +160,8 @@ export const Users = () => {
               onChange={(e) => setRoleFilter(e.target.value)}
               className="h-8.5 px-2.5 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 text-xs font-semibold text-slate-700 dark:text-slate-200 outline-none cursor-pointer"
             >
-              <option value="all">All Roles</option>
-              {ASSIGNABLE_ROLES.map(r => (
+              <option value="all">{isTsm ? 'All Roles (TSE & TSM)' : 'All Roles'}</option>
+              {availableFilterRoles.map(r => (
                 <option key={r.id} value={r.id}>{r.label}</option>
               ))}
             </select>

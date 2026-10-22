@@ -590,7 +590,7 @@ export const INITIAL_EVENTS = [];
 export const permissionsByRole = {
   upper_management: ['dashboard', 'feedback', 'analytics', 'reports', 'notifications', 'profile'],
   management: ['dashboard', 'tasks', 'interviews', 'calendar', 'feedback', 'analytics', 'notifications', 'team', 'reports', 'users', 'settings', 'profile'],
-  tsm: ['dashboard', 'tasks', 'interviews', 'calendar', 'feedback', 'analytics', 'notifications', 'team', 'profile'],
+  tsm: ['dashboard', 'tasks', 'interviews', 'calendar', 'feedback', 'analytics', 'notifications', 'team', 'users', 'profile'],
   tse: ['dashboard', 'tasks', 'calendar', 'notifications', 'profile'],
   marketing_tl: ['dashboard', 'tasks', 'interviews', 'calendar', 'feedback', 'reports', 'notifications', 'profile'],
   marketing_sr: ['dashboard', 'tasks', 'interviews', 'calendar', 'feedback', 'notifications', 'profile'],
@@ -1173,4 +1173,82 @@ export function getSmartTseRecommendations(candidateName, allTasks = [], allFeed
       rationaleText: rationale.join(' • '),
     };
   }).sort((a, b) => b.score - a.score);
+}
+
+// ----------------- REAL-TIME TSE AVAILABILITY ENGINE -----------------
+export function parseDurationMinutes(durationStr) {
+  if (!durationStr) return 30;
+  const s = String(durationStr).toLowerCase().trim();
+  if (s.includes('hr') || s.includes('hour')) {
+    const num = parseFloat(s) || 1;
+    return Math.round(num * 60);
+  }
+  const match = s.match(/\d+/);
+  return match ? parseInt(match[0], 10) : 30;
+}
+
+export function checkTseAvailability(tseId, interviewDateTime, duration, allTasks = [], excludeTaskId = null) {
+  if (!tseId || !interviewDateTime) {
+    return { available: true, conflicts: [] };
+  }
+
+  const requestedStart = new Date(interviewDateTime).getTime();
+  if (isNaN(requestedStart)) {
+    return { available: true, conflicts: [] };
+  }
+
+  const durMins = parseDurationMinutes(duration);
+  const requestedEnd = requestedStart + durMins * 60000;
+
+  const conflicts = [];
+
+  for (const t of allTasks) {
+    if (excludeTaskId && t.id === excludeTaskId) continue;
+    if (t.status === 'Cancelled') continue;
+    if (!t.interviewDateTime) continue;
+
+    // Match by assigneeId or techPerson or codeName
+    const isThisTse = t.assigneeId === tseId ||
+      (t.techPerson && t.techPerson.toLowerCase() === tseId.toLowerCase()) ||
+      (t.codeName && t.codeName.toLowerCase() === tseId.toLowerCase());
+
+    if (!isThisTse) continue;
+
+    const existingStart = new Date(t.interviewDateTime).getTime();
+    if (isNaN(existingStart)) continue;
+
+    const existingDurMins = parseDurationMinutes(t.duration);
+    const existingEnd = existingStart + existingDurMins * 60000;
+
+    // Time Overlap Formula: existing_start < requested_end && existing_end > requested_start
+    if (existingStart < requestedEnd && existingEnd > requestedStart) {
+      const startEst = new Date(existingStart).toLocaleTimeString('en-US', {
+        timeZone: 'America/New_York',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+      });
+      const endEst = new Date(existingEnd).toLocaleTimeString('en-US', {
+        timeZone: 'America/New_York',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+      });
+
+      conflicts.push({
+        taskId: t.id,
+        candidateName: t.candidateName || t.title || 'Candidate',
+        interviewDateTime: t.interviewDateTime,
+        duration: t.duration || '30 mins',
+        companyName: t.companyName || '',
+        status: t.status,
+        timeWindowFormatted: `${startEst} – ${endEst} EST`,
+      });
+    }
+  }
+
+  return {
+    available: conflicts.length === 0,
+    conflicts,
+  };
 }

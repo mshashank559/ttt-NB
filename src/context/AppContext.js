@@ -378,6 +378,7 @@ export const AppProvider = ({ children }) => {
       timeline: [
         { at: date, event: `Assigned to ${assignee?.name || 'Unassigned'} for ${taskType}`, by: creator?.name || 'TSM' },
       ],
+      attachments: Array.isArray(task.attachments) ? task.attachments : [],
     };
     setTasks(prev => [newTask, ...prev]);
 
@@ -544,6 +545,30 @@ export const AppProvider = ({ children }) => {
       ? `Task marked as Done by ${currentUser?.name || 'TSE'}: ${completionRemark}`
       : `Status changed to ${status}`;
     updateTask(id, patch, note);
+  }, [currentUser, updateTask]);
+
+  const deleteTask = useCallback((id) => {
+    setTasks(prev => prev.filter(t => t.id !== id));
+    fetch(`/api/tasks/${id}`, {
+      method: 'DELETE',
+    }).catch(err => console.warn('Failed to delete task on server:', err));
+    toast.success(`Task ${id} deleted successfully. Linked feedback preserved.`);
+  }, []);
+
+  const unassignTask = useCallback((id) => {
+    const unassignPatch = {
+      assigneeId: '',
+      techPerson: 'Unassigned',
+      codeName: 'Unassigned',
+      techPersonId: '',
+    };
+    updateTask(id, unassignPatch, `TSE unassigned by ${currentUser?.name || 'TSM'}. Task ready for reassignment.`);
+    fetch(`/api/tasks/${id}/unassign`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ by: currentUser?.name || 'TSM' }),
+    }).catch(err => console.warn('Failed to unassign task on server:', err));
+    toast.success(`Task ${id} has been unassigned.`);
   }, [currentUser, updateTask]);
 
   const addMarketingReview = useCallback((feedbackId, reviewData) => {
@@ -987,6 +1012,8 @@ export const AppProvider = ({ children }) => {
     updateTask,
     reassignTask,
     changeTaskStatus,
+    deleteTask,
+    unassignTask,
     assignMarketingSr,
     submitInterviewFeedback,
     updateInterviewStatus,

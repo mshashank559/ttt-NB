@@ -5,6 +5,8 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dns from 'dns';
+import fs from 'fs';
+import multer from 'multer';
 
 // Fix Node.js Windows SRV DNS resolution for MongoDB Atlas
 try {
@@ -22,7 +24,60 @@ const MONGODB_URI = process.env.MONGODB_URI;
 
 // Middleware
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// -------------------------------------------------------------
+// File Uploads Configuration (Attachments)
+// -------------------------------------------------------------
+const UPLOADS_DIR = path.join(__dirname, 'uploads');
+if (!fs.existsSync(UPLOADS_DIR)) {
+  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, UPLOADS_DIR);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    const baseName = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9_-]/g, '_');
+    const safeUniqueName = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}-${baseName}${ext}`;
+    cb(null, safeUniqueName);
+  },
+});
+
+const ALLOWED_MIME_TYPES = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'text/csv',
+  'application/csv',
+  'image/png',
+  'image/jpeg',
+  'image/jpg',
+  'image/webp',
+  'text/plain',
+];
+
+const upload = multer({
+  storage,
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10 MB per file limit
+    files: 10,
+  },
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    const allowedExts = ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.csv', '.png', '.jpg', '.jpeg', '.webp', '.txt'];
+    if (allowedExts.includes(ext) || ALLOWED_MIME_TYPES.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error(`File type ${ext} is not allowed. Supported formats: PDF, DOC/DOCX, XLS/XLSX, CSV, PNG, JPG, JPEG, WEBP, TXT.`));
+    }
+  },
+});
 
 // -------------------------------------------------------------
 // MongoDB Connection
@@ -79,6 +134,7 @@ const TaskSchema = new mongoose.Schema({
   isUrgent: Boolean,
   isElevated: Boolean,
   timeline: Array,
+  attachments: { type: Array, default: [] },
 }, { timestamps: true });
 
 const FeedbackSchema = new mongoose.Schema({
@@ -296,7 +352,13 @@ app.post('/api/seed', async (req, res) => {
 // ----------------- USERS ENDPOINTS -----------------
 app.get('/api/users', async (req, res) => {
   try {
-    const users = await User.find().sort({ createdAt: -1 });
+    const requesterRole = req.query.role || req.query.requesterRole || req.headers['x-user-role'];
+    let query = {};
+    // TSM can ONLY view TSE and TSM users
+    if (requesterRole === 'tsm') {
+      query = { role: { $in: ['tse', 'tsm'] } };
+    }
+    const users = await User.find(query).sort({ createdAt: -1 });
     res.json(users);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -306,6 +368,13 @@ app.get('/api/users', async (req, res) => {
 app.post('/api/users', async (req, res) => {
   try {
     const userData = req.body;
+    const requesterRole = req.body.requesterRole || req.headers['x-user-role'];
+
+    // TSM can ONLY create TSE and TSM users
+    if (requesterRole === 'tsm' && !['tse', 'tsm'].includes(userData.role)) {
+      return res.status(403).json({ error: 'TSM is only authorized to create credentials for TSE and TSM.' });
+    }
+
     const existing = await User.findOne({ email: userData.email?.toLowerCase() });
     if (existing) {
       return res.status(400).json({ error: 'User with this email already exists' });
@@ -325,6 +394,19 @@ app.put('/api/users/:id', async (req, res) => {
   try {
     const userId = req.params.id;
     const updateData = req.body;
+    const requesterRole = req.body.requesterRole || req.headers['x-user-role'];
+
+    // TSM can ONLY update TSE and TSM users, and cannot elevate to other roles
+    if (requesterRole === 'tsm') {
+      const targetUser = await User.findOne({ $or: [{ id: userId }, { empId: userId }, { tttNbId: userId }] });
+      if (!targetUser || !['tse', 'tsm'].includes(targetUser.role)) {
+        return res.status(403).json({ error: 'TSM is only authorized to edit TSE and TSM accounts.' });
+      }
+      if (updateData.role && !['tse', 'tsm'].includes(updateData.role)) {
+        return res.status(403).json({ error: 'TSM cannot assign roles other than TSE or TSM.' });
+      }
+    }
+
     const user = await User.findOneAndUpdate(
       { $or: [{ id: userId }, { empId: userId }, { tttNbId: userId }] },
       { $set: updateData },
@@ -342,6 +424,16 @@ app.put('/api/users/:id', async (req, res) => {
 app.delete('/api/users/:id', async (req, res) => {
   try {
     const userId = req.params.id;
+    const requesterRole = req.query.requesterRole || req.query.role || req.headers['x-user-role'];
+
+    // TSM can ONLY delete TSE and TSM users
+    if (requesterRole === 'tsm') {
+      const targetUser = await User.findOne({ $or: [{ id: userId }, { empId: userId }, { tttNbId: userId }] });
+      if (!targetUser || !['tse', 'tsm'].includes(targetUser.role)) {
+        return res.status(403).json({ error: 'TSM is only authorized to delete TSE and TSM accounts.' });
+      }
+    }
+
     const result = await User.findOneAndDelete({
       $or: [{ id: userId }, { empId: userId }, { tttNbId: userId }]
     });
@@ -521,8 +613,148 @@ app.put('/api/tasks/:id/outcome', async (req, res) => {
 
 app.delete('/api/tasks/:id', async (req, res) => {
   try {
-    await Task.findOneAndDelete({ id: req.params.id });
-    res.json({ success: true, id: req.params.id });
+    const deleted = await Task.findOneAndDelete({ id: req.params.id });
+    if (!deleted) return res.status(404).json({ error: 'Task not found' });
+    res.json({ success: true, id: req.params.id, message: 'Task deleted successfully. Feedback and audit records preserved.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ----------------- TASK ATTACHMENTS ENDPOINTS -----------------
+app.post('/api/tasks/upload-attachments', upload.array('files', 10), (req, res) => {
+  try {
+    const files = req.files || [];
+    const attachments = files.map(f => ({
+      id: `att-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
+      name: f.filename,
+      originalName: f.originalname,
+      size: f.size,
+      mimeType: f.mimetype,
+      path: `/api/attachments/${f.filename}`,
+      uploadedAt: new Date().toISOString(),
+      uploadedBy: req.body.uploadedBy || 'TSM',
+    }));
+    res.json({ success: true, count: attachments.length, attachments });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/attachments/:filename', (req, res) => {
+  try {
+    const safeFilename = path.basename(req.params.filename);
+    const filePath = path.join(UPLOADS_DIR, safeFilename);
+
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'Attachment file not found' });
+    }
+
+    const ext = path.extname(safeFilename).toLowerCase();
+    const isDownload = req.query.download === '1' || req.query.download === 'true';
+    const inlineExts = ['.pdf', '.png', '.jpg', '.jpeg', '.webp', '.txt'];
+
+    if (!isDownload && inlineExts.includes(ext)) {
+      res.setHeader('Content-Disposition', 'inline');
+      res.sendFile(filePath);
+    } else {
+      res.download(filePath, req.query.name || safeFilename);
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ----------------- TSE AVAILABILITY ENGINE -----------------
+function parseDurationMinutes(dur) {
+  if (!dur) return 30;
+  const s = String(dur).toLowerCase();
+  if (s.includes('hr') || s.includes('hour')) {
+    const num = parseFloat(s) || 1;
+    return Math.round(num * 60);
+  }
+  const match = s.match(/\d+/);
+  return match ? parseInt(match[0], 10) : 30;
+}
+
+app.post('/api/tse/check-availability', async (req, res) => {
+  try {
+    const { tseId, interviewDateTime, duration, excludeTaskId } = req.body;
+    if (!tseId || !interviewDateTime) {
+      return res.json({ available: true, conflicts: [] });
+    }
+
+    const reqStart = new Date(interviewDateTime).getTime();
+    if (isNaN(reqStart)) {
+      return res.json({ available: true, conflicts: [] });
+    }
+
+    const durMins = parseDurationMinutes(duration);
+    const reqEnd = reqStart + durMins * 60000;
+
+    // Find active scheduled tasks for this TSE
+    const tasks = await Task.find({
+      status: { $ne: 'Cancelled' },
+      interviewDateTime: { $exists: true, $ne: '' },
+      $or: [
+        { assigneeId: tseId },
+        { techPerson: { $regex: new RegExp(`^${tseId}$`, 'i') } },
+        { codeName: { $regex: new RegExp(`^${tseId}$`, 'i') } }
+      ]
+    });
+
+    const conflicts = [];
+    for (const t of tasks) {
+      if (excludeTaskId && t.id === excludeTaskId) continue;
+      const existStart = new Date(t.interviewDateTime).getTime();
+      if (isNaN(existStart)) continue;
+      const existDur = parseDurationMinutes(t.duration);
+      const existEnd = existStart + existDur * 60000;
+
+      // Overlap formula: existing_start < requested_end && existing_end > requested_start
+      if (existStart < reqEnd && existEnd > reqStart) {
+        conflicts.push({
+          taskId: t.id,
+          candidateName: t.candidateName || t.title,
+          interviewDateTime: t.interviewDateTime,
+          duration: t.duration || '30 mins',
+          status: t.status,
+          companyName: t.companyName || '',
+        });
+      }
+    }
+
+    res.json({ available: conflicts.length === 0, conflicts });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// TSM TSE Unassign Endpoint
+app.put('/api/tasks/:id/unassign', async (req, res) => {
+  try {
+    const unassignPatch = {
+      assigneeId: '',
+      techPerson: 'Unassigned',
+      codeName: 'Unassigned',
+      techPersonId: '',
+    };
+    const updated = await Task.findOneAndUpdate(
+      { id: req.params.id },
+      {
+        $set: unassignPatch,
+        $push: {
+          timeline: {
+            at: new Date().toISOString().slice(0, 10),
+            event: 'TSE unassigned. Task ready for reassignment.',
+            by: req.body.by || 'TSM',
+          }
+        }
+      },
+      { new: true }
+    );
+    if (!updated) return res.status(404).json({ error: 'Task not found' });
+    res.json(updated);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

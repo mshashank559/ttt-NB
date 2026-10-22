@@ -95,8 +95,15 @@ export default function CreateUserModal({ open, onOpenChange }) {
   // Automatically computed next TTT-NB ID (no manual entry required)
   const nextTttNbId = useMemo(() => getNextTttNbId(users), [users]);
 
-  // Permission guard: Only Management or Upper Management
-  const isAuthorized = currentRole === 'management' || currentRole === 'upper_management';
+  // Permission guard: Management, Upper Management, and TSM
+  const isManagement = currentRole === 'management' || currentRole === 'upper_management';
+  const isTsm = currentRole === 'tsm';
+  const isAuthorized = isManagement || isTsm;
+
+  // TSM can ONLY create TSE and TSM accounts
+  const availableRoles = useMemo(() => {
+    return isTsm ? ASSIGNABLE_ROLES.filter(r => r.id === 'tse' || r.id === 'tsm') : ASSIGNABLE_ROLES;
+  }, [isTsm]);
 
   const handleRoleChange = (newRole) => {
     setRole(newRole);
@@ -115,7 +122,12 @@ export default function CreateUserModal({ open, onOpenChange }) {
     e.preventDefault();
 
     if (!isAuthorized) {
-      toast.error('Permission Denied: User creation is restricted to Management.');
+      toast.error('Permission Denied: User creation is restricted to Management and TSM.');
+      return;
+    }
+
+    if (isTsm && !['tse', 'tsm'].includes(role)) {
+      toast.error('Permission Denied: TSM is only authorized to create TSE and TSM accounts.');
       return;
     }
 
@@ -313,7 +325,7 @@ export default function CreateUserModal({ open, onOpenChange }) {
                 Role Assignment <span className="text-red-500">*</span>
               </label>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {ASSIGNABLE_ROLES.map((r) => {
+                {availableRoles.map((r) => {
                   const isSelected = role === r.id;
                   return (
                     <button

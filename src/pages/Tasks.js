@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Plus, Search, UserRound, Calendar as CalIcon, Clock, Building2, Briefcase, FileText, StickyNote, MessageSquare, ShieldAlert, CheckCircle2, Sparkles, Lock } from 'lucide-react';
+import { Plus, Search, UserRound, Calendar as CalIcon, Clock, Building2, Briefcase, FileText, StickyNote, MessageSquare, ShieldAlert, CheckCircle2, Sparkles, Lock, Paperclip, UploadCloud, X, File, Download, Eye, Trash2, UserMinus, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useApp } from '../context/AppContext';
 import { PageHeader, StatusBadge, TaskTypeBadge, SectionCard, EmptyState } from '../components/common';
-import { TASK_TYPES, TASK_STATUSES, MARKETING_TEAMS, getTseCodeName, getTsmCodeName, roleIsMarketing, getInterviewTimingMeta, sortTasksByInterviewPriority, getSmartTseRecommendations, INTERVIEW_OUTCOMES, TSE_IDS, getTseId, getTseRealName } from '../data/mockData';
+import { TASK_TYPES, TASK_STATUSES, MARKETING_TEAMS, getTseCodeName, getTsmCodeName, roleIsMarketing, getInterviewTimingMeta, sortTasksByInterviewPriority, getSmartTseRecommendations, INTERVIEW_OUTCOMES, TSE_IDS, getTseId, getTseRealName, checkTseAvailability, parseDurationMinutes } from '../data/mockData';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
@@ -27,6 +27,10 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
     (currentUser?.team === 'team-mukesh' || currentUser?.id === 'u-1791911058812' || (currentUser?.name || '').toLowerCase().includes('mukesh') ? 'team-mukesh' :
      currentUser?.team === 'team-shivam' || currentUser?.id === 'u-1791911115518' || (currentUser?.name || '').toLowerCase().includes('shivam') ? 'team-shivam' : '');
   const initialTeam = (userTeamId && MARKETING_TEAMS.find(t => t.id === userTeamId)) || MARKETING_TEAMS[0];
+
+  const [attachments, setAttachments] = useState([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [allowTseOverride, setAllowTseOverride] = useState(false);
 
   const [form, setForm] = useState({
     date: todayStr,
@@ -63,9 +67,34 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
     );
   }, [users, form.teamId, initialTeam.id]);
 
+  // Real-Time TSE Availability Engine (Formula: existing_start < requested_end && existing_end > requested_start)
+  const tseAvailabilityMap = useMemo(() => {
+    if (form.taskType !== 'Interview' || !form.interviewDateTime) {
+      const map = {};
+      tseUsers.forEach(u => {
+        map[u.id] = { available: true, conflicts: [] };
+      });
+      return map;
+    }
+    const map = {};
+    tseUsers.forEach(u => {
+      map[u.id] = checkTseAvailability(u.id, form.interviewDateTime, form.duration, tasks);
+    });
+    return map;
+  }, [form.taskType, form.interviewDateTime, form.duration, tseUsers, tasks]);
+
+  const selectedTseAvailability = useMemo(() => {
+    if (!form.assigneeId || form.taskType !== 'Interview' || !form.interviewDateTime) {
+      return { available: true, conflicts: [] };
+    }
+    return tseAvailabilityMap[form.assigneeId] || { available: true, conflicts: [] };
+  }, [form.assigneeId, form.taskType, form.interviewDateTime, tseAvailabilityMap]);
+
   // Sync team & clear inputs whenever modal opens
   useEffect(() => {
     if (open) {
+      setAttachments([]);
+      setAllowTseOverride(false);
       setForm(prev => ({
         ...prev,
         position: '',
@@ -81,6 +110,63 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
       }));
     }
   }, [open, isMarketingUser, initialTeam]);
+
+  // Multi-format File Upload Handler (Feature 2)
+  const handleFileUpload = async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    const allowedExts = ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.csv', '.png', '.jpg', '.jpeg', '.webp', '.txt'];
+    const maxFileSize = 10 * 1024 * 1024; // 10MB per file
+
+    const validFiles = [];
+    for (const f of files) {
+      const ext = '.' + f.name.split('.').pop().toLowerCase();
+      if (!allowedExts.includes(ext)) {
+        toast.error(`"${f.name}" format is not supported. Supported: PDF, DOC/DOCX, XLS/XLSX, CSV, PNG, JPG, JPEG, WEBP, TXT.`);
+        continue;
+      }
+      if (f.size > maxFileSize) {
+        toast.error(`"${f.name}" exceeds the 10MB limit (${(f.size / (1024 * 1024)).toFixed(1)}MB).`);
+        continue;
+      }
+      validFiles.push(f);
+    }
+
+    if (validFiles.length === 0) return;
+
+    const formData = new FormData();
+    validFiles.forEach(f => formData.append('files', f));
+    formData.append('uploadedBy', currentUser?.name || 'TSM');
+
+    setIsUploading(true);
+    try {
+      const res = await fetch('/api/tasks/upload-attachments', {
+        method: 'POST',
+        body: formData,
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.attachments && data.attachments.length > 0) {
+          setAttachments(prev => [...prev, ...data.attachments]);
+          toast.success(`Attached ${data.attachments.length} file${data.attachments.length > 1 ? 's' : ''}`);
+        }
+      } else {
+        const err = await res.json();
+        toast.error(err.error || 'Failed to upload attachments.');
+      }
+    } catch (err) {
+      console.error('File upload error:', err);
+      toast.error('Network error during file upload.');
+    } finally {
+      setIsUploading(false);
+      e.target.value = '';
+    }
+  };
+
+  const removeAttachment = (attId) => {
+    setAttachments(prev => prev.filter(a => a.id !== attId));
+  };
 
   // Candidate Prior History
   const priorHistory = useMemo(() => {
@@ -121,6 +207,8 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
   };
 
   const resetForm = () => {
+    setAttachments([]);
+    setAllowTseOverride(false);
     setForm({
       date: todayStr,
       assigneeId: isMarketingUser ? '' : (tseUsers[0]?.id || ''),
@@ -148,6 +236,13 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
       toast.error('Please enter the candidate name');
       return;
     }
+
+    // Availability validation guard
+    if (form.taskType === 'Interview' && !isMarketingUser && form.assigneeId && !selectedTseAvailability.available && !allowTseOverride) {
+      toast.error('The selected TSE is occupied during this time window. Please select an available TSE or authorize emergency override.');
+      return;
+    }
+
     const selectedTse = tseUsers.find(u => u.id === form.assigneeId);
     const taskDate = form.taskType === 'Interview' && form.interviewDateTime
       ? form.interviewDateTime.slice(0, 10)
@@ -167,6 +262,7 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
       title: `${form.candidateName.trim()} — ${form.taskType}${form.companyName ? ` (${form.companyName.trim()})` : ''}`,
       category: form.taskType,
       interviewDateTime: form.taskType === 'Interview' ? form.interviewDateTime : '',
+      attachments: attachments || [],
     });
     toast.success('Task created successfully!');
     onOpenChange(false);
@@ -301,26 +397,74 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
 
           {/* Tech Person (TSE) - Only visible when NOT Marketing TL / SR */}
           {!isMarketingUser && (
-            <div>
-              <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Tech Person (TSE)</label>
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Tech Person (TSE)</label>
+                {selectedTseAvailability && (
+                  <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full border ${
+                    selectedTseAvailability.available
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                      : 'bg-rose-50 text-rose-700 border-rose-300 animate-pulse'
+                  }`}>
+                    {selectedTseAvailability.available ? '🟢 Available' : '🔴 Occupied'}
+                  </span>
+                )}
+              </div>
               <Select value={form.assigneeId} onValueChange={v => setForm({ ...form, assigneeId: v })}>
-                <SelectTrigger data-testid="task-form-assignee" className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white">
+                <SelectTrigger data-testid="task-form-assignee" className="bg-slate-50 border-slate-300 text-slate-900 focus:bg-white">
                   <SelectValue placeholder="Select TSE" />
                 </SelectTrigger>
                 <SelectContent className="bg-white border-slate-200 text-slate-900 max-h-56">
                   {tseUsers.map(u => {
                     const codeName = u.codeName || u.name;
                     const realName = getTseRealName(u.name) || getTseRealName(u.id);
+                    const avail = tseAvailabilityMap[u.id];
+                    const isOccupied = avail && !avail.available;
+                    const displayName = canViewRealName && realName && realName.toLowerCase() !== codeName.toLowerCase()
+                      ? `${codeName} (${realName})`
+                      : codeName;
+
                     return (
-                      <SelectItem key={u.id} value={u.id}>
-                        {canViewRealName && realName && realName.toLowerCase() !== codeName.toLowerCase()
-                          ? `${codeName} (${realName})`
-                          : codeName}
+                      <SelectItem key={u.id} value={u.id} disabled={isOccupied && !allowTseOverride}>
+                        <div className="flex items-center justify-between w-full gap-2 text-xs">
+                          <span className="font-semibold">{displayName}</span>
+                          {isOccupied ? (
+                            <span className="text-[10px] font-bold text-rose-700 bg-rose-50 px-1.5 py-0.2 rounded border border-rose-200">
+                              🔴 {avail.conflicts[0]?.timeWindowFormatted || 'Occupied'}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">
+                              🟢 Available
+                            </span>
+                          )}
+                        </div>
                       </SelectItem>
                     );
                   })}
                 </SelectContent>
               </Select>
+
+              {/* Conflict Alert Box with Emergency Override */}
+              {!selectedTseAvailability.available && (
+                <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-300 text-rose-950 text-xs mt-1.5 space-y-1">
+                  <div className="font-bold flex items-center gap-1.5 text-rose-800">
+                    <AlertTriangle size={13} className="text-rose-600 shrink-0" />
+                    <span>Slot Conflict Detected</span>
+                  </div>
+                  <p className="text-[11px] text-rose-800">
+                    Already scheduled with <strong>{selectedTseAvailability.conflicts[0]?.candidateName}</strong> ({selectedTseAvailability.conflicts[0]?.timeWindowFormatted}).
+                  </p>
+                  <label className="flex items-center gap-2 pt-1 text-[11px] font-semibold text-rose-900 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={allowTseOverride}
+                      onChange={(e) => setAllowTseOverride(e.target.checked)}
+                      className="rounded text-rose-600 focus:ring-rose-500"
+                    />
+                    <span>Authorize Emergency Override / Concurrent Session</span>
+                  </label>
+                </div>
+              )}
             </div>
           )}
 
@@ -486,6 +630,70 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
               className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white resize-none"
               placeholder="Add internal handover notes, additional instructions..."
             />
+          </div>
+
+          {/* Attachments Upload Section (Feature 2) */}
+          <div className="md:col-span-2 p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                <Paperclip size={13} className="text-blue-600" />
+                <span>Task Attachments</span>
+                <span className="text-[10px] text-slate-500 font-normal lowercase">(PDF, Word, Excel, CSV, Images, Text · Max 10MB each)</span>
+              </label>
+              <span className="text-[11px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                {attachments.length} attached
+              </span>
+            </div>
+
+            {/* Dropzone / Upload Trigger */}
+            <label className="flex flex-col items-center justify-center p-3.5 border-2 border-dashed border-slate-300 hover:border-blue-500 bg-white hover:bg-blue-50/30 rounded-xl transition-all cursor-pointer group select-none">
+              <input
+                type="file"
+                multiple
+                accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.png,.jpg,.jpeg,.webp,.txt"
+                onChange={handleFileUpload}
+                className="hidden"
+                disabled={isUploading}
+              />
+              <UploadCloud size={22} className="text-slate-400 group-hover:text-blue-600 transition-colors" />
+              <span className="text-xs font-semibold text-slate-700 group-hover:text-blue-700 mt-1">
+                {isUploading ? 'Uploading files to storage...' : 'Click or Drag files to attach (Resume, JD, Runbook)'}
+              </span>
+              <span className="text-[10px] text-slate-400 mt-0.5">
+                Supported formats: PDF, DOC/DOCX, XLS/XLSX, CSV, PNG, JPG, JPEG, WEBP, TXT
+              </span>
+            </label>
+
+            {/* Uploaded File Cards */}
+            {attachments.length > 0 && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 max-h-40 overflow-y-auto pr-1">
+                {attachments.map(att => (
+                  <div key={att.id} className="flex items-center justify-between p-2 rounded-lg bg-white border border-slate-200 text-xs shadow-2xs">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="h-7 w-7 rounded-md bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
+                        <FileText size={14} />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="font-semibold text-slate-900 truncate max-w-[170px]" title={att.originalName}>
+                          {att.originalName}
+                        </div>
+                        <div className="text-[10px] text-slate-400">
+                          {(att.size / 1024).toFixed(1)} KB
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeAttachment(att.id)}
+                      className="p-1 text-slate-400 hover:text-rose-600 rounded transition-colors cursor-pointer shrink-0"
+                      title="Remove attachment"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -1007,6 +1215,38 @@ const TaskDrawer = ({ task, onClose }) => {
             </div>
           )}
 
+          {/* Attachments Section in Drawer */}
+          {task.attachments && task.attachments.length > 0 && (
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+              <div className="text-xs uppercase tracking-wider text-slate-700 font-bold flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <Paperclip size={13} className="text-blue-600" />
+                  <span>Attachments ({task.attachments.length})</span>
+                </span>
+              </div>
+              <div className="space-y-1.5">
+                {task.attachments.map(att => (
+                  <div key={att.id} className="flex items-center justify-between p-2 rounded-lg bg-white border border-slate-200 text-xs">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <FileText size={14} className="text-blue-600 shrink-0" />
+                      <span className="font-medium text-slate-800 truncate max-w-[200px]" title={att.originalName}>
+                        {att.originalName}
+                      </span>
+                    </div>
+                    <a
+                      href={`${att.path}?download=1&name=${encodeURIComponent(att.originalName)}`}
+                      download={att.originalName}
+                      className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 font-semibold flex items-center gap-1 cursor-pointer"
+                    >
+                      <Download size={11} />
+                      <span>Download</span>
+                    </a>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Activity Timeline */}
           <div>
             <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-3">Activity timeline</div>
@@ -1020,19 +1260,226 @@ const TaskDrawer = ({ task, onClose }) => {
               ))}
             </ol>
           </div>
+
+          {/* TSM / Management Action Controls (Feature 4: Unassign & Delete) */}
+          {roleCanEditAny(currentRole) && (
+            <div className="pt-3 border-t border-slate-200 flex items-center gap-2">
+              {task.assigneeId && (
+                <button
+                  type="button"
+                  data-testid="drawer-btn-unassign-tse"
+                  onClick={() => {
+                    unassignTask && unassignTask(task.id);
+                    onClose();
+                  }}
+                  className="flex-1 h-9 rounded-lg border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <UserMinus size={14} />
+                  <span>Unassign TSE</span>
+                </button>
+              )}
+              <button
+                type="button"
+                data-testid="drawer-btn-delete-task"
+                onClick={() => {
+                  if (window.confirm(`Are you sure you want to delete task ${task.id}? Linked feedback and audit records will remain preserved.`)) {
+                    deleteTask && deleteTask(task.id);
+                    onClose();
+                  }
+                }}
+                className="flex-1 h-9 rounded-lg border border-rose-300 bg-rose-50 text-rose-800 hover:bg-rose-100 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <Trash2 size={14} />
+                <span>Delete Task</span>
+              </button>
+            </div>
+          )}
         </div>
       </SheetContent>
     </Sheet>
   );
 };
 
+// ----------------- ATTACHMENT VIEWER MODAL (Feature 3) -----------------
+const AttachmentViewerModal = ({ task, open, onOpenChange }) => {
+  const [selectedPreview, setSelectedPreview] = useState(null);
+
+  useEffect(() => {
+    if (!open) setSelectedPreview(null);
+  }, [open]);
+
+  if (!task) return null;
+  const attachments = task.attachments || [];
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="bg-white border-slate-200 text-slate-900 max-w-3xl max-h-[90vh] overflow-y-auto shadow-2xl">
+        <DialogHeader>
+          <DialogTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
+            <Paperclip size={18} className="text-blue-600" />
+            <span>Task Attachments — {task.candidateName || task.title || task.id}</span>
+          </DialogTitle>
+          <DialogDescription className="text-xs text-slate-500">
+            {attachments.length} attachment{attachments.length > 1 ? 's' : ''} available for candidate assessment
+          </DialogDescription>
+        </DialogHeader>
+
+        {attachments.length === 0 ? (
+          <div className="py-8 text-center text-xs text-slate-400">
+            No attachments uploaded for this task.
+          </div>
+        ) : (
+          <div className="space-y-2.5 mt-3">
+            {attachments.map(att => {
+              const fileName = att.originalName || att.name || 'document';
+              const ext = fileName.split('.').pop().toLowerCase();
+              const isPreviewable = ['pdf', 'png', 'jpg', 'jpeg', 'webp', 'txt'].includes(ext);
+
+              return (
+                <div key={att.id} className="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100/70 transition-colors">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="h-9 w-9 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
+                      <FileText size={18} />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="font-semibold text-xs text-slate-900 truncate" title={fileName}>
+                        {fileName}
+                      </div>
+                      <div className="text-[10px] text-slate-500 mt-0.5">
+                        {(att.size / 1024).toFixed(1)} KB · {att.uploadedAt ? new Date(att.uploadedAt).toLocaleDateString() : 'Attached'} · By {att.uploadedBy || 'TSM'}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    {isPreviewable && (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedPreview(att)}
+                        className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-white border border-slate-200 text-blue-700 hover:bg-blue-50 transition-colors flex items-center gap-1 cursor-pointer"
+                      >
+                        <Eye size={12} />
+                        <span>Preview</span>
+                      </button>
+                    )}
+                    <a
+                      href={`${att.path}?download=1&name=${encodeURIComponent(fileName)}`}
+                      download={fileName}
+                      className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-[#0B1EE6] text-white hover:bg-blue-700 transition-colors flex items-center gap-1 cursor-pointer"
+                    >
+                      <Download size={12} />
+                      <span>Download</span>
+                    </a>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Inline Preview Window */}
+        {selectedPreview && (
+          <div className="mt-4 pt-4 border-t border-slate-200">
+            <div className="flex items-center justify-between mb-2">
+              <span className="font-bold text-xs text-slate-800 truncate max-w-[80%]">
+                Preview: {selectedPreview.originalName}
+              </span>
+              <button
+                type="button"
+                onClick={() => setSelectedPreview(null)}
+                className="text-xs text-slate-500 hover:text-slate-800 font-semibold cursor-pointer"
+              >
+                Close Preview
+              </button>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-900 overflow-hidden flex items-center justify-center min-h-[300px] max-h-[500px]">
+              {['png', 'jpg', 'jpeg', 'webp'].includes((selectedPreview.originalName || '').split('.').pop().toLowerCase()) ? (
+                <img
+                  src={selectedPreview.path}
+                  alt={selectedPreview.originalName}
+                  className="max-h-[480px] max-w-full object-contain p-2"
+                />
+              ) : selectedPreview.originalName?.toLowerCase().endsWith('.pdf') ? (
+                <iframe
+                  src={selectedPreview.path}
+                  title="PDF Preview"
+                  className="w-full h-[480px] border-none"
+                />
+              ) : (
+                <iframe
+                  src={selectedPreview.path}
+                  title="Text Preview"
+                  className="w-full h-[320px] bg-white border-none p-4 font-mono text-xs"
+                />
+              )}
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+// ----------------- DELETE TASK MODAL (Feature 4) -----------------
+const DeleteTaskModal = ({ task, open, onOpenChange, onConfirm }) => {
+  if (!task) return null;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="bg-white border-slate-200 text-slate-900 max-w-md shadow-2xl">
+        <DialogHeader>
+          <DialogTitle className="text-base font-bold text-rose-600 flex items-center gap-2">
+            <Trash2 size={18} />
+            <span>Delete Task Record</span>
+          </DialogTitle>
+          <DialogDescription className="text-xs text-slate-600 leading-relaxed pt-2">
+            Are you sure you want to delete task <strong>{task.id}</strong> for candidate <strong>{task.candidateName || task.title}</strong>?
+            <br />
+            <span className="text-emerald-700 font-semibold block mt-1.5">
+              ✓ Linked candidate feedback and audit trail records will be safely preserved.
+            </span>
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex items-center justify-end gap-2 mt-4 pt-3 border-t border-slate-200">
+          <button
+            type="button"
+            onClick={() => onOpenChange(false)}
+            className="px-3.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            data-testid="confirm-delete-task-btn"
+            onClick={() => {
+              onConfirm(task.id);
+              onOpenChange(false);
+            }}
+            className="px-4 py-1.5 rounded-lg bg-rose-600 text-white text-xs font-bold hover:bg-rose-700 shadow-sm transition-colors cursor-pointer"
+          >
+            Confirm Delete
+          </button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
 export default function Tasks() {
-  const { tasks, users, feedbacks, currentRole, currentUser, reassignTask } = useApp();
+  const { tasks, users, feedbacks, currentRole, currentUser, reassignTask, deleteTask, unassignTask } = useApp();
   const navigate = useNavigate();
   const location = useLocation();
   const [filters, setFilters] = useState({ status: 'all', taskType: 'all', assignee: 'all', sr: 'all', q: '' });
   const [createOpen, setCreateOpen] = useState(false);
   const [activeTask, setActiveTask] = useState(null);
+
+  // Modals for Attachments Viewer & Delete Confirmation
+  const [selectedTaskForAttachments, setSelectedTaskForAttachments] = useState(null);
+  const [attachmentViewerOpen, setAttachmentViewerOpen] = useState(false);
+  const [selectedTaskForDelete, setSelectedTaskForDelete] = useState(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+
+  const canManageTasks = currentRole === 'tsm' || currentRole === 'management' || currentRole === 'upper_management';
 
   const tseUsers = useMemo(() => (users || []).filter(u => u.role === 'tse'), [users]);
   const canAssignTse = ['tsm', 'management', 'upper_management', 'marketing_tl', 'marketing_sr', 'recruiter', 'admin'].includes(currentRole) || roleCanEditAny(currentRole);
@@ -1183,9 +1630,11 @@ export default function Tasks() {
                   <th className="py-3 px-4 font-semibold">Position</th>
                   <th className="py-3 px-4 font-semibold">Company name</th>
                   <th className="py-3 px-4 font-semibold">Status / Outcome</th>
+                  <th className="py-3 px-3 font-semibold">Attachments</th>
                   <th className="py-3 px-4 font-semibold">Comment</th>
                   <th className="py-3 px-4 font-semibold">Candidate Feedback</th>
                   <th className="py-3 px-4 font-semibold text-right">Assign TSE</th>
+                  {canManageTasks && <th className="py-3 px-3 font-semibold text-right">Actions</th>}
                 </tr>
               </thead>
               <tbody>
@@ -1302,6 +1751,27 @@ export default function Tasks() {
                         </div>
                       </td>
 
+                      {/* Attachments Column (Feature 3) */}
+                      <td className="py-3 px-3 whitespace-nowrap text-xs" onClick={(e) => e.stopPropagation()}>
+                        {t.attachments && t.attachments.length > 0 ? (
+                          <button
+                            type="button"
+                            data-testid={`task-attachments-btn-${t.id}`}
+                            onClick={() => {
+                              setSelectedTaskForAttachments(t);
+                              setAttachmentViewerOpen(true);
+                            }}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 hover:border-blue-300 transition-colors shadow-2xs cursor-pointer"
+                            title="Click to view/download attachments"
+                          >
+                            <Paperclip size={12} className="text-blue-600" />
+                            <span>{t.attachments.length} file{t.attachments.length > 1 ? 's' : ''}</span>
+                          </button>
+                        ) : (
+                          <span className="text-slate-400 pl-3">—</span>
+                        )}
+                      </td>
+
                       {/* Comment (formerly Remark) */}
                       <td className="py-3 px-4 text-xs text-slate-600 max-w-[200px] truncate" title={t.remark}>
                         {t.remark ? (
@@ -1328,13 +1798,19 @@ export default function Tasks() {
                         );
                       })()}
 
-                      {/* Assign TSE Dropdown */}
+                      {/* Assign TSE Dropdown with Unassign Option (Feature 4) */}
                       <td className="py-3 px-4 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end">
                           {canAssignTse ? (
                             <Select
                               value={currentAssigneeId || undefined}
-                              onValueChange={(val) => reassignTask(t.id, val)}
+                              onValueChange={(val) => {
+                                if (val === 'UNASSIGN_TASK') {
+                                  unassignTask(t.id);
+                                } else {
+                                  reassignTask(t.id, val);
+                                }
+                              }}
                             >
                               <SelectTrigger
                                 data-testid={`task-assign-select-${t.id}`}
@@ -1343,6 +1819,11 @@ export default function Tasks() {
                                 <SelectValue placeholder="Assign TSE" />
                               </SelectTrigger>
                               <SelectContent className="bg-white border-slate-200 text-slate-900 max-h-60 z-50">
+                                {canManageTasks && t.assigneeId && (
+                                  <SelectItem value="UNASSIGN_TASK" className="text-amber-700 font-bold text-xs bg-amber-50/70 mb-1 border-b border-amber-200">
+                                    ⚠️ Unassign TSE
+                                  </SelectItem>
+                                )}
                                 {tseUsers.map(u => {
                                   const cName = u.codeName || u.name;
                                   const rName = getTseRealName(u.name) || getTseRealName(u.id);
@@ -1362,6 +1843,37 @@ export default function Tasks() {
                           )}
                         </div>
                       </td>
+
+                      {/* Actions Column (Feature 4: Unassign & Delete) */}
+                      {canManageTasks && (
+                        <td className="py-3 px-3 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-end gap-1">
+                            {t.assigneeId && (
+                              <button
+                                type="button"
+                                title="Unassign TSE from this task"
+                                data-testid={`btn-unassign-task-${t.id}`}
+                                onClick={() => unassignTask(t.id)}
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors cursor-pointer"
+                              >
+                                <UserMinus size={14} />
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              title="Delete task from queue"
+                              data-testid={`btn-delete-task-${t.id}`}
+                              onClick={() => {
+                                setSelectedTaskForDelete(t);
+                                setDeleteDialogOpen(true);
+                              }}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </td>
+                      )}
                     </motion.tr>
                   );
                 })}
@@ -1373,6 +1885,17 @@ export default function Tasks() {
 
       <CreateTaskModal open={createOpen} onOpenChange={setCreateOpen} />
       <TaskDrawer task={activeTask} onClose={() => setActiveTask(null)} />
+      <AttachmentViewerModal
+        task={selectedTaskForAttachments}
+        open={attachmentViewerOpen}
+        onOpenChange={setAttachmentViewerOpen}
+      />
+      <DeleteTaskModal
+        task={selectedTaskForDelete}
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        onConfirm={(id) => deleteTask(id)}
+      />
     </div>
   );
 }
