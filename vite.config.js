@@ -5,7 +5,7 @@ import path from 'path';
 export default defineConfig({
   plugins: [
     react({
-      include: '**/*.{jsx,js}',
+      include: '**/*.{jsx,js,tsx,ts}',
     }),
   ],
   resolve: {
@@ -24,8 +24,8 @@ export default defineConfig({
     },
   },
   esbuild: {
-    loader: 'jsx',
-    include: /src\/.*\.jsx?$/,
+    loader: 'tsx',
+    include: /src\/.*\.[jt]sx?$/,
     exclude: [],
   },
   optimizeDeps: {
