@@ -24,7 +24,7 @@ const triggerDownload = (filename, content) => {
 export { default as Reports } from './ReportsPage';
 
 export const Users = () => {
-  const { users, currentRole } = useApp();
+  const { users, currentRole, currentUser, userAvatar } = useApp();
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
@@ -194,12 +194,16 @@ export const Users = () => {
                     color: 'text-slate-600 bg-slate-100 border-slate-200',
                   };
 
+                  const isCurrent = (currentUser && (u.id === currentUser.id || u.email === currentUser.email)) ||
+                    (u.email === 'shashank.m@netbounceplacement.com' && (!currentUser || currentUser.email === 'shashank.m@netbounceplacement.com'));
+                  const displayAvatar = isCurrent ? (userAvatar || u.avatar || DEFAULT_AVATAR) : (u.avatar || DEFAULT_AVATAR);
+
                   return (
                     <tr key={u.id} className="border-b border-slate-100 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
                       <td className="py-3">
                         <div className="flex items-center gap-3">
                           <img
-                            src={u.avatar || DEFAULT_AVATAR}
+                            src={displayAvatar}
                             alt={u.name}
                             className="w-8 h-8 rounded-full object-cover ring-1 ring-slate-200 dark:ring-white/10 bg-slate-100"
                           />

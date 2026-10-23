@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 // 1. VIEW USER MODAL
 // ==========================================
 export function ViewUserModal({ user, open, onOpenChange, onEditClick }) {
+  const { currentUser, userAvatar } = useApp();
   const [showPassword, setShowPassword] = useState(false);
 
   if (!user) return null;
@@ -24,6 +25,9 @@ export function ViewUserModal({ user, open, onOpenChange, onEditClick }) {
 
   const userPassword = user.password || 'NetBounce@2026';
   const displayId = user.tttNbId || user.empId || 'TTT-NB-00000';
+  const isCurrent = (currentUser && (user.id === currentUser.id || user.email === currentUser.email)) ||
+    (user.email === 'shashank.m@netbounceplacement.com' && (!currentUser || currentUser.email === 'shashank.m@netbounceplacement.com'));
+  const displayAvatar = isCurrent ? (userAvatar || user.avatar || DEFAULT_AVATAR) : (user.avatar || DEFAULT_AVATAR);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -51,7 +55,7 @@ export function ViewUserModal({ user, open, onOpenChange, onEditClick }) {
           {/* Avatar & Hero Header */}
           <div className="flex items-center gap-4 p-4 rounded-2xl bg-gradient-to-r from-blue-50/70 to-indigo-50/40 dark:from-white/5 dark:to-white/5 border border-slate-200/70 dark:border-white/10">
             <img
-              src={user.avatar || DEFAULT_AVATAR}
+              src={displayAvatar}
               alt={user.name}
               className="w-16 h-16 rounded-full object-cover ring-2 ring-[#0B1EE6] shadow-md bg-white shrink-0"
             />

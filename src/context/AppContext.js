@@ -158,10 +158,21 @@ export const AppProvider = ({ children }) => {
         if (usersRes && usersRes.ok) {
           const liveUsers = await usersRes.json();
           if (Array.isArray(liveUsers) && liveUsers.length > 0) {
-            setUsers(liveUsers);
-            try {
-              localStorage.setItem('ttt_users', JSON.stringify(liveUsers));
-            } catch (e) { }
+            setUsers(prev => {
+              const savedAvatar = typeof window !== 'undefined' ? localStorage.getItem('ttt_user_avatar') : null;
+              const merged = liveUsers.map(lu => {
+                const existing = prev.find(p => p.id === lu.id || p.email === lu.email);
+                let avatar = lu.avatar || existing?.avatar;
+                if (!avatar && savedAvatar && (lu.id === currentUserId || lu.id === 'u-shashank-01' || lu.email === 'shashank.m@netbounceplacement.com')) {
+                  avatar = savedAvatar;
+                }
+                return { ...lu, avatar: avatar || lu.avatar || DEFAULT_AVATAR };
+              });
+              try {
+                localStorage.setItem('ttt_users', JSON.stringify(merged));
+              } catch (e) { }
+              return merged;
+            });
           }
         }
 
@@ -218,13 +229,48 @@ export const AppProvider = ({ children }) => {
     return DEFAULT_AVATAR;
   });
 
+  const currentUser = useMemo(() => (currentUserId ? (users.find(u => u.id === currentUserId) || getUserById(currentUserId)) : null), [currentUserId, users]);
+
   const updateUserAvatar = useCallback((url) => {
     setUserAvatar(url);
     if (typeof window !== 'undefined') {
-      localStorage.setItem('ttt_user_avatar', url);
+      try {
+        localStorage.setItem('ttt_user_avatar', url);
+      } catch (e) {}
     }
+
+    const targetId = currentUserId || currentUser?.id;
+    const targetEmail = currentUser?.email;
+
+    setUsers(prev => {
+      const updated = prev.map(u => {
+        const isMatch = (targetId && (u.id === targetId || u.empId === targetId || u.tttNbId === targetId)) ||
+          (targetEmail && u.email?.toLowerCase() === targetEmail.toLowerCase()) ||
+          (!targetId && (u.id === 'u-shashank-01' || u.email === 'shashank.m@netbounceplacement.com'));
+        if (isMatch) {
+          return { ...u, avatar: url };
+        }
+        return u;
+      });
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('ttt_users', JSON.stringify(updated));
+        } catch (e) {}
+      }
+      return updated;
+    });
+
+    const syncId = targetId || currentUser?.empId || currentUser?.tttNbId || 'u-shashank-01';
+    if (syncId) {
+      fetch(`/api/users/${syncId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ avatar: url }),
+      }).catch(err => console.warn('Failed to sync avatar update to server:', err));
+    }
+
     toast.success('Profile avatar updated!');
-  }, []);
+  }, [currentUserId, currentUser]);
 
   const [theme] = useState('light');
 
@@ -254,6 +300,14 @@ export const AppProvider = ({ children }) => {
     const finalRole = user?.role || roleId;
     setCurrentRole(finalRole);
     setCurrentUserId(user?.id || null);
+    if (user?.avatar) {
+      setUserAvatar(user.avatar);
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('ttt_user_avatar', user.avatar);
+        } catch (e) {}
+      }
+    }
     toast.success(`Signed in as ${user?.name || ROLES[finalRole]?.label || finalRole}`);
   }, [users]);
 
@@ -262,8 +316,6 @@ export const AppProvider = ({ children }) => {
     setCurrentUserId(null);
     toast.info('Signed out successfully.');
   }, []);
-
-  const currentUser = useMemo(() => (currentUserId ? (users.find(u => u.id === currentUserId) || getUserById(currentUserId)) : null), [currentUserId, users]);
 
   const addUser = useCallback((newUser) => {
     setUsers(prev => {
@@ -303,6 +355,15 @@ export const AppProvider = ({ children }) => {
       return updated;
     });
 
+    if (updatedData.avatar && (userId === currentUserId || (currentUser && (userId === currentUser.id || userId === currentUser.empId || userId === currentUser.tttNbId)))) {
+      setUserAvatar(updatedData.avatar);
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('ttt_user_avatar', updatedData.avatar);
+        } catch (e) {}
+      }
+    }
+
     // Sync to MongoDB Atlas backend
     fetch(`/api/users/${userId}`, {
       method: 'PUT',
@@ -311,7 +372,7 @@ export const AppProvider = ({ children }) => {
     }).catch(err => console.warn('Failed to sync user update to server:', err));
 
     toast.success('User updated successfully.');
-  }, []);
+  }, [currentUserId, currentUser]);
 
   const deleteUser = useCallback((userId) => {
     setUsers(prev => {

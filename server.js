@@ -213,6 +213,7 @@ const UserSchema = new mongoose.Schema({
   dept: String,
   empId: String,
   tttNbId: String,
+  avatar: { type: String, default: '' },
   password: { type: String, default: 'NetBounce@2026' },
   joined: String,
   marketingManagerId: String,
