@@ -964,16 +964,36 @@ const TaskDrawer = ({ task, onClose }) => {
               <div className="text-sm font-semibold text-slate-900">
                 {roleIsMarketing(currentRole)
                   ? (assignee?.empId || assignee?.tttNbId || task.techPersonId || task.assigneeId || 'TSE-ID')
-                  : (
-                    <div>
-                      <div>{task.codeName || assignee?.codeName || task.techPerson || assignee?.name || 'Unassigned'}</div>
-                      {canViewRealName && (getTseRealName(task.techPerson) || getTseRealName(assignee?.name)) && (
-                        <div className="text-xs text-slate-500 font-normal mt-0.5">
-                          ({getTseRealName(task.techPerson) || getTseRealName(assignee?.name)})
+                  : (() => {
+                      const isUnassigned = (!task.assigneeId || task.assigneeId === 'Unassigned') &&
+                        (!task.techPerson || task.techPerson === 'Unassigned' || task.techPerson === 'Code Name Unassigned') &&
+                        (!task.codeName || task.codeName === 'Unassigned' || task.codeName === 'Code Name Unassigned') &&
+                        !assignee;
+                      if (isUnassigned) {
+                        return <span className="text-slate-400 italic font-normal text-xs">Unassigned</span>;
+                      }
+                      const cName = (task.codeName && task.codeName !== 'Code Name Unassigned' && task.codeName !== 'Unassigned' ? task.codeName : '') ||
+                        assignee?.codeName ||
+                        (task.techPerson && task.techPerson !== 'Unassigned' && task.techPerson !== 'Code Name Unassigned' ? getTseCodeName(task.techPerson) : '') ||
+                        (assignee?.name ? getTseCodeName(assignee.name) : '') ||
+                        task.techPerson ||
+                        'TSE';
+                      const rName = getTseRealName(cName) ||
+                        getTseRealName(task.techPerson) ||
+                        getTseRealName(assignee?.name) ||
+                        getTseRealName(task.assigneeId) ||
+                        (assignee?.role === 'tse' ? assignee.name : '');
+                      return (
+                        <div>
+                          <div className="font-bold text-slate-900 text-sm">{cName}</div>
+                          {canViewRealName && rName && rName.toLowerCase() !== cName.toLowerCase() && (
+                            <div className="text-xs text-slate-500 font-normal mt-0.5">
+                              ({rName})
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
-                  )}
+                      );
+                    })()}
               </div>
             </div>
             <div>
@@ -1641,13 +1661,38 @@ export default function Tasks() {
                 {sortedTasks.map(t => {
                   const a = users.find(u => u.id === t.assigneeId);
                   const isMarketing = roleIsMarketing(currentRole);
-                  const pseudoName = t.codeName || a?.codeName || getTseCodeName(a?.name || t.techPerson) || 'TSE-Code-***';
-                  const techName = isMarketingTl
-                    ? pseudoName
-                    : (isMarketing
-                      ? (a?.empId || a?.tttNbId || t.techPersonId || t.assigneeId || 'TSE-ID')
-                      : (t.codeName || a?.codeName || a?.name || t.techPerson || 'Unassigned'));
-                  const realName = getTseRealName(t.techPerson) || getTseRealName(a?.name) || getTseRealName(t.assigneeId);
+
+                  // Robust check for unassigned status
+                  const isUnassigned = (!t.assigneeId || t.assigneeId === 'Unassigned') &&
+                    (!t.techPerson || t.techPerson === 'Unassigned' || t.techPerson === 'Code Name Unassigned') &&
+                    (!t.codeName || t.codeName === 'Unassigned' || t.codeName === 'Code Name Unassigned') &&
+                    !a;
+
+                  let codeName = '';
+                  let realName = '';
+
+                  if (!isUnassigned) {
+                    codeName = (t.codeName && t.codeName !== 'Code Name Unassigned' && t.codeName !== 'Unassigned' ? t.codeName : '') ||
+                      a?.codeName ||
+                      (t.techPerson && t.techPerson !== 'Unassigned' && t.techPerson !== 'Code Name Unassigned' ? getTseCodeName(t.techPerson) : '') ||
+                      (a?.name ? getTseCodeName(a.name) : '') ||
+                      t.techPerson ||
+                      'TSE';
+
+                    realName = getTseRealName(codeName) ||
+                      getTseRealName(t.techPerson) ||
+                      getTseRealName(a?.name) ||
+                      getTseRealName(t.assigneeId) ||
+                      (a?.role === 'tse' ? a.name : '');
+                  }
+
+                  const techName = isUnassigned
+                    ? 'Unassigned'
+                    : (isMarketingTl
+                      ? codeName
+                      : (isMarketing
+                        ? (a?.empId || a?.tttNbId || t.techPersonId || t.assigneeId || 'TSE-ID')
+                        : codeName));
                   const timing = t.interviewDateTime ? getInterviewTimingMeta(t.interviewDateTime) : null;
                   const currentAssigneeId = t.assigneeId || tseUsers.find(u =>
                     (u.name && u.name.toLowerCase() === (t.techPerson || '').toLowerCase()) ||
@@ -1694,21 +1739,39 @@ export default function Tasks() {
 
                       {/* Tech Person / Pseudo Name */}
                       <td className="py-3 px-4 text-slate-900">
-                        <div className="flex items-center gap-2">
-                          <span className="h-7 w-7 rounded-full bg-blue-100 text-blue-700 text-[11px] font-bold flex items-center justify-center shrink-0">
-                            {(techName || 'U').charAt(0).toUpperCase()}
-                          </span>
-                          <div>
-                            <div className="font-semibold whitespace-nowrap text-slate-900 text-xs">
-                              {techName}
-                            </div>
-                            {canViewRealName && realName && realName.toLowerCase() !== techName.toLowerCase() && (
-                              <div className="text-[11px] text-slate-500 font-medium whitespace-nowrap mt-0.5">
-                                ({realName})
+                        {isUnassigned ? (
+                          <div className="flex items-center gap-2">
+                            <span className="h-7 w-7 rounded-full bg-slate-100 text-slate-400 text-xs font-bold flex items-center justify-center shrink-0">
+                              —
+                            </span>
+                            <div>
+                              <div className="font-semibold whitespace-nowrap text-slate-500 text-xs italic">
+                                Unassigned
                               </div>
-                            )}
+                              {canManageTasks && (
+                                <div className="text-[10px] text-blue-600 font-medium whitespace-nowrap">
+                                  Assign via dropdown →
+                                </div>
+                              )}
+                            </div>
                           </div>
-                        </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <span className="h-7 w-7 rounded-full bg-blue-100 text-blue-700 text-[11px] font-bold flex items-center justify-center shrink-0">
+                              {(techName || 'T').charAt(0).toUpperCase()}
+                            </span>
+                            <div>
+                              <div className="font-semibold whitespace-nowrap text-slate-900 text-xs">
+                                {techName}
+                              </div>
+                              {canViewRealName && realName && realName.toLowerCase() !== techName.toLowerCase() && (
+                                <div className="text-[11px] text-slate-500 font-medium whitespace-nowrap mt-0.5">
+                                  ({realName})
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
                       </td>
 
                       {/* Duration */}

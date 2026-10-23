@@ -117,21 +117,38 @@ export default function Login() {
           -webkit-font-smoothing: antialiased;
         }
 
-        /* Background NB Logo Watermark */
-        .bg-watermark {
+        /* Background Big NetBounce Logo (Replacing transparent watermark) */
+        .bg-logo-wrap {
           position: absolute;
           top: 50%;
           left: 50%;
-          transform: translate(-50%, -50%);
-          width: 620px;
-          height: 620px;
-          max-width: 90vw;
-          max-height: 90vh;
-          object-contain: contain;
-          opacity: 0.085;
+          transform: translate(-50%, -64%);
           pointer-events: none;
-          z-index: 1;
-          filter: drop-shadow(0 0 50px rgba(11, 30, 230, 0.4));
+          z-index: 3;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .bg-nb-logo {
+          width: 320px;
+          height: auto;
+          max-width: 82vw;
+          object-fit: contain;
+          opacity: 0.95;
+          filter: drop-shadow(0 0 50px rgba(11, 30, 230, 0.8)) drop-shadow(0 15px 30px rgba(0, 0, 0, 0.6));
+          animation: logoGlow 6s ease-in-out infinite alternate;
+        }
+
+        @keyframes logoGlow {
+          0% {
+            transform: scale(1);
+            filter: drop-shadow(0 0 45px rgba(11, 30, 230, 0.7)) drop-shadow(0 15px 30px rgba(0, 0, 0, 0.6));
+          }
+          100% {
+            transform: scale(1.03);
+            filter: drop-shadow(0 0 65px rgba(56, 189, 248, 0.85)) drop-shadow(0 20px 40px rgba(0, 0, 0, 0.7));
+          }
         }
 
         /* Background Liquid Physics Simulation */
@@ -162,28 +179,22 @@ export default function Login() {
           100% { transform: translate(5vw, -10vh) scale(1.12); }
         }
 
-        /* Interface Container (Only Logo + ID + PASS) */
+        /* Interface Container (Only ID + PASS + LOG IN) */
         .auth-container {
           position: relative;
           z-index: 10;
           width: 100%;
           max-width: 420px;
-          padding: 40px 28px;
-        }
-
-        .logo-header {
-          margin-bottom: 42px;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-        }
-
-        .logo-img {
-          height: 68px;
-          width: auto;
-          object-fit: contain;
-          filter: drop-shadow(0 8px 24px rgba(0, 0, 0, 0.45));
+          padding: 42px 32px 36px 32px;
+          background: rgba(5, 11, 46, 0.65);
+          backdrop-filter: blur(14px);
+          -webkit-backdrop-filter: blur(14px);
+          border: 1px solid rgba(255, 255, 255, 0.12);
+          border-radius: 24px;
+          box-shadow: 0 30px 70px rgba(0, 0, 0, 0.65), 
+                      0 0 40px rgba(11, 30, 230, 0.25),
+                      inset 0 1px 0 rgba(255, 255, 255, 0.15);
+          margin-top: 100px;
         }
 
         /* Form Elements */
@@ -223,6 +234,15 @@ export default function Login() {
         .form-group input::placeholder {
           color: rgba(255, 255, 255, 0.3);
           font-size: 14px;
+        }
+
+        .form-group input:-webkit-autofill,
+        .form-group input:-webkit-autofill:hover, 
+        .form-group input:-webkit-autofill:focus, 
+        .form-group input:-webkit-autofill:active {
+          -webkit-box-shadow: 0 0 0 40px rgba(5, 11, 46, 0.95) inset !important;
+          -webkit-text-fill-color: #ffffff !important;
+          transition: background-color 5000s ease-in-out 0s;
         }
 
         .input-glow {
@@ -316,12 +336,14 @@ export default function Login() {
         </defs>
       </svg>
 
-      {/* Large NetBounce Logo Watermark in Background */}
-      <img
-        src="/intro-assets/nb_mark_white.png"
-        alt="NetBounce Watermark"
-        className="bg-watermark"
-      />
+      {/* Big NetBounce Colored Logo in Background (Replacing transparent watermark) */}
+      <div className="bg-logo-wrap">
+        <img
+          src="/intro-assets/nb_logo.png"
+          alt="NetBounce"
+          className="bg-nb-logo"
+        />
+      </div>
 
       {/* Animated NetBounce Blue Liquid Bubbles */}
       <div className="stage" id="stage">
@@ -342,16 +364,8 @@ export default function Login() {
         ))}
       </div>
 
-      {/* Main Terminal Container: ONLY NB Logo, ID, PASS, and Submit Button */}
+      {/* Main Terminal Container: ONLY ID, PASS, and Submit Button */}
       <main className="auth-container">
-        {/* NetBounce Logo Header */}
-        <header className="logo-header">
-          <img
-            src="/intro-assets/nb_logo.png"
-            alt="NetBounce"
-            className="logo-img"
-          />
-        </header>
 
         <form autoComplete="off" onSubmit={handleLogin} data-testid="login-card">
           {/* ID / Email Input */}

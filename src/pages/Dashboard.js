@@ -909,8 +909,14 @@ export default function Dashboard() {
                     (a && tse.employeeName.toLowerCase().includes(a.name.toLowerCase())) ||
                     tse.supportName.toLowerCase() === (a?.codeName || t.techPerson || '').toLowerCase()
                   );
-                  const codeName = a?.codeName || matchingTse?.supportName || t.techPerson || 'Unassigned';
-                  const realName = a?.name || matchingTse?.employeeName || (codeName !== 'Unassigned' ? codeName : '');
+                  const isUnassigned = (!t.assigneeId || t.assigneeId === 'Unassigned') &&
+                    (!t.techPerson || t.techPerson === 'Unassigned' || t.techPerson === 'Code Name Unassigned') &&
+                    (!t.codeName || t.codeName === 'Unassigned' || t.codeName === 'Code Name Unassigned') &&
+                    !a;
+                  const codeName = isUnassigned
+                    ? 'Unassigned'
+                    : (a?.codeName || matchingTse?.supportName || (t.techPerson && t.techPerson !== 'Code Name Unassigned' ? t.techPerson : 'Unassigned'));
+                  const realName = isUnassigned ? '' : (a?.name || matchingTse?.employeeName || (codeName !== 'Unassigned' ? getTseRealName(codeName) : ''));
 
                   return (
                     <tr
@@ -921,16 +927,20 @@ export default function Dashboard() {
                       <td className="py-2.5 mono text-xs text-slate-600 dark:text-slate-400 whitespace-nowrap">{t.date || t.dueDate}</td>
                       <td className="text-slate-800 dark:text-slate-200 py-2.5">
                         <div className="flex items-center gap-2">
-                          <span className="h-7 w-7 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-[10px] font-bold flex items-center justify-center shrink-0">
-                            {codeName.slice(0, 2).toUpperCase()}
+                          <span className={`h-7 w-7 rounded-full text-[10px] font-bold flex items-center justify-center shrink-0 ${
+                            isUnassigned ? 'bg-slate-100 dark:bg-white/10 text-slate-400' : 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300'
+                          }`}>
+                            {isUnassigned ? '—' : codeName.slice(0, 2).toUpperCase()}
                           </span>
                           <div>
-                            <div className="text-xs font-bold text-slate-900 dark:text-white leading-tight">
+                            <div className={`text-xs font-bold leading-tight ${
+                              isUnassigned ? 'text-slate-500 italic' : 'text-slate-900 dark:text-white'
+                            }`}>
                               {codeName}
                             </div>
                             {realName && realName !== codeName && (
                               <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
-                                {realName}
+                                ({realName})
                               </div>
                             )}
                           </div>

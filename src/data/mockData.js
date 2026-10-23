@@ -74,7 +74,7 @@ export const TSM_CODE_NAMES = {
 };
 
 export const getTseCodeName = (name) => {
-  if (!name) return 'Code Name Unassigned';
+  if (!name || name === 'Unassigned' || name === 'Code Name Unassigned') return 'Unassigned';
   if (TSE_CODE_NAMES[name]) return TSE_CODE_NAMES[name];
   const matching = TECH_SUPPORT_TEAM.find(t => 
     t.employeeName.toLowerCase().includes(name.toLowerCase()) || 
@@ -82,12 +82,12 @@ export const getTseCodeName = (name) => {
     t.id === name
   );
   if (matching) return matching.supportName;
-  return 'Code Name Unassigned';
+  return 'Unassigned';
 };
 
 export const getTsmCodeName = (name) => {
-  if (!name) return 'Code Name Unassigned';
-  return TSM_CODE_NAMES[name] || 'Code Name Unassigned';
+  if (!name || name === 'Unassigned' || name === 'Code Name Unassigned') return 'Unassigned';
+  return TSM_CODE_NAMES[name] || 'Unassigned';
 };
 
 export const MARKETING_SR_USERS = [
