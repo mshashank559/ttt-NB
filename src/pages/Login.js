@@ -79,9 +79,21 @@ export default function Login() {
   const navigate = useNavigate();
   const [showRoles, setShowRoles] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [email, setEmail] = useState('shashank.m@netbounceplacement.com');
-  const [password, setPassword] = useState('_Shas@061');
-  const [rememberMe, setRememberMe] = useState(true);
+  const [email, setEmail] = useState(() => {
+    try {
+      return localStorage.getItem('ttt_remembered_email') || '';
+    } catch (e) {
+      return '';
+    }
+  });
+  const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(() => {
+    try {
+      return Boolean(localStorage.getItem('ttt_remembered_email'));
+    } catch (e) {
+      return false;
+    }
+  });
 
   const pick = (roleId, userId) => {
     loginAs(roleId, userId);
@@ -94,6 +106,16 @@ export default function Login() {
     if (!cleanEmail) {
       toast.error('Please enter your email address');
       return;
+    }
+
+    if (rememberMe) {
+      try {
+        localStorage.setItem('ttt_remembered_email', cleanEmail);
+      } catch (err) {}
+    } else {
+      try {
+        localStorage.removeItem('ttt_remembered_email');
+      } catch (err) {}
     }
 
     const allUsers = users && users.length > 0 ? users : USERS;
@@ -177,6 +199,7 @@ export default function Login() {
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="Enter your email"
                     required
+                    autoComplete="username"
                     className="w-full h-10 sm:h-11 pl-9 pr-3 rounded-lg border border-slate-300 focus:border-[#0B1EE6] focus:ring-2 focus:ring-[#0B1EE6]/15 text-slate-900 placeholder:text-slate-400 text-xs sm:text-sm font-normal bg-white transition-all outline-none"
                   />
                 </div>
@@ -195,6 +218,7 @@ export default function Login() {
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Enter password"
                     required
+                    autoComplete="current-password"
                     className="w-full h-10 sm:h-11 pl-3 pr-9 rounded-lg border border-slate-300 focus:border-[#0B1EE6] focus:ring-2 focus:ring-[#0B1EE6]/15 text-slate-900 placeholder:text-slate-400 text-xs sm:text-sm font-normal bg-white transition-all outline-none"
                   />
                   <button

@@ -230,60 +230,24 @@ const SlaTicket = mongoose.model('SlaTicket', SlaTicketSchema);
 // -------------------------------------------------------------
 async function seedDatabaseIfEmpty() {
   try {
-    // Check if stale mock data is in DB
-    const oldUser = await User.findOne({ email: { $in: ['aarav.mehta@netbounce.io', 'amber.afreen@netbounce.io', 'admin@netbounce.io'] } });
-    const shashankExists = await User.findOne({ email: 'shashank.m@netbounceplacement.com' });
-
-    if (oldUser || !shashankExists) {
-      console.log('🧹 Purging old mock data from MongoDB Atlas and provisioning 1st member...');
-      await Task.deleteMany({});
-      await Feedback.deleteMany({});
-      await User.deleteMany({});
-
-      const initialUser = new User({
-        id: 'u-shashank-01',
-        name: 'Shashank Mishra',
-        email: 'shashank.m@netbounceplacement.com',
-        password: '_Shas@061',
-        role: 'management',
-        dept: 'Operations',
-        empId: 'TTT-NB-001',
-        tttNbId: 'TTT-NB-001',
-        joined: new Date().toISOString().slice(0, 10),
-        status: 'Active',
-        avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
-      });
-      await initialUser.save();
-      console.log('✅ 1st member provisioned in MongoDB: Shashank Mishra (TTT-NB-001)');
-    } else {
-      console.log('✅ Database is already configured with real members.');
-    }
-
-    // Auto-provision 14 Marketing SR users if missing
-    await syncMarketingSrUsersInternal();
-  } catch (err) {
-    console.error('⚠️ Seeding error:', err.message);
-  }
-}
-
-async function syncMarketingSrUsersInternal() {
-  try {
-    const { MARKETING_SR_USERS } = await import('./src/data/mockData.js');
-    if (Array.isArray(MARKETING_SR_USERS) && MARKETING_SR_USERS.length > 0) {
+    const { USERS } = await import('./src/data/mockData.js');
+    if (Array.isArray(USERS) && USERS.length > 0) {
       let added = 0;
-      for (const sr of MARKETING_SR_USERS) {
-        const exists = await User.findOne({ $or: [{ id: sr.id }, { email: sr.email }, { empId: sr.empId }] });
+      for (const u of USERS) {
+        const exists = await User.findOne({ $or: [{ id: u.id }, { email: u.email }] });
         if (!exists) {
-          await new User(sr).save();
+          await new User(u).save();
           added++;
         }
       }
       if (added > 0) {
-        console.log(`✅ Provisioned ${added} Marketing SR users to MongoDB Atlas.`);
+        console.log(`✅ Provisioned ${added} authoritative members to MongoDB Atlas.`);
+      } else {
+        console.log('✅ Database is already configured with real authoritative members.');
       }
     }
-  } catch (e) {
-    console.warn('⚠️ SR sync warning:', e.message);
+  } catch (err) {
+    console.error('⚠️ Seeding error:', err.message);
   }
 }
 
@@ -302,32 +266,26 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Clean Reset Database Route
+// Clean Reset Database Route (Purges business records, strictly preserves User Management)
 app.post('/api/clean-reset-database', async (req, res) => {
   try {
     await Task.deleteMany({});
     await Feedback.deleteMany({});
-    await User.deleteMany({});
+    await SlaTicket.deleteMany({});
 
-    const initialUser = new User({
-      id: 'u-shashank-01',
-      name: 'Shashank Mishra',
-      email: 'shashank.m@netbounceplacement.com',
-      password: '_Shas@061',
-      role: 'management',
-      dept: 'Operations',
-      empId: 'TTT-NB-001',
-      tttNbId: 'TTT-NB-001',
-      joined: new Date().toISOString().slice(0, 10),
-      status: 'Active',
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
-    });
-    await initialUser.save();
-
+    // Ensure all real users exist
+    const { USERS } = await import('./src/data/mockData.js');
+    for (const u of USERS) {
+      const exists = await User.findOne({ $or: [{ id: u.id }, { email: u.email }] });
+      if (!exists) {
+        await new User(u).save();
+      }
+    }
+    const currentUsers = await User.find({});
     res.json({
       success: true,
-      message: 'Database cleaned! Fake data removed. Shashank Mishra provisioned as 1st member (TTT-NB-001).',
-      users: [initialUser],
+      message: 'Database cleaned! Fake business records removed. All user accounts and roles preserved.',
+      users: currentUsers,
     });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
