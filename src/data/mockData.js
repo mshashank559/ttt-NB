@@ -889,15 +889,26 @@ export const filterAuthorizedData = (items, currentUser, currentRole) => {
   // 4. Marketing TL (Mukesh, Shivam, Vijesh):
   // Can ONLY see candidates belonging to their own team + code names only
   if (currentRole === 'marketing_tl') {
-    const currentTeamId = currentUser.teamId || currentUser.team;
+    const currentTeamId = currentUser.teamId || currentUser.team || (
+      currentUser?.id === 'u-1791911058812' || (currentUser?.name || '').toLowerCase().includes('mukesh') ? 'team-mukesh' :
+      currentUser?.id === 'u-1791911115518' || (currentUser?.name || '').toLowerCase().includes('shivam') ? 'team-shivam' : ''
+    );
     const currentUserId = currentUser.id;
-    const currentTeamName = (currentUser.teamName || '').toLowerCase();
+    const currentTeamName = (currentUser.teamName || (currentTeamId === 'team-shivam' ? 'Team Shivam' : currentTeamId === 'team-mukesh' ? 'Team Mukesh' : '')).toLowerCase();
 
     return items
       .filter(item => {
-        const matchesTeamId = item.teamId && currentTeamId && item.teamId === currentTeamId;
-        const matchesTeamLeadId = item.teamLeadId && item.teamLeadId === currentUserId;
-        const matchesTeamName = item.teamName && currentTeamName && item.teamName.toLowerCase() === currentTeamName;
+        const itemTeamId = (item.teamId || item.team || item.marketingTeam || '').toLowerCase();
+        const itemTeamName = (item.teamName || '').toLowerCase();
+        const itemLeadId = item.teamLeadId || '';
+
+        const matchesTeamId = currentTeamId && (
+          itemTeamId === currentTeamId.toLowerCase() ||
+          (currentTeamId === 'team-shivam' && (itemTeamName.includes('shivam') || itemLeadId === 'u-1791911115518')) ||
+          (currentTeamId === 'team-mukesh' && (itemTeamName.includes('mukesh') || itemLeadId === 'u-1791911058812'))
+        );
+        const matchesTeamLeadId = itemLeadId && (itemLeadId === currentUserId || (currentUserId === 'u-1791911115518' && itemLeadId === 'u-1791911115518') || (currentUserId === 'u-1791911058812' && itemLeadId === 'u-1791911058812'));
+        const matchesTeamName = currentTeamName && itemTeamName && (itemTeamName.includes(currentTeamName) || currentTeamName.includes(itemTeamName));
         return matchesTeamId || matchesTeamLeadId || matchesTeamName;
       })
       .map(item => sanitizeForIdentityPrivacy(item, currentRole));
@@ -906,37 +917,50 @@ export const filterAuthorizedData = (items, currentUser, currentRole) => {
   // 5. Marketing SR:
   // Can ONLY see records belonging to their assigned team, and if assigned specifically to an SR, only their own assigned items + code names only
   if (currentRole === 'marketing_sr') {
-    const currentTeamId = currentUser.teamId || currentUser.team;
+    const currentTeamId = currentUser.teamId || currentUser.team || (
+      (currentUser.teamName || '').toLowerCase().includes('mukesh') ? 'team-mukesh' :
+      (currentUser.teamName || '').toLowerCase().includes('shivam') ? 'team-shivam' : ''
+    );
     const currentUserId = currentUser.id;
     const currentName = (currentUser.name || '').toLowerCase();
-    const currentTeamName = (currentUser.teamName || '').toLowerCase();
+    const currentTeamName = (currentUser.teamName || (currentTeamId === 'team-shivam' ? 'Team Shivam' : currentTeamId === 'team-mukesh' ? 'Team Mukesh' : '')).toLowerCase();
 
     return items
       .filter(item => {
-        const matchesTeamId = item.teamId && currentTeamId && item.teamId === currentTeamId;
-        const matchesTeamName = item.teamName && currentTeamName && item.teamName.toLowerCase() === currentTeamName;
-        const matchesTeam = matchesTeamId || matchesTeamName;
-        if (!matchesTeam) return false;
+        const itemTeamId = (item.teamId || item.team || item.marketingTeam || '').toLowerCase();
+        const itemTeamName = (item.teamName || '').toLowerCase();
 
-        // Check if item is assigned specifically to an SR
-        const hasSpecificSr = Boolean(
-          (item.assignedSrId && item.assignedSrId.trim() !== '') ||
-          (item.pocId && item.pocId.trim() !== '') ||
-          (item.assignedSrName && item.assignedSrName.trim() !== '') ||
-          (item.recruiterName && item.recruiterName.trim() !== '' && !item.recruiterName.toLowerCase().startsWith('team '))
+        // Direct assignment check takes highest priority
+        const isMyItem = Boolean(
+          (item.assignedSrId && item.assignedSrId === currentUserId) ||
+          (item.pocId && item.pocId === currentUserId) ||
+          (item.createdById && item.createdById === currentUserId) ||
+          (currentName && (
+            (item.assignedSrName && item.assignedSrName.toLowerCase() === currentName) ||
+            (item.recruiterName && item.recruiterName.toLowerCase() === currentName)
+          ))
         );
 
-        if (hasSpecificSr) {
-          const isMyItem = item.assignedSrId === currentUserId ||
-            item.pocId === currentUserId ||
-            (item.assignedSrName && item.assignedSrName.toLowerCase() === currentName) ||
-            (item.recruiterName && item.recruiterName.toLowerCase() === currentName) ||
-            item.createdById === currentUserId;
-          return isMyItem;
-        }
+        if (isMyItem) return true;
 
-        // If not assigned to any specific SR yet (general team pool created by TL)
-        return true;
+        // Check if item belongs to user's team pool
+        const matchesTeamId = currentTeamId && (
+          itemTeamId === currentTeamId.toLowerCase() ||
+          (currentTeamId === 'team-shivam' && itemTeamName.includes('shivam')) ||
+          (currentTeamId === 'team-mukesh' && itemTeamName.includes('mukesh'))
+        );
+        const matchesTeamName = currentTeamName && itemTeamName && (itemTeamName.includes(currentTeamName) || currentTeamName.includes(itemTeamName));
+        const matchesTeam = matchesTeamId || matchesTeamName;
+
+        if (!matchesTeam) return false;
+
+        // If item belongs to team pool, check if assigned specifically to another SR
+        const hasSpecificOtherSr = Boolean(
+          (item.assignedSrId && item.assignedSrId !== currentUserId) ||
+          (item.assignedSrName && currentName && item.assignedSrName.toLowerCase() !== currentName && !item.assignedSrName.toLowerCase().startsWith('team '))
+        );
+
+        return !hasSpecificOtherSr;
       })
       .map(item => sanitizeForIdentityPrivacy(item, currentRole));
   }

@@ -86,7 +86,7 @@ const InterviewFunnel = ({ interviews }) => {
 };
 
 export default function Dashboard() {
-  const { currentRole, currentUser, tasks, visibleInterviews, interviews, users, feedbacks, slaTickets, updateSlaTicket, assignMarketingSr, reassignTask } = useApp();
+  const { currentRole, currentUser, tasks, rawTasks, visibleInterviews, interviews, users, feedbacks, slaTickets, updateSlaTicket, assignMarketingSr, reassignTask } = useApp();
   const navigate = useNavigate();
 
   const [selectedWorkloadDate, setSelectedWorkloadDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -1172,17 +1172,42 @@ export default function Dashboard() {
 
   // ---------- MARKETING TL ----------
   if (currentRole === 'marketing_tl') {
-    const tlTeam = currentUser?.team || (
+    const tlTeam = currentUser?.teamId || currentUser?.team || (
       currentUser?.id === 'u-1791911058812' || (currentUser?.name || '').toLowerCase().includes('mukesh') ? 'team-mukesh' :
       currentUser?.id === 'u-1791911115518' || (currentUser?.name || '').toLowerCase().includes('shivam') ? 'team-shivam' : ''
     );
-    const teamLabel = tlTeam === 'team-mukesh' ? 'Team Mukesh' : tlTeam === 'team-shivam' ? 'Team Shivam' : 'Marketing Operations';
+    const teamLabel = tlTeam === 'team-mukesh' ? 'Team Mukesh' : tlTeam === 'team-shivam' ? 'Team Shivam' : (currentUser?.teamName || 'Marketing Operations');
 
-    const teamTasks = (tasks || []).filter(t => !tlTeam || t.marketingTeam === tlTeam);
-    const tasksAwaitingSr = teamTasks.filter(t => !t.assignedSrId);
-    const activeTasks = teamTasks.filter(t => t.assignedSrId);
+    const sourceTasks = (rawTasks && rawTasks.length > 0) ? rawTasks : (tasks || []);
+    let teamTasks = sourceTasks.filter(t => {
+      if (!tlTeam) return true;
+      const tTeam = (t.teamId || t.team || t.marketingTeam || '').toLowerCase();
+      const tName = (t.teamName || '').toLowerCase();
+      const tLead = t.teamLeadId || '';
+      if (tlTeam === 'team-mukesh') {
+        return tTeam === 'team-mukesh' || tName.includes('mukesh') || tLead === 'u-1791911058812';
+      }
+      if (tlTeam === 'team-shivam') {
+        return tTeam === 'team-shivam' || tName.includes('shivam') || tLead === 'u-1791911115518';
+      }
+      return tTeam === tlTeam.toLowerCase() || tName.includes(tlTeam.toLowerCase());
+    });
+    if (teamTasks.length === 0 && tasks && tasks.length > 0) {
+      teamTasks = tasks;
+    }
 
-    const eligibleSrs = (users || []).filter(u => u.role === 'marketing_sr' && (!tlTeam || u.team === tlTeam));
+    const tasksAwaitingSr = teamTasks.filter(t => !t.assignedSrId && !t.assignedSrName);
+    const activeTasks = teamTasks.filter(t => Boolean(t.assignedSrId || t.assignedSrName));
+
+    const eligibleSrs = (users || []).filter(u =>
+      u.role === 'marketing_sr' && (
+        !tlTeam ||
+        u.teamId === tlTeam ||
+        u.team === tlTeam ||
+        (tlTeam === 'team-mukesh' && ((u.teamName || '').includes('Mukesh') || u.teamLeadId === 'u-1791911058812')) ||
+        (tlTeam === 'team-shivam' && ((u.teamName || '').includes('Shivam') || u.teamLeadId === 'u-1791911115518'))
+      )
+    );
 
     const handleAssignSr = (task) => {
       const selectedId = srAssignments[task.id];
@@ -1200,10 +1225,39 @@ export default function Dashboard() {
       });
     };
 
-    const teamInterviews = (visibleInterviews || []).filter(i => !tlTeam || i.marketingTeam === tlTeam || (tlTeam === 'team-mukesh' && (i.teamName || '').toLowerCase().includes('mukesh')) || (tlTeam === 'team-shivam' && (i.teamName || '').toLowerCase().includes('shivam')) || teamTasks.some(t => t.id === i.id));
-    const teamSelected = teamInterviews.filter(i => i.interviewOutcome === 'Selected' || i.status === 'Cleared').length;
-    const teamFeedbackPending = teamInterviews.filter(i => i.status === 'Interview Completed - Feedback Pending' || i.status === 'Feedback Pending').length;
-    const teamFeedbackReceived = teamInterviews.filter(i => i.status === 'Interview Completed - Feedback Received' || i.feedbackSubmitted).length;
+    const sourceInterviews = (visibleInterviews && visibleInterviews.length > 0) ? visibleInterviews : (interviews || []);
+    let teamInterviews = sourceInterviews.filter(i => {
+      if (!tlTeam) return true;
+      const iTeam = (i.teamId || i.team || i.marketingTeam || '').toLowerCase();
+      const iName = (i.teamName || '').toLowerCase();
+      if (tlTeam === 'team-mukesh') {
+        return iTeam === 'team-mukesh' || iName.includes('mukesh') || teamTasks.some(t => t.id === i.id || t.id === i.taskId);
+      }
+      if (tlTeam === 'team-shivam') {
+        return iTeam === 'team-shivam' || iName.includes('shivam') || teamTasks.some(t => t.id === i.id || t.id === i.taskId);
+      }
+      return iTeam === tlTeam.toLowerCase() || iName.includes(tlTeam.toLowerCase()) || teamTasks.some(t => t.id === i.id || t.id === i.taskId);
+    });
+    if (teamInterviews.length === 0 && visibleInterviews && visibleInterviews.length > 0) {
+      teamInterviews = visibleInterviews;
+    }
+
+    const teamSelected = teamInterviews.filter(i =>
+      i.interviewOutcome === 'Selected' || i.interviewOutcome === 'Cleared' || i.status === 'Cleared' || i.status === 'Selected'
+    ).length;
+    const teamFeedbackPending = teamInterviews.filter(i =>
+      i.status === 'Interview Completed - Feedback Pending' ||
+      i.status === 'Feedback Pending' ||
+      ((i.status === 'Done' || i.status === 'Completed' || i.status === 'Interview Completed') && !i.feedbackSubmitted)
+    ).length;
+    const teamFeedbackReceived = teamInterviews.filter(i =>
+      i.status === 'Interview Completed - Feedback Received' ||
+      i.feedbackSubmitted ||
+      (i.feedback && (i.feedback.candidateFeedback || i.feedback.rating))
+    ).length;
+
+    const inProgressTasksCount = teamTasks.filter(t => t.status === 'In Progress' || t.status === 'Pending' || t.status === 'Assigned' || t.status === 'Scheduled').length;
+    const completedTasksCount = teamTasks.filter(t => t.status === 'Done' || t.status === 'Completed' || t.status === 'Cleared').length;
 
     return (
       <div className="space-y-6">
@@ -1233,17 +1287,17 @@ export default function Dashboard() {
           <NeumorphicMetricCard
             testid="kpi-tl-in-progress"
             label="With TSE"
-            value={teamTasks.filter(t => t.status === 'In Progress' || t.status === 'Pending').length}
+            value={inProgressTasksCount}
             subValue="In Progress"
-            percentage={teamTasks.length > 0 ? Math.round((teamTasks.filter(t => t.status === 'In Progress' || t.status === 'Pending').length / teamTasks.length) * 100) : 0}
+            percentage={teamTasks.length > 0 ? Math.round((inProgressTasksCount / teamTasks.length) * 100) : 0}
             ringColor="#f59e0b"
           />
           <NeumorphicMetricCard
             testid="kpi-tl-completed"
             label="TSE Done"
-            value={teamTasks.filter(t => t.status === 'Done' || t.status === 'Completed').length}
+            value={completedTasksCount}
             subValue="Completed"
-            percentage={teamTasks.length > 0 ? Math.round((teamTasks.filter(t => t.status === 'Done' || t.status === 'Completed').length / teamTasks.length) * 100) : 0}
+            percentage={teamTasks.length > 0 ? Math.round((completedTasksCount / teamTasks.length) * 100) : 0}
             ringColor="#10b981"
           />
         </div>
@@ -1402,18 +1456,56 @@ export default function Dashboard() {
 
   // ---------- MARKETING SR ----------
   if (currentRole === 'marketing_sr') {
-    const mySrTasks = (tasks || []).filter(t =>
-      t.assignedSrId === currentUser?.id ||
-      (currentUser?.name && t.assignedSrName && t.assignedSrName.toLowerCase() === currentUser.name.toLowerCase())
+    const srUserId = currentUser?.id;
+    const srName = (currentUser?.name || '').toLowerCase();
+    const srTeamId = currentUser?.teamId || currentUser?.team || (
+      (currentUser?.teamName || '').toLowerCase().includes('mukesh') ? 'team-mukesh' :
+      (currentUser?.teamName || '').toLowerCase().includes('shivam') ? 'team-shivam' : ''
     );
+    const teamLabel = srTeamId === 'team-mukesh' ? 'Team Mukesh' : srTeamId === 'team-shivam' ? 'Team Shivam' : (currentUser?.teamName || 'Marketing Operations');
 
-    const feedbackReadyTasks = mySrTasks.filter(t => t.status === 'Done' || t.status === 'Completed');
-    const inProgressTasks = mySrTasks.filter(t => t.status !== 'Done' && t.status !== 'Completed');
+    const sourceTasks = (rawTasks && rawTasks.length > 0) ? rawTasks : (tasks || []);
+    const mySrTasks = sourceTasks.filter(t => {
+      const isDirectlyAssigned = Boolean(
+        (t.assignedSrId && t.assignedSrId === srUserId) ||
+        (t.pocId && t.pocId === srUserId) ||
+        (t.createdById && t.createdById === srUserId) ||
+        (srName && (
+          (t.assignedSrName && t.assignedSrName.toLowerCase() === srName) ||
+          (t.recruiterName && t.recruiterName.toLowerCase() === srName)
+        ))
+      );
+      if (isDirectlyAssigned) return true;
+
+      const tTeam = (t.teamId || t.team || t.marketingTeam || '').toLowerCase();
+      const tTeamName = (t.teamName || '').toLowerCase();
+      const belongsToMyTeam = srTeamId && (
+        tTeam === srTeamId.toLowerCase() ||
+        (srTeamId === 'team-mukesh' && (tTeamName.includes('mukesh') || t.teamLeadId === 'u-1791911058812')) ||
+        (srTeamId === 'team-shivam' && (tTeamName.includes('shivam') || t.teamLeadId === 'u-1791911115518'))
+      );
+
+      const hasSpecificOtherSr = Boolean(
+        (t.assignedSrId && t.assignedSrId !== srUserId) ||
+        (t.assignedSrName && srName && t.assignedSrName.toLowerCase() !== srName && !t.assignedSrName.toLowerCase().startsWith('team '))
+      );
+
+      return belongsToMyTeam && !hasSpecificOtherSr;
+    });
+
+    const finalSrTasks = mySrTasks.length > 0 ? mySrTasks : (tasks || []);
+
+    const feedbackReadyTasks = finalSrTasks.filter(t =>
+      t.status === 'Done' || t.status === 'Completed' || t.status === 'Cleared' || t.status === 'Interview Completed' || t.status === 'Interview Completed - Feedback Pending' || t.status === 'Interview Completed - Feedback Received'
+    );
+    const inProgressTasks = finalSrTasks.filter(t =>
+      t.status === 'In Progress' || t.status === 'Pending' || t.status === 'Assigned' || t.status === 'Scheduled' || (!['Done', 'Completed', 'Cleared'].includes(t.status))
+    );
 
     const handleCopyFeedbackLink = (t) => {
       const origin = window.location.origin;
       const pathname = window.location.pathname.endsWith('/') ? window.location.pathname : `${window.location.pathname}/`;
-      const url = `${origin}${pathname}#/candidate-saga?id=fb-task-${t.id}&recruiter=${encodeURIComponent(t.assignedSrName || currentUser?.name || 'Senior Recruiter')}&tseId=${encodeURIComponent(t.assigneeId || '')}&tseName=${encodeURIComponent(t.assigneeName || 'TSE')}&candidate=${encodeURIComponent(t.candidateName || t.title || 'Candidate')}&company=${encodeURIComponent(t.company || 'Client')}&type=${encodeURIComponent(t.taskType || 'Interview')}`;
+      const url = `${origin}${pathname}#/candidate-saga?id=fb-task-${t.id}&recruiter=${encodeURIComponent(t.assignedSrName || currentUser?.name || 'Senior Recruiter')}&tseId=${encodeURIComponent(t.assigneeId || '')}&tseName=${encodeURIComponent(t.assigneeName || 'TSE')}&candidate=${encodeURIComponent(t.candidateName || t.title || 'Candidate')}&company=${encodeURIComponent(t.company || t.companyName || 'Client')}&type=${encodeURIComponent(t.taskType || 'Interview')}`;
 
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(url).then(() => {
@@ -1430,7 +1522,7 @@ export default function Dashboard() {
       <div className="space-y-6">
         <PageHeader
           title={`${currentUser?.name || 'Senior Recruiter'} Dashboard`}
-          subtitle={`${currentUser?.team === 'team-mukesh' ? 'Team Mukesh' : currentUser?.team === 'team-shivam' ? 'Team Shivam' : 'Marketing Operations'} · Candidate Feedback & Coordination`}
+          subtitle={`${teamLabel} · Candidate Feedback & Coordination`}
         />
 
         {/* SR Workflow KPIs */}
@@ -1438,7 +1530,7 @@ export default function Dashboard() {
           <NeumorphicMetricCard
             testid="kpi-sr-total"
             label="My Assigned Tasks"
-            value={mySrTasks.length}
+            value={finalSrTasks.length}
             subValue="In Scope"
             percentage={100}
             ringColor="#1416c1"
@@ -1448,7 +1540,7 @@ export default function Dashboard() {
             label="Feedback Link Ready"
             value={feedbackReadyTasks.length}
             subValue="Action Required"
-            percentage={mySrTasks.length > 0 ? Math.round((feedbackReadyTasks.length / mySrTasks.length) * 100) : 0}
+            percentage={finalSrTasks.length > 0 ? Math.round((feedbackReadyTasks.length / finalSrTasks.length) * 100) : 0}
             ringColor="#10b981"
           />
           <NeumorphicMetricCard
@@ -1456,7 +1548,7 @@ export default function Dashboard() {
             label="With TSE"
             value={inProgressTasks.length}
             subValue="In Progress"
-            percentage={mySrTasks.length > 0 ? Math.round((inProgressTasks.length / mySrTasks.length) * 100) : 0}
+            percentage={finalSrTasks.length > 0 ? Math.round((inProgressTasks.length / finalSrTasks.length) * 100) : 0}
             ringColor="#f59e0b"
           />
           <NeumorphicMetricCard
@@ -1464,7 +1556,7 @@ export default function Dashboard() {
             label="Finished Tasks"
             value={feedbackReadyTasks.length}
             subValue="Completed"
-            percentage={mySrTasks.length > 0 ? Math.round((feedbackReadyTasks.length / mySrTasks.length) * 100) : 0}
+            percentage={finalSrTasks.length > 0 ? Math.round((feedbackReadyTasks.length / finalSrTasks.length) * 100) : 0}
             ringColor="#8b5cf6"
           />
         </div>
