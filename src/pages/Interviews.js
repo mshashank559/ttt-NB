@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Shield, UserRound } from 'lucide-react';
+import { Shield, UserRound, Calendar, X } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { PageHeader, StatusBadge, SectionCard, EmptyState, KpiCard, Pagination } from '../components/common';
 import { INTERVIEW_STATUSES, roleIsMarketing } from '../data/mockData';
@@ -173,14 +173,49 @@ export default function Interviews() {
   const { visibleInterviews, currentRole, currentUser, users } = useApp();
   const [active, setActive] = useState(null);
   const [statusFilter, setStatusFilter] = useState('all');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
   const [tablePage, setTablePage] = useState(1);
   const [tablePageSize, setTablePageSize] = useState(10);
   const isMk = roleIsMarketing(currentRole);
 
-  const filtered = useMemo(() => (visibleInterviews || []).filter(i => statusFilter === 'all' || i.status === statusFilter), [visibleInterviews, statusFilter]);
+  const getLocalDateStr = (d = new Date()) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+
+  const getInterviewDateStr = (i) => {
+    const raw = i.date || i.interviewDateTime || i.dueDate || i.createdAt;
+    if (!raw) return '';
+    if (typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
+    const d = new Date(raw);
+    if (!isNaN(d.getTime())) return getLocalDateStr(d);
+    return '';
+  };
+
+  const filtered = useMemo(() => {
+    return (visibleInterviews || []).filter(i => {
+      const matchStatus = statusFilter === 'all' || i.status === statusFilter;
+      if (!matchStatus) return false;
+
+      const iDate = getInterviewDateStr(i);
+      if (fromDate && (!iDate || iDate < fromDate)) return false;
+      if (toDate && (!iDate || iDate > toDate)) return false;
+
+      return true;
+    });
+  }, [visibleInterviews, statusFilter, fromDate, toDate]);
 
   const handleStatusFilterChange = (val) => {
     setStatusFilter(val);
+    setTablePage(1);
+  };
+
+  const handleClearDates = () => {
+    setFromDate('');
+    setToDate('');
     setTablePage(1);
   };
 
@@ -199,6 +234,8 @@ export default function Interviews() {
     hold: filtered.filter(i => i.interviewOutcome === 'On Hold' || i.status === 'Hold').length,
   };
 
+  const isDateFiltered = Boolean(fromDate || toDate);
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -214,15 +251,105 @@ export default function Interviews() {
         <KpiCard testid="iv-rejected" label="Rejected" value={totals.rejected} />
         <KpiCard testid="iv-hold" label="On Hold" value={totals.hold} />
       </div>
-      <SectionCard title="Filter" actions={
-        <Select value={statusFilter} onValueChange={handleStatusFilterChange}>
-          <SelectTrigger data-testid="iv-filter-status" className="w-44 bg-white border-slate-300 text-slate-900 h-9"><SelectValue /></SelectTrigger>
-          <SelectContent className="bg-white border-slate-200 text-slate-900">
-            <SelectItem value="all">All statuses</SelectItem>
-            {INTERVIEW_STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      }>
+      <SectionCard
+        title="Filter"
+        subtitle={
+          (isDateFiltered || statusFilter !== 'all')
+            ? `Showing ${filtered.length} of ${(visibleInterviews || []).length} interviews`
+            : undefined
+        }
+        actions={
+          <div className="flex items-center gap-2.5 flex-wrap">
+            {/* From Date Filter */}
+            <div className="flex items-center gap-1.5 bg-white border border-slate-300 rounded-xl px-2.5 py-1 shadow-xs hover:border-[#1416c1] focus-within:border-[#1416c1] transition-colors">
+              <Calendar size={13} className="text-slate-400 shrink-0" />
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider select-none">From:</span>
+              <input
+                type="date"
+                data-testid="iv-filter-from-date"
+                value={fromDate}
+                onChange={(e) => {
+                  setFromDate(e.target.value);
+                  setTablePage(1);
+                }}
+                className="text-xs bg-transparent text-slate-800 outline-none font-medium cursor-pointer"
+              />
+            </div>
+
+            {/* To Date Filter */}
+            <div className="flex items-center gap-1.5 bg-white border border-slate-300 rounded-xl px-2.5 py-1 shadow-xs hover:border-[#1416c1] focus-within:border-[#1416c1] transition-colors">
+              <Calendar size={13} className="text-slate-400 shrink-0" />
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider select-none">To:</span>
+              <input
+                type="date"
+                data-testid="iv-filter-to-date"
+                value={toDate}
+                onChange={(e) => {
+                  setToDate(e.target.value);
+                  setTablePage(1);
+                }}
+                className="text-xs bg-transparent text-slate-800 outline-none font-medium cursor-pointer"
+              />
+            </div>
+
+            {/* Quick Presets */}
+            <div className="hidden xl:flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-xs">
+              <button
+                type="button"
+                onClick={() => {
+                  const todayStr = getLocalDateStr(new Date());
+                  setFromDate(todayStr);
+                  setToDate(todayStr);
+                  setTablePage(1);
+                }}
+                className="px-2 py-1 rounded text-[11px] font-semibold text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
+              >
+                Today
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const now = new Date();
+                  const day = now.getDay();
+                  const diffToMonday = now.getDate() - day + (day === 0 ? -6 : 1);
+                  const monday = new Date(now.getFullYear(), now.getMonth(), diffToMonday);
+                  const sunday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6);
+                  setFromDate(getLocalDateStr(monday));
+                  setToDate(getLocalDateStr(sunday));
+                  setTablePage(1);
+                }}
+                className="px-2 py-1 rounded text-[11px] font-semibold text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
+              >
+                This Week
+              </button>
+            </div>
+
+            {/* Reset Dates Button */}
+            {isDateFiltered && (
+              <button
+                type="button"
+                data-testid="iv-clear-dates-btn"
+                onClick={handleClearDates}
+                className="px-2.5 py-1 rounded-xl text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 flex items-center gap-1 transition-colors cursor-pointer"
+              >
+                <X size={12} />
+                <span>Reset Dates</span>
+              </button>
+            )}
+
+            {/* Status Dropdown */}
+            <Select value={statusFilter} onValueChange={handleStatusFilterChange}>
+              <SelectTrigger data-testid="iv-filter-status" className="w-40 bg-white border-slate-300 text-slate-900 h-9">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="bg-white border-slate-200 text-slate-900">
+                <SelectItem value="all">All statuses</SelectItem>
+                {INTERVIEW_STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        }
+      >
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4" data-testid="interview-kanban">
           {STAGES.map(stage => {
             const items = filtered.filter(i => {
