@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { toast } from 'sonner';
 import { Download, FileSpreadsheet, FileText, Shield, User as UserIcon, Settings as SettingsIcon, Sparkles, UserPlus, Search, Filter, Mail, Hash, Eye, Pencil, Trash2 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
