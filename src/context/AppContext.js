@@ -445,18 +445,25 @@ export const AppProvider = ({ children }) => {
 
     // Also auto-create linked feedback session for Marketing console
     const matchingTse = TECH_SUPPORT_TEAM.find(t =>
-      t.supportName.toLowerCase() === (assignee?.name || '').toLowerCase() ||
-      t.employeeName.toLowerCase().includes((assignee?.name || '').toLowerCase())
-    ) || TECH_SUPPORT_TEAM[0];
+      (codeName && t.supportName.toLowerCase() === codeName.toLowerCase()) ||
+      (assignee?.name && t.employeeName.toLowerCase().includes(assignee.name.toLowerCase())) ||
+      (assignee?.name && t.supportName.toLowerCase() === assignee.name.toLowerCase()) ||
+      (assignee?.id && (t.id === assignee.id || TSE_IDS[assignee.id] === t.id))
+    );
+
+    const resolvedOfficialId = matchingTse?.id || (codeName && TSE_IDS[codeName]) || (assignee?.empId?.startsWith('TSE-NB') ? assignee.empId : '') || '';
+    const resolvedCodeName = matchingTse?.supportName || codeName || 'Unassigned';
+    const resolvedRealName = matchingTse?.employeeName || getTseRealName(resolvedCodeName) || assignee?.name || '';
+    const resolvedEmail = matchingTse?.email || assignee?.email || '';
 
     const linkedFeedback = {
       id: `fb-task-${id}`,
       taskId: id,
       date,
-      techSupport: codeName,
-      techSupportId: assignee?.id || matchingTse.id,
-      techSupportEmail: matchingTse.email,
-      employeeName: assignee?.name || matchingTse.employeeName,
+      techSupport: resolvedCodeName,
+      techSupportId: resolvedOfficialId,
+      techSupportEmail: resolvedEmail,
+      employeeName: resolvedRealName,
       candidateName,
       candidateEmail: task.candidateEmail || '',
       recruiterName: task.assignedSrName || task.recruiterName || assignedTeam.name,
@@ -583,7 +590,7 @@ export const AppProvider = ({ children }) => {
 
     // Synchronously sync to linked feedback record in state
     updateFeedbacksWithStorage(prev => prev.map(f => {
-      if (f.taskId === id || f.id === `fb-task-${id}` || (f.candidateName && f.candidateName.toLowerCase() === (tasks.find(t => t.id === id)?.candidateName || '').toLowerCase())) {
+      if (f.taskId === id || f.id === `fb-task-${id}`) {
         return {
           ...f,
           techSupport: codeName,

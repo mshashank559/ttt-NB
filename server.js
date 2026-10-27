@@ -479,10 +479,18 @@ app.post('/api/tasks', async (req, res) => {
     const feedbackId = `fb-task-${task.id}`;
     const existingFeedback = await Feedback.findOne({ id: feedbackId });
     if (!existingFeedback) {
-      const { TECH_SUPPORT_TEAM } = await import('./src/data/mockData.js');
+      const { TECH_SUPPORT_TEAM, TSE_IDS, getTseRealName } = await import('./src/data/mockData.js');
       const assignedTse = TECH_SUPPORT_TEAM.find(t => 
-        t.supportName.toLowerCase() === (task.techPerson || '').toLowerCase()
-      ) || TECH_SUPPORT_TEAM[0];
+        (task.codeName && t.supportName.toLowerCase() === task.codeName.toLowerCase()) ||
+        (task.techPerson && t.supportName.toLowerCase() === task.techPerson.toLowerCase()) ||
+        (task.techPerson && t.employeeName.toLowerCase().includes(task.techPerson.toLowerCase())) ||
+        (task.assigneeId && (t.id === task.assigneeId || TSE_IDS[task.assigneeId] === t.id))
+      );
+
+      const resolvedCodeName = assignedTse?.supportName || task.codeName || (task.techPerson && task.techPerson !== 'Unassigned' ? task.techPerson : 'Unassigned');
+      const resolvedOfficialId = assignedTse?.id || (resolvedCodeName && TSE_IDS[resolvedCodeName]) || (task.assigneeId && TSE_IDS[task.assigneeId]) || (task.techPersonId?.startsWith('TSE-NB') ? task.techPersonId : '') || '';
+      const resolvedRealName = assignedTse?.employeeName || getTseRealName(resolvedCodeName) || (task.techPerson !== 'Unassigned' ? task.techPerson : '') || '';
+      const resolvedEmail = assignedTse?.email || '';
 
       const isShivam = task.teamId === 'team-shivam' || (task.teamName && task.teamName.includes('Shivam'));
       const fallbackLeadId = isShivam ? 'u-1791911115518' : 'u-1791911058812';
@@ -492,10 +500,10 @@ app.post('/api/tasks', async (req, res) => {
         id: feedbackId,
         taskId: task.id,
         date: task.date || new Date().toISOString().slice(0, 10),
-        techSupport: task.codeName || assignedTse.supportName,
-        techSupportId: assignedTse.id,
-        techSupportEmail: assignedTse.email,
-        employeeName: assignedTse.employeeName,
+        techSupport: resolvedCodeName,
+        techSupportId: resolvedOfficialId,
+        techSupportEmail: resolvedEmail,
+        employeeName: resolvedRealName,
         candidateName: task.candidateName || 'Candidate',
         candidateEmail: task.candidateEmail || '',
         recruiterName: task.assignedSrName || task.recruiterName || 'Marketing Team',
@@ -546,7 +554,7 @@ app.put('/api/tasks/:id', async (req, res) => {
 
     if (Object.keys(feedbackPatch).length > 0) {
       await Feedback.findOneAndUpdate(
-        { $or: [{ id: `fb-task-${updated.id}` }, { taskId: updated.id }, { candidateName: updated.candidateName }] },
+        { $or: [{ id: `fb-task-${updated.id}` }, { taskId: updated.id }] },
         { $set: feedbackPatch }
       );
     }
@@ -741,28 +749,31 @@ app.get('/api/feedbacks', async (req, res) => {
     const taskMap = new Map();
     allTasks.forEach(t => {
       if (t.id) taskMap.set(t.id, t);
-      if (t.candidateName) taskMap.set(t.candidateName.trim().toLowerCase(), t);
     });
 
-    const { TECH_SUPPORT_TEAM, TSE_IDS } = await import('./src/data/mockData.js');
+    const { TECH_SUPPORT_TEAM, TSE_IDS, getTseRealName } = await import('./src/data/mockData.js');
 
     feedbacks = feedbacks.map(fb => {
       const obj = fb.toObject ? fb.toObject() : { ...fb };
       const rawTaskId = obj.taskId || (obj.id ? obj.id.replace('fb-task-', '') : '');
-      const linkedTask = taskMap.get(rawTaskId) || (obj.candidateName ? taskMap.get(obj.candidateName.trim().toLowerCase()) : null);
+      const linkedTask = rawTaskId ? taskMap.get(rawTaskId) : null;
 
       if (linkedTask) {
         const assignedName = linkedTask.techPerson || linkedTask.codeName;
         const matchingTse = TECH_SUPPORT_TEAM.find(t =>
           (assignedName && t.supportName.toLowerCase() === assignedName.toLowerCase()) ||
+          (assignedName && t.employeeName.toLowerCase().includes(assignedName.toLowerCase())) ||
           (linkedTask.assigneeId && (t.id === linkedTask.assigneeId || TSE_IDS[linkedTask.assigneeId] === t.id))
         );
         if (matchingTse) {
           obj.techSupportId = matchingTse.id;
           obj.techSupport = matchingTse.supportName;
           obj.employeeName = matchingTse.employeeName;
+          obj.techSupportEmail = matchingTse.email;
         } else if (linkedTask.techPersonId && linkedTask.techPersonId.startsWith('TSE-NB')) {
           obj.techSupportId = linkedTask.techPersonId;
+          obj.techSupport = linkedTask.codeName || linkedTask.techPerson;
+          obj.employeeName = getTseRealName(linkedTask.codeName || linkedTask.techPerson);
         }
       }
 

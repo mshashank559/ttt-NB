@@ -67,80 +67,110 @@ export default function CalendarPage() {
   const [selectedDateKey, setSelectedDateKey] = useState(null);
   const [modalFilter, setModalFilter] = useState('all'); // 'all' | 'interviews' | 'tasks'
 
-  // Combine and unify all activities across events, tasks, and interviews
+  // Combine and unify all activities using TASKS as the Single Source of Truth
   const unifiedEvents = useMemo(() => {
-    const map = new Map();
+    const list = [];
+    const seenTaskIds = new Set();
+    const seenCandidateDates = new Set();
 
-    // 1. Base events from context
-    (events || []).forEach(e => {
-      map.set(e.id, { ...e });
-    });
-
-    // 2. Add or enrich with all tasks
+    // 1. Primary Source of Truth: TASKS (Exact 1:1 match with Task sidebar)
     (tasks || []).forEach(t => {
-      const id = `ev-t-${t.id}`;
-      const matchingFeedback = (feedbacks || []).find(f =>
-        String(f.linkRecordId || f.taskId) === String(t.id) ||
-        String(f.id) === `fb-task-${t.id}` ||
-        (f.candidateName && t.candidateName && f.candidateName.toLowerCase() === t.candidateName.toLowerCase())
-      );
-      const candidateFeedbackComment = matchingFeedback?.candidateFeedback?.comments || matchingFeedback?.comments || t.candidateClosingComment || t.candidateFeedback;
-      const candidateRating = matchingFeedback?.candidateFeedback?.performanceRating || matchingFeedback?.candidateFeedback?.experienceRating || matchingFeedback?.overallRating;
+      seenTaskIds.add(String(t.id));
 
-      map.set(id, {
-        id,
-        type: 'task',
-        title: `${t.candidateName} • ${t.companyName} (${t.taskType})`,
-        date: t.date,
+      // Strictly match feedback by Unique Task ID (NEVER by candidate name)
+      const matchingFeedback = (feedbacks || []).find(f =>
+        (f.taskId && String(f.taskId) === String(t.id)) ||
+        (f.linkRecordId && String(f.linkRecordId) === String(t.id)) ||
+        (f.id && String(f.id) === `fb-task-${t.id}`)
+      );
+
+      // Status directly equals Task sidebar status
+      const taskStatus = t.status || (t.taskType === 'Interview' ? 'Scheduled' : 'Pending');
+      const isCompleted = ['Done', 'Interview Completed', 'Completed', 'Completed - Feedback Received'].includes(taskStatus);
+
+      // Candidate Feedback appears ONLY if feedback form was actually submitted AND task is completed
+      const hasFeedbackSubmitted = Boolean(
+        isCompleted &&
+        matchingFeedback &&
+        (matchingFeedback.status === 'Submitted' || matchingFeedback.candidateFeedback?.submitted) &&
+        (matchingFeedback.candidateFeedback?.comments || matchingFeedback.comments)
+      );
+
+      const candidateFeedbackComment = hasFeedbackSubmitted
+        ? (matchingFeedback.candidateFeedback?.comments || matchingFeedback.comments)
+        : null;
+      const candidateRating = hasFeedbackSubmitted
+        ? (matchingFeedback.candidateFeedback?.performanceRating || matchingFeedback.candidateFeedback?.experienceRating || matchingFeedback.overallRating)
+        : null;
+
+      const dateStr = t.date || t.dueDate || (t.interviewDateTime ? t.interviewDateTime.slice(0, 10) : '');
+      const timeStr = t.interviewDateTime
+        ? (t.interviewDateTime.includes('T') ? t.interviewDateTime.split('T')[1].slice(0, 5) : '')
+        : (t.time || '');
+
+      const isInterview = t.taskType === 'Interview' || t.category === 'Interview' || Boolean(t.interviewDateTime);
+      const techPersonDisplay = t.codeName || t.techPerson || 'Unassigned';
+
+      // Remark strictly from task or legitimate status (no bogus "Feedback submitted")
+      const remarkDisplay = hasFeedbackSubmitted
+        ? 'Feedback submitted'
+        : (t.remark || (taskStatus === 'Pending' ? 'Interview Scheduled / Pending' : taskStatus));
+
+      const candKey = `${(t.candidateName || '').toLowerCase().trim()}__${dateStr}`;
+      seenCandidateDates.add(candKey);
+
+      list.push({
+        id: `task-${t.id}`,
+        taskId: t.id,
         refId: t.id,
-        candidateName: t.candidateName,
-        companyName: t.companyName,
-        sessionType: t.taskType,
-        taskType: t.taskType,
-        techPerson: t.techPerson,
-        duration: t.duration,
-        position: t.position,
-        status: t.status,
-        remark: t.remark,
+        type: isInterview ? 'interview' : 'task',
+        title: `${t.candidateName || t.title} • ${t.companyName || 'Client Org'} (${t.taskType || 'Interview'})`,
+        date: dateStr,
+        candidateName: t.candidateName || t.title,
+        companyName: t.companyName || 'Client Org',
+        sessionType: t.taskType || 'Interview',
+        taskType: t.taskType || 'Interview',
+        techPerson: techPersonDisplay,
+        assigneeId: t.assigneeId,
+        time: timeStr,
+        duration: t.duration || '30 mins',
+        position: t.position || 'Software Engineer',
+        status: taskStatus,
+        remark: remarkDisplay,
         candidateFeedbackComment,
         candidateRating,
       });
     });
 
-    // 3. Add or enrich with all interviews
+    // 2. Non-task events (e.g. general company calendar events, deadlines, meetings)
+    (events || []).forEach(e => {
+      if (e.taskId && seenTaskIds.has(String(e.taskId))) return;
+      if (seenTaskIds.has(String(e.id)) || seenTaskIds.has(String(e.refId))) return;
+      list.push({
+        ...e,
+        id: `ev-${e.id}`,
+        type: e.type || 'meeting',
+      });
+    });
+
+    // 3. Standalone interviews (Deduplicated: only add if not already present in tasks)
     (interviews || []).forEach(i => {
-      const id = `ev-i-${i.id}`;
-      const matchingFeedback = (feedbacks || []).find(f =>
-        String(f.linkRecordId || f.taskId) === String(i.id) ||
-        String(f.id) === `fb-task-${i.id}` ||
-        (f.candidateName && i.candidateName && f.candidateName.toLowerCase() === i.candidateName.toLowerCase())
-      );
-      const candidateFeedbackComment = matchingFeedback?.candidateFeedback?.comments || matchingFeedback?.comments || i.candidateFeedback?.comments;
-      const candidateRating = matchingFeedback?.candidateFeedback?.performanceRating || matchingFeedback?.candidateFeedback?.experienceRating || matchingFeedback?.overallRating;
+      const interviewTaskId = i.taskId || i.taskRefId || (i.id && i.id.startsWith('task-') ? i.id.replace('task-', '') : null);
+      if (interviewTaskId && seenTaskIds.has(String(interviewTaskId))) return;
+      if (seenTaskIds.has(String(i.id))) return;
 
-      map.set(id, {
-        id,
+      const candKey = `${(i.candidateName || '').toLowerCase().trim()}__${i.date}`;
+      if (seenCandidateDates.has(candKey)) return;
+
+      list.push({
+        ...i,
+        id: `interview-${i.id}`,
         type: 'interview',
-        title: `${i.candidateName} • ${i.companyName || 'NetBounce'} (${i.sessionType || 'Interview'})`,
-        date: i.date,
-        refId: i.id,
-        candidateName: i.candidateName,
-        companyName: i.companyName || 'Client Org',
-        sessionType: i.sessionType || 'Interview',
-        taskType: i.sessionType || 'Interview',
-        techPerson: i.techPerson || 'Assigned TSE',
-        time: i.time,
-        duration: '45 mins',
-        position: i.position,
-        status: i.status,
-        remark: i.feedbackSubmitted ? 'Feedback submitted' : 'Interview Scheduled',
-        candidateFeedbackComment,
-        candidateRating,
       });
     });
 
-    return Array.from(map.values());
-  }, [events, tasks, interviews, feedbacks]);
+    return list;
+  }, [tasks, feedbacks, events, interviews]);
 
   // Group events by date key (YYYY-MM-DD)
   const eventByDate = useMemo(() => {

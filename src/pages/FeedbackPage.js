@@ -9,7 +9,7 @@ import {
 import { toast } from 'sonner';
 import { useApp } from '../context/AppContext';
 import { PageHeader, SectionCard, StatusBadge } from '../components/common';
-import { calculateOverallRating, TECH_SUPPORT_TEAM, ROLES, roleIsMarketing, TSE_IDS, getTseId } from '../data/mockData';
+import { calculateOverallRating, TECH_SUPPORT_TEAM, ROLES, roleIsMarketing, TSE_IDS, getTseId, getTseRealName } from '../data/mockData';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import { Textarea } from '../components/ui/textarea';
 
@@ -202,13 +202,98 @@ export default function FeedbackPage() {
     });
   };
 
+  // Left Join: Start with all candidate tasks from tasks (so every candidate requiring feedback appears),
+  // joined strictly by unique taskId with feedbacks.
+  const unifiedFeedbacks = useMemo(() => {
+    const feedbackByTaskId = new Map();
+    (feedbacks || []).forEach(f => {
+      if (f.taskId) feedbackByTaskId.set(String(f.taskId), f);
+      if (f.id && String(f.id).startsWith('fb-task-')) {
+        feedbackByTaskId.set(String(f.id).replace('fb-task-', ''), f);
+      }
+    });
+
+    const taskIdsSeen = new Set();
+
+    const taskRows = (tasks || []).map(t => {
+      taskIdsSeen.add(String(t.id));
+      const fb = feedbackByTaskId.get(String(t.id));
+
+      // Resolve assigned TSE accurately from task & users without falling back to Abhishek
+      const assignedUserId = t.assigneeId;
+      const assignedUser = (users || []).find(u =>
+        u.id === assignedUserId ||
+        u.empId === assignedUserId ||
+        u.tttNbId === assignedUserId ||
+        (t.codeName && u.codeName?.toLowerCase() === t.codeName.toLowerCase()) ||
+        (t.techPerson && u.name?.toLowerCase() === t.techPerson.toLowerCase())
+      );
+
+      const candidateCodeName = t.codeName || assignedUser?.codeName || (t.techPerson && !t.techPerson.includes(' ') && t.techPerson !== 'Unassigned' ? t.techPerson : '');
+      const candidateRealName = (t.techPerson && t.techPerson !== 'Unassigned') ? t.techPerson : (assignedUser?.name || '');
+
+      const matchingTse = TECH_SUPPORT_TEAM.find(item =>
+        (assignedUserId && (item.id === assignedUserId || TSE_IDS[assignedUserId] === item.id)) ||
+        (candidateCodeName && item.supportName.toLowerCase() === candidateCodeName.toLowerCase()) ||
+        (candidateRealName && (item.employeeName.toLowerCase().includes(candidateRealName.toLowerCase()) || candidateRealName.toLowerCase().includes(item.employeeName.toLowerCase()))) ||
+        (t.techPersonId && item.id === t.techPersonId)
+      );
+
+      const resolvedCodeName = matchingTse?.supportName || candidateCodeName || (assignedUser?.codeName) || (t.techPerson && t.techPerson !== 'Unassigned' ? t.techPerson : 'Unassigned');
+      const resolvedRealName = matchingTse?.employeeName || getTseRealName(resolvedCodeName) || candidateRealName || (assignedUser?.name) || '';
+      const resolvedOfficialId = matchingTse?.id || TSE_IDS[resolvedCodeName] || (assignedUser?.empId?.startsWith('TSE-NB') ? assignedUser.empId : '') || (t.techPersonId?.startsWith('TSE-NB') ? t.techPersonId : '') || (resolvedCodeName !== 'Unassigned' ? (TSE_IDS[resolvedCodeName] || '') : '');
+      const resolvedEmail = matchingTse?.email || assignedUser?.email || '';
+
+      const taskDate = t.date || (t.interviewDateTime ? t.interviewDateTime.slice(0, 10) : new Date().toISOString().slice(0, 10));
+
+      return {
+        id: fb?.id || `fb-task-${t.id}`,
+        taskId: t.id,
+        date: fb?.date || taskDate,
+        techSupport: resolvedCodeName,
+        techSupportId: resolvedOfficialId,
+        techSupportEmail: resolvedEmail,
+        employeeName: resolvedRealName,
+        codeName: resolvedCodeName,
+        candidateName: t.candidateName || fb?.candidateName || 'Candidate',
+        candidateEmail: t.candidateEmail || fb?.candidateEmail || '',
+        recruiterName: t.assignedSrName || t.recruiterName || fb?.recruiterName || 'Senior Recruiter',
+        pocId: t.assignedSrId || t.pocId || fb?.pocId || '',
+        teamId: t.teamId || fb?.teamId || 'team-mukesh',
+        teamLeadId: t.teamLeadId || fb?.teamLeadId || '',
+        teamName: t.teamName || fb?.teamName || 'Team Mukesh',
+        jobRole: t.position || fb?.jobRole || 'Software Engineer',
+        company: t.companyName || t.company || fb?.company || '',
+        round: t.taskType || fb?.round || 'Interview',
+        techSupportType: t.taskType || fb?.techSupportType || 'Interview',
+        taskStatus: t.status,
+        candidateFeedback: fb?.candidateFeedback || {
+          submitted: false,
+          performanceRating: null,
+          experienceRating: null,
+          comments: '',
+          timestamp: null,
+        },
+        marketingReview: fb?.marketingReview || null,
+      };
+    });
+
+    // Standalone historical feedbacks that don't match any task
+    const standaloneFeedbacks = (feedbacks || []).filter(f => {
+      const rawTaskId = f.taskId || (f.id && String(f.id).startsWith('fb-task-') ? String(f.id).replace('fb-task-', '') : null);
+      return !rawTaskId || !taskIdsSeen.has(String(rawTaskId));
+    });
+
+    return [...taskRows, ...standaloneFeedbacks];
+  }, [tasks, feedbacks, users]);
+
   // Filtered records for the main table
   const filteredFeedbacks = useMemo(() => {
-    return (feedbacks || []).filter((item) => {
+    return (unifiedFeedbacks || []).filter((item) => {
       // Search filter
       if (search.trim()) {
         const q = search.toLowerCase();
-        const matchTech = item.techSupport?.toLowerCase().includes(q);
+        const matchTech = item.techSupport?.toLowerCase().includes(q) || item.employeeName?.toLowerCase().includes(q);
         const matchCand = item.candidateName?.toLowerCase().includes(q);
         const matchComp = item.company?.toLowerCase().includes(q);
         if (!matchTech && !matchCand && !matchComp) return false;
@@ -255,17 +340,17 @@ export default function FeedbackPage() {
 
       return true;
     });
-  }, [feedbacks, search, dateRange, typeFilter, statusFilter]);
+  }, [unifiedFeedbacks, search, dateRange, typeFilter, statusFilter]);
 
   // Candidates for the drill-down tech support view
   const drillDownRecords = useMemo(() => {
     if (!selectedTechSupport) return [];
-    return (feedbacks || []).filter(
+    return (unifiedFeedbacks || []).filter(
       (f) =>
-        f.techSupport === selectedTechSupport.name &&
+        (f.techSupport === selectedTechSupport.name || f.techSupportId === selectedTechSupport.name) &&
         (!selectedTechSupport.date || f.date === selectedTechSupport.date)
     );
-  }, [feedbacks, selectedTechSupport]);
+  }, [unifiedFeedbacks, selectedTechSupport]);
 
   // Drill-down average rating for selected Tech Support
   const drillDownAvgRating = useMemo(() => {
@@ -284,12 +369,12 @@ export default function FeedbackPage() {
 
   // Counts for Marketing Evaluation
   const pendingTseReviews = useMemo(() => {
-    return (feedbacks || []).filter(f => !f.marketingReview?.reviewed).length;
-  }, [feedbacks]);
+    return (unifiedFeedbacks || []).filter(f => !f.marketingReview?.reviewed).length;
+  }, [unifiedFeedbacks]);
 
   const completedTseReviews = useMemo(() => {
-    return (feedbacks || []).filter(f => f.marketingReview?.reviewed).length;
-  }, [feedbacks]);
+    return (unifiedFeedbacks || []).filter(f => f.marketingReview?.reviewed).length;
+  }, [unifiedFeedbacks]);
 
   // Open marketing review modal for a specific record
   const handleOpenMarketingReview = (record) => {
@@ -514,31 +599,10 @@ export default function FeedbackPage() {
                           className="flex items-center gap-2 text-left group/btn"
                         >
                           {(() => {
-                            // Dynamically cross-reference with linked task to guarantee correct assigned TSE
-                            const linkedTask = (tasks || []).find(t => 
-                              t.id === row.taskId || 
-                              row.id === `fb-task-${t.id}` || 
-                              (row.candidateName && t.candidateName && t.candidateName.trim().toLowerCase() === row.candidateName.trim().toLowerCase())
-                            );
-
-                            const assignedTseName = (linkedTask?.techPerson && linkedTask.techPerson !== 'Unassigned')
-                              ? linkedTask.techPerson
-                              : (row.techSupport && row.techSupport !== 'Code Name Unassigned' && !row.techSupport.startsWith('TSE-NB') ? row.techSupport : '');
-
-                            const assignedUserId = linkedTask?.assigneeId;
-
-                            const matchingTse = TECH_SUPPORT_TEAM.find(t => 
-                              (assignedUserId && (t.id === assignedUserId || TSE_IDS[assignedUserId] === t.id)) ||
-                              (assignedTseName && t.supportName.toLowerCase() === assignedTseName.toLowerCase()) ||
-                              t.id === row.techSupportId ||
-                              (row.techSupport && t.supportName.toLowerCase() === row.techSupport.toLowerCase()) ||
-                              (row.employeeName && t.employeeName.toLowerCase().includes(row.employeeName.toLowerCase()))
-                            );
-
-                            const officialIdDisplay = matchingTse?.id || (row.techSupportId && row.techSupportId.startsWith('TSE-NB') ? row.techSupportId : '') || (assignedUserId && TSE_IDS[assignedUserId]) || (assignedTseName && TSE_IDS[assignedTseName]) || 'TSE-NB-008';
-                            const codeNameDisplay = matchingTse?.supportName || assignedTseName || (row.techSupport && !row.techSupport.startsWith('TSE-NB') ? row.techSupport : 'Shreya');
-                            const realNameDisplay = matchingTse?.employeeName || row.employeeName || '';
-                            const emailDisplay = matchingTse?.email || row.techSupportEmail || '';
+                            const codeNameDisplay = row.techSupport && row.techSupport !== 'Code Name Unassigned' ? row.techSupport : 'Unassigned';
+                            const officialIdDisplay = row.techSupportId || (codeNameDisplay !== 'Unassigned' ? TSE_IDS[codeNameDisplay] : '') || '';
+                            const realNameDisplay = row.employeeName || (codeNameDisplay !== 'Unassigned' ? getTseRealName(codeNameDisplay) : '');
+                            const emailDisplay = row.techSupportEmail || '';
 
                             return (
                               <>
@@ -548,7 +612,7 @@ export default function FeedbackPage() {
                                 <div>
                                   {roleIsMarketing(currentRole) ? (
                                     <div className="font-bold text-[#1416c1] font-mono text-xs group-hover/btn:underline flex items-center gap-1">
-                                      <span>{officialIdDisplay}</span>
+                                      <span>{officialIdDisplay || 'TSE-NB-008'}</span>
                                       <ChevronRight size={13} className="opacity-0 group-hover/btn:opacity-100 -translate-x-1 group-hover/btn:translate-x-0 transition-all text-[#1416c1]" />
                                     </div>
                                   ) : (
