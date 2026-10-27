@@ -9,10 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 
 const STAGES = [
   'Scheduled',
+  'Interview Rescheduled',
   'Interview Completed - Feedback Received',
   'Interview Completed - Feedback Pending',
-  'Interview Completed',
-  'Feedback Pending',
   'Cleared',
   'Rejected',
   'Hold',
@@ -20,10 +19,10 @@ const STAGES = [
 
 const stageTint = {
   Scheduled: 'border-sky-500/30',
+  'Interview Rescheduled': 'border-amber-500/30',
+  Rescheduled: 'border-amber-500/30',
   'Interview Completed - Feedback Received': 'border-emerald-500/30',
   'Interview Completed - Feedback Pending': 'border-amber-500/30',
-  'Interview Completed': 'border-indigo-500/30',
-  'Feedback Pending': 'border-amber-500/30',
   Cleared: 'border-emerald-500/30',
   Rejected: 'border-rose-500/30',
   Hold: 'border-purple-500/30',
@@ -180,10 +179,9 @@ export default function Interviews() {
 
   const totals = {
     scheduled: filtered.filter(i => i.status === 'Scheduled').length,
+    rescheduled: filtered.filter(i => i.status === 'Interview Rescheduled' || i.status === 'Rescheduled').length,
     completedReceived: filtered.filter(i => i.status === 'Interview Completed - Feedback Received').length,
     completedPending: filtered.filter(i => i.status === 'Interview Completed - Feedback Pending').length,
-    completed: filtered.filter(i => i.status === 'Interview Completed' || i.status === 'Interview Completed - Feedback Received' || i.status === 'Interview Completed - Feedback Pending').length,
-    pending: filtered.filter(i => i.status === 'Feedback Pending' || i.status === 'Interview Completed - Feedback Pending').length,
     selected: filtered.filter(i => i.interviewOutcome === 'Selected' || i.status === 'Cleared').length,
     rejected: filtered.filter(i => i.interviewOutcome === 'Rejected' || i.status === 'Rejected').length,
     hold: filtered.filter(i => i.interviewOutcome === 'On Hold' || i.status === 'Hold').length,
@@ -197,9 +195,9 @@ export default function Interviews() {
       />
       <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-3">
         <KpiCard testid="iv-scheduled" label="Scheduled" value={totals.scheduled} />
+        <KpiCard testid="iv-rescheduled" label="Rescheduled" value={totals.rescheduled} />
         <KpiCard testid="iv-completed-rec" label="FB Received" value={totals.completedReceived} />
         <KpiCard testid="iv-completed-pend" label="FB Pending" value={totals.completedPending} />
-        <KpiCard testid="iv-completed" label="Total Completed" value={totals.completed} />
         <KpiCard testid="iv-cleared" label="Selected" value={totals.selected} />
         <KpiCard testid="iv-rejected" label="Rejected" value={totals.rejected} />
         <KpiCard testid="iv-hold" label="On Hold" value={totals.hold} />

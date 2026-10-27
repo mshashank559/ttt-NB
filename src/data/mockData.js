@@ -576,8 +576,7 @@ export const CATEGORIES = ['Technical Assessment', 'Coding Evaluation', 'Live In
 export const INITIAL_TASKS = [];
 export const INTERVIEW_STATUSES = [
   'Scheduled',
-  'Interview Completed',
-  'Feedback Pending',
+  'Interview Rescheduled',
   'Interview Completed - Feedback Received',
   'Interview Completed - Feedback Pending',
   'Cleared',
@@ -977,19 +976,34 @@ export const filterAuthorizedData = (items, currentUser, currentRole) => {
 export const mapTaskToInterview = (t, feedbacks = []) => {
   if (!t) return null;
   const fb = (feedbacks || []).find(f => f.taskId === t.id || f.id === `fb-task-${t.id}` || f.id === `fb-${t.id}`);
-  const hasSubmittedFeedback = Boolean(fb?.candidateFeedback?.submitted);
+  const hasSubmittedFeedback = Boolean(
+    fb?.feedbackSubmitted ||
+    fb?.candidateFeedback?.submitted ||
+    (fb?.candidateFeedback?.performanceRating != null && Number(fb?.candidateFeedback?.performanceRating) > 0) ||
+    (fb?.candidateFeedback?.rating != null && Number(fb?.candidateFeedback?.rating) > 0)
+  );
 
   let status = 'Scheduled';
   const outcome = t.interviewOutcome || fb?.marketingReview?.decision || fb?.candidateFeedback?.decision;
 
   if (t.interviewStatus) {
-    status = t.interviewStatus;
+    if (t.interviewStatus === 'Interview Completed') {
+      status = hasSubmittedFeedback ? 'Interview Completed - Feedback Received' : 'Interview Completed - Feedback Pending';
+    } else if (t.interviewStatus === 'Feedback Pending') {
+      status = 'Interview Completed - Feedback Pending';
+    } else if (t.interviewStatus === 'Rescheduled' || t.interviewStatus === 'Reschedule') {
+      status = 'Interview Rescheduled';
+    } else {
+      status = t.interviewStatus;
+    }
   } else if (outcome === 'Cleared' || outcome === 'Passed' || outcome === 'Moved to Next Round' || outcome === 'Offer Received' || t.status === 'Cleared') {
     status = 'Cleared';
   } else if (outcome === 'Failed' || outcome === 'Rejected' || t.status === 'Rejected') {
     status = 'Rejected';
   } else if (outcome === 'Hold' || t.status === 'Hold') {
     status = 'Hold';
+  } else if (t.status === 'Reschedule' || t.status === 'Rescheduled' || t.status === 'Interview Rescheduled') {
+    status = 'Interview Rescheduled';
   } else if (t.status === 'Done' || t.status === 'Completed') {
     status = hasSubmittedFeedback ? 'Interview Completed - Feedback Received' : 'Interview Completed - Feedback Pending';
   } else if (t.status === 'Cancel' || t.status === 'Not Possible') {

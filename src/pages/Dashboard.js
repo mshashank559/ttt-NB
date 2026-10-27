@@ -65,7 +65,7 @@ const priorityDistribution = (tasks) => {
 };
 
 const InterviewFunnel = ({ interviews }) => {
-  const stages = ['Scheduled', 'Interview Completed', 'Feedback Pending', 'Cleared'];
+  const stages = ['Scheduled', 'Interview Rescheduled', 'Interview Completed - Feedback Received', 'Cleared'];
   const data = stages.map(s => ({ name: s, value: interviews.filter(i => i.status === s).length }));
   const max = Math.max(...data.map(d => d.value), 1);
   return (
@@ -170,9 +170,9 @@ export default function Dashboard() {
   const allInterviews = (interviews && interviews.length) ? interviews : (visibleInterviews || []);
   const ivTotals = {
     total: allInterviews.length,
-    scheduled: allInterviews.filter(i => i.status === 'Scheduled').length,
-    completed: allInterviews.filter(i => i.status === 'Interview Completed').length,
-    feedbackPending: allInterviews.filter(i => i.status === 'Feedback Pending').length,
+    scheduled: allInterviews.filter(i => i.status === 'Scheduled' || i.status === 'Interview Rescheduled' || i.status === 'Rescheduled').length,
+    completed: allInterviews.filter(i => i.status === 'Interview Completed - Feedback Received' || i.status === 'Cleared' || i.status === 'Interview Completed').length,
+    feedbackPending: allInterviews.filter(i => i.status === 'Interview Completed - Feedback Pending' || i.status === 'Feedback Pending').length,
     cleared: allInterviews.filter(i => i.status === 'Cleared').length,
   };
   const totalRoundsConducted = ivTotals.completed + ivTotals.cleared; // 3 + 2 = 5 rounds
@@ -1245,16 +1245,26 @@ export default function Dashboard() {
     const teamSelected = teamInterviews.filter(i =>
       i.interviewOutcome === 'Selected' || i.interviewOutcome === 'Cleared' || i.status === 'Cleared' || i.status === 'Selected'
     ).length;
-    const teamFeedbackPending = teamInterviews.filter(i =>
-      i.status === 'Interview Completed - Feedback Pending' ||
-      i.status === 'Feedback Pending' ||
-      ((i.status === 'Done' || i.status === 'Completed' || i.status === 'Interview Completed') && !i.feedbackSubmitted)
-    ).length;
-    const teamFeedbackReceived = teamInterviews.filter(i =>
+
+    const isFeedbackSubmitted = (i) => Boolean(
       i.status === 'Interview Completed - Feedback Received' ||
-      i.feedbackSubmitted ||
-      (i.feedback && (i.feedback.candidateFeedback || i.feedback.rating))
-    ).length;
+      i.feedbackSubmitted === true ||
+      i.feedback?.candidateFeedback?.submitted === true ||
+      (i.feedback?.candidateFeedback?.performanceRating != null && Number(i.feedback?.candidateFeedback?.performanceRating) > 0) ||
+      (i.feedback?.candidateFeedback?.rating != null && Number(i.feedback?.candidateFeedback?.rating) > 0) ||
+      (i.feedback?.rating != null && Number(i.feedback?.rating) > 0)
+    );
+
+    const isFeedbackPending = (i) => Boolean(
+      !isFeedbackSubmitted(i) && (
+        i.status === 'Interview Completed - Feedback Pending' ||
+        i.status === 'Feedback Pending' ||
+        ((i.status === 'Done' || i.status === 'Completed') && !isFeedbackSubmitted(i))
+      )
+    );
+
+    const teamFeedbackReceived = teamInterviews.filter(isFeedbackSubmitted).length;
+    const teamFeedbackPending = teamInterviews.filter(isFeedbackPending).length;
 
     const inProgressTasksCount = teamTasks.filter(t => t.status === 'In Progress' || t.status === 'Pending' || t.status === 'Assigned' || t.status === 'Scheduled').length;
     const completedTasksCount = teamTasks.filter(t => t.status === 'Done' || t.status === 'Completed' || t.status === 'Cleared').length;

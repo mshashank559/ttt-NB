@@ -698,13 +698,14 @@ export const AppProvider = ({ children }) => {
 
     // 1. Update task in MongoDB & App state
     const taskId = interviewId;
-    const isDone = ['Cleared', 'Rejected', 'Hold', 'Interview Completed', 'Interview Completed - Feedback Received', 'Interview Completed - Feedback Pending', 'Selected', 'Offer Released', 'Joined'].includes(newStatus) ||
+    const isDone = ['Cleared', 'Rejected', 'Hold', 'Interview Completed - Feedback Received', 'Interview Completed - Feedback Pending', 'Selected', 'Offer Released', 'Joined'].includes(newStatus) ||
                    ['Cleared', 'Rejected', 'Selected', 'Offer Released', 'Joined'].includes(rawOutcome);
+    const isRescheduled = newStatus === 'Interview Rescheduled' || newStatus === 'Rescheduled';
 
     updateTask(taskId, {
       interviewOutcome: finalOutcome,
       interviewStatus: newStatus,
-      status: isDone ? 'Done' : 'Pending',
+      status: isDone ? 'Done' : (isRescheduled ? 'Reschedule' : 'Pending'),
       completionRemark: feedback.remarks || `Interview evaluation: ${newStatus}`,
     }, `Interview status updated by ${currentUser?.name || 'Reviewer'}: ${newStatus}`);
 
@@ -760,10 +761,13 @@ export const AppProvider = ({ children }) => {
     } else if (status === 'Hold') {
       patch.status = 'Done';
       patch.interviewOutcome = 'On Hold';
-    } else if (status === 'Interview Completed' || status === 'Interview Completed - Feedback Received') {
+    } else if (status === 'Interview Completed - Feedback Received') {
       patch.status = 'Done';
-    } else if (status === 'Interview Completed - Feedback Pending' || status === 'Feedback Pending') {
+    } else if (status === 'Interview Completed - Feedback Pending') {
       patch.status = 'Done';
+    } else if (status === 'Interview Rescheduled' || status === 'Rescheduled' || status === 'Reschedule') {
+      patch.status = 'Reschedule';
+      patch.interviewOutcome = null;
     } else if (status === 'Scheduled') {
       patch.status = 'Pending';
       patch.interviewOutcome = null;
