@@ -686,24 +686,27 @@ export const AppProvider = ({ children }) => {
   }, [currentRole, currentUser, updateFeedbacksWithStorage]);
 
   const submitInterviewFeedback = useCallback((interviewId, feedback) => {
-    const outcome = feedback.decision || feedback.outcome || 'Selected';
+    const rawOutcome = feedback.decision || feedback.outcome || null;
     const newStatus = feedback.stage || (
-      ['Cleared', 'Passed', 'Moved to Next Round', 'Offer Received', 'Selected'].includes(outcome)
+      ['Cleared', 'Passed', 'Moved to Next Round', 'Offer Received', 'Selected'].includes(rawOutcome)
         ? 'Cleared'
-        : (outcome === 'Rejected' || outcome === 'Failed') ? 'Rejected' : 'Hold'
+        : (rawOutcome === 'Rejected' || rawOutcome === 'Failed') ? 'Rejected' : 'Hold'
     );
+
+    const isRejectedOrHold = ['Rejected', 'Hold'].includes(newStatus);
+    const finalOutcome = isRejectedOrHold ? null : rawOutcome;
 
     // 1. Update task in MongoDB & App state
     const taskId = interviewId;
     const isDone = ['Cleared', 'Rejected', 'Hold', 'Interview Completed', 'Interview Completed - Feedback Received', 'Interview Completed - Feedback Pending', 'Selected', 'Offer Released', 'Joined'].includes(newStatus) ||
-                   ['Cleared', 'Rejected', 'Selected', 'Offer Released', 'Joined'].includes(outcome);
+                   ['Cleared', 'Rejected', 'Selected', 'Offer Released', 'Joined'].includes(rawOutcome);
 
     updateTask(taskId, {
-      interviewOutcome: outcome,
+      interviewOutcome: finalOutcome,
       interviewStatus: newStatus,
       status: isDone ? 'Done' : 'Pending',
-      completionRemark: feedback.remarks || `Interview evaluation: ${outcome}`,
-    }, `Interview status updated by ${currentUser?.name || 'Reviewer'}: ${newStatus} (${outcome})`);
+      completionRemark: feedback.remarks || `Interview evaluation: ${newStatus}`,
+    }, `Interview status updated by ${currentUser?.name || 'Reviewer'}: ${newStatus}`);
 
     // 2. Also record in feedbacks state and /api/feedbacks
     const fbId = `fb-task-${taskId}`;

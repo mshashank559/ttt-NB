@@ -723,7 +723,8 @@ const TaskDrawer = ({ task, onClose }) => {
   const assignee = users.find(u => u.id === task?.assigneeId);
   const creator = users.find(u => u.id === task?.createdById);
   const tseUsers = (users || []).filter(u => u.role === 'tse');
-  const canEdit = roleCanEditAny(currentRole) || task?.assigneeId === currentUser?.id;
+  const canUpdateStatus = ['management', 'upper_management', 'marketing_tl', 'marketing_sr', 'tsm', 'tse', 'admin'].includes(currentRole) || roleCanEditAny(currentRole) || task?.assigneeId === currentUser?.id;
+  const canReassignTseInDrawer = ['management', 'upper_management', 'tsm'].includes(currentRole);
   const [completionRemark, setCompletionRemark] = useState(task?.completionRemark || task?.remark || '');
   const [selectedStatus, setSelectedStatus] = useState(task?.status || 'Pending');
 
@@ -1123,9 +1124,9 @@ const TaskDrawer = ({ task, onClose }) => {
           </div>
 
           {/* Status & Assignee Controls with Mandatory Remarks on Done */}
-          {canEdit && (
+          {canUpdateStatus && (
             <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
-              <div className="grid grid-cols-2 gap-3">
+              <div className={`grid ${canReassignTseInDrawer ? 'grid-cols-2' : 'grid-cols-1'} gap-3`}>
                 <div>
                   <label className="text-xs text-slate-600 font-semibold">Update Status</label>
                   <Select
@@ -1151,7 +1152,7 @@ const TaskDrawer = ({ task, onClose }) => {
                     </SelectContent>
                   </Select>
                 </div>
-                {roleCanEditAny(currentRole) && (
+                {canReassignTseInDrawer && (
                   <div>
                     <label className="text-xs text-slate-600 font-semibold">Reassign TSE</label>
                     <Select value={task.assigneeId} onValueChange={v => reassignTask(task.id, v)}>
@@ -1502,7 +1503,7 @@ export default function Tasks() {
   const canManageTasks = currentRole === 'tsm' || currentRole === 'management' || currentRole === 'upper_management';
 
   const tseUsers = useMemo(() => (users || []).filter(u => u.role === 'tse'), [users]);
-  const canAssignTse = ['tsm', 'management', 'upper_management', 'marketing_tl', 'marketing_sr', 'recruiter', 'admin'].includes(currentRole) || roleCanEditAny(currentRole);
+  const canAssignTse = ['tsm', 'management', 'upper_management'].includes(currentRole);
   const canViewRealName = ['tsm', 'management', 'upper_management'].includes(currentRole);
 
   const isMarketingTl = currentRole === 'marketing_tl';

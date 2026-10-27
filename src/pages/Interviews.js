@@ -46,11 +46,14 @@ const EvaluationModal = ({ interview, onClose }) => {
 
   if (!interview) return null;
 
+  const isRejectedOrHold = stage === 'Rejected' || stage === 'Hold';
+
   const submit = () => {
-    if (outcome && outcome !== interview.interviewOutcome) {
-      updateInterviewOutcome(interview.id, outcome);
+    const finalOutcome = isRejectedOrHold ? null : outcome;
+    if (finalOutcome !== interview.interviewOutcome) {
+      updateInterviewOutcome(interview.id, finalOutcome);
     }
-    submitInterviewFeedback(interview.id, { stage, decision: outcome, outcome });
+    submitInterviewFeedback(interview.id, { stage, decision: finalOutcome, outcome: finalOutcome });
     onClose();
   };
 
@@ -67,7 +70,9 @@ const EvaluationModal = ({ interview, onClose }) => {
               <UserRound size={18} />
             </div>
             <div>
-              <DialogTitle className="text-slate-900 text-base font-bold">Interview {interview.id}</DialogTitle>
+              <DialogTitle className="text-slate-900 text-base font-bold">
+                Interview {interview.id}{interview.candidateName ? ` — ${interview.candidateName}` : ''}
+              </DialogTitle>
               <DialogDescription className="text-slate-500 text-xs mt-0.5">
                 {interview.company ? `${interview.company} · ` : ''}{interview.position || interview.technology || 'Candidate'} · {interview.date} {interview.time || ''}
               </DialogDescription>
@@ -91,25 +96,27 @@ const EvaluationModal = ({ interview, onClose }) => {
             </Select>
           </div>
 
-          {/* Interview Outcome */}
-          <div>
-            <label className="text-xs uppercase tracking-wider text-slate-700 font-bold flex items-center justify-between mb-1.5">
-              <span>Interview Outcome</span>
-              {isCompletedStage && (
-                <span className="text-[10px] text-emerald-700 font-bold uppercase tracking-wider bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                  Active
-                </span>
-              )}
-            </label>
-            <Select value={outcome} onValueChange={v => setOutcome(v)}>
-              <SelectTrigger data-testid="feedback-outcome" className="bg-slate-50 border-slate-300 text-slate-900 h-10 rounded-xl focus:bg-white text-xs font-semibold">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="bg-white border-slate-200 text-slate-900">
-                {OUTCOMES.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
+          {/* Interview Outcome: Only show when status is not Rejected or Hold */}
+          {!isRejectedOrHold && (
+            <div>
+              <label className="text-xs uppercase tracking-wider text-slate-700 font-bold flex items-center justify-between mb-1.5">
+                <span>Interview Outcome</span>
+                {isCompletedStage && (
+                  <span className="text-[10px] text-emerald-700 font-bold uppercase tracking-wider bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                    Active
+                  </span>
+                )}
+              </label>
+              <Select value={outcome} onValueChange={v => setOutcome(v)}>
+                <SelectTrigger data-testid="feedback-outcome" className="bg-slate-50 border-slate-300 text-slate-900 h-10 rounded-xl focus:bg-white text-xs font-semibold">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-white border-slate-200 text-slate-900">
+                  {OUTCOMES.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           {/* Audit trail of outcome changes (if available) */}
           {interview.outcomeAuditTrail && interview.outcomeAuditTrail.length > 0 && (
@@ -239,7 +246,7 @@ export default function Interviews() {
                           {i.company ? <span className="font-semibold text-slate-800">{i.company} · </span> : null}
                           {i.position} · {i.date} {i.time}
                         </div>
-                        {i.interviewOutcome && (
+                        {i.interviewOutcome && !['Rejected', 'Hold'].includes(i.status) && (
                           <div className="mt-1.5 flex items-center gap-1.5">
                             <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
                               Outcome: {i.interviewOutcome}
@@ -294,13 +301,13 @@ export default function Interviews() {
               ) : filtered.map(i => (
                 <tr key={i.id} className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer transition-colors" onClick={() => setActive(i)}>
                   <td className="py-2.5 mono text-xs text-blue-700 font-semibold">{i.id}</td>
-                  <td className="text-slate-900 font-medium text-xs">{isMk ? i.id : i.candidateName}</td>
+                  <td className="text-slate-900 font-medium text-xs">{i.candidateName || i.title?.split('—')?.[0]?.trim() || i.id}</td>
                   <td className="text-slate-700 font-medium text-xs">{i.company || '—'}</td>
                   <td className="text-slate-900 font-medium text-xs">{i.position}</td>
                   <td className="text-slate-600 text-xs">{i.date} {i.time}</td>
                   <td><StatusBadge value={i.status} /></td>
                   <td>
-                    {i.interviewOutcome ? (
+                    {i.interviewOutcome && !['Rejected', 'Hold'].includes(i.status) ? (
                       <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200 whitespace-nowrap">
                         {i.interviewOutcome}
                       </span>
