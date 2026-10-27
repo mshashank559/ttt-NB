@@ -11,7 +11,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 import { useApp } from '../context/AppContext';
-import { PageHeader, SectionCard, StatusBadge } from '../components/common';
+import { PageHeader, SectionCard, StatusBadge, Pagination } from '../components/common';
 import { calculateOverallRating, TECH_SUPPORT_TEAM, roleIsMarketing } from '../data/mockData';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 
@@ -439,6 +439,19 @@ export default function ReportsPage() {
       return sortOrder === 'desc' ? -comparison : comparison;
     });
   }, [tseAnalytics, sortBy, sortOrder]);
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, dateRange, selectedTseFilter, techFilter, companyFilter, roundFilter, typeFilter, perfFilter, feedbackStatusFilter, marketingFilter, sortBy, sortOrder]);
+
+  const totalPages = Math.max(1, Math.ceil(sortedTseList.length / pageSize));
+  const paginatedTseList = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return sortedTseList.slice(start, start + pageSize);
+  }, [sortedTseList, currentPage, pageSize]);
 
   // Card 1: Top 3 Performing TSEs (Dynamically Ranked)
   const topPerformers = useMemo(() => {
@@ -1400,7 +1413,7 @@ export default function ReportsPage() {
                   </td>
                 </tr>
               ) : (
-                sortedTseList.map((tse) => (
+                paginatedTseList.map((tse) => (
                   <tr
                     key={tse.name}
                     onClick={() => setDrillDownTse(tse)}
@@ -1480,6 +1493,14 @@ export default function ReportsPage() {
             </tbody>
           </table>
         </div>
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalItems={sortedTseList.length}
+          pageSize={pageSize}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={setPageSize}
+        />
       </SectionCard>
 
       {/* ========================================================================= */}

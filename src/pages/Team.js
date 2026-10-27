@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
-import { PageHeader, SectionCard, StatusBadge } from '../components/common';
+import { PageHeader, SectionCard, StatusBadge, Pagination } from '../components/common';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../components/ui/sheet';
 import { Input } from '../components/ui/input';
 import { Search } from 'lucide-react';
@@ -12,8 +12,21 @@ export default function Team() {
   const { users, tasks } = useApp();
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const list = useMemo(() => users.filter(u => u.role !== 'upper_management' && u.name.toLowerCase().includes(query.toLowerCase())), [users, query]);
+
+  const handleQueryChange = (e) => {
+    setQuery(e.target.value);
+    setCurrentPage(1);
+  };
+
+  const totalPages = Math.max(1, Math.ceil(list.length / pageSize));
+  const paginatedList = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return list.slice(start, start + pageSize);
+  }, [list, currentPage, pageSize]);
 
   const stats = (u) => {
     const a = tasks.filter(t => t.assigneeId === u.id);
@@ -27,7 +40,7 @@ export default function Team() {
       <SectionCard title="Directory" actions={
         <div className="relative">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <Input data-testid="team-search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search team..." className="pl-9 bg-white border-slate-300 text-slate-900 placeholder:text-slate-400 w-64 h-9" />
+          <Input data-testid="team-search" value={query} onChange={handleQueryChange} placeholder="Search team..." className="pl-9 bg-white border-slate-300 text-slate-900 placeholder:text-slate-400 w-64 h-9" />
         </div>
       }>
         <div className="overflow-x-auto">
@@ -38,7 +51,11 @@ export default function Team() {
               </tr>
             </thead>
             <tbody>
-              {list.map((u, i) => {
+              {paginatedList.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-8 text-center text-xs text-slate-400 italic">No team members match this search.</td>
+                </tr>
+              ) : paginatedList.map((u, i) => {
                 const s = stats(u);
                 return (
                   <tr key={u.id} data-testid={`team-member-${u.id}`} onClick={() => setActive(u)} className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer transition-colors">
@@ -52,13 +69,21 @@ export default function Team() {
                     <td className="text-slate-600 font-medium">{u.dept}</td>
                     <td className="tabular-nums font-semibold text-slate-800">{s.total}</td>
                     <td className="tabular-nums font-bold text-emerald-700">{s.completed}</td>
-                    <td><span className="inline-flex items-center gap-1.5 text-xs text-slate-700 font-medium"><span className={`h-2 w-2 rounded-full ${statusDot(i)}`} />{statusLabel(i)}</span></td>
+                    <td><span className="inline-flex items-center gap-1.5 text-xs text-slate-700 font-medium"><span className={`h-2 w-2 rounded-full ${statusDot((currentPage - 1) * pageSize + i)}`} />{statusLabel((currentPage - 1) * pageSize + i)}</span></td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
         </div>
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalItems={list.length}
+          pageSize={pageSize}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={setPageSize}
+        />
       </SectionCard>
 
       <Sheet open={!!active} onOpenChange={o => !o && setActive(null)}>

@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useApp } from '../context/AppContext';
-import { PageHeader, SectionCard, StatusBadge } from '../components/common';
+import { PageHeader, SectionCard, StatusBadge, Pagination } from '../components/common';
 import { calculateOverallRating, TECH_SUPPORT_TEAM, ROLES, roleIsMarketing, TSE_IDS, getTseId, getTseRealName } from '../data/mockData';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import { Textarea } from '../components/ui/textarea';
@@ -342,6 +342,19 @@ export default function FeedbackPage() {
     });
   }, [unifiedFeedbacks, search, dateRange, typeFilter, statusFilter]);
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, dateRange, typeFilter, statusFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredFeedbacks.length / pageSize));
+  const paginatedFeedbacks = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredFeedbacks.slice(start, start + pageSize);
+  }, [filteredFeedbacks, currentPage, pageSize]);
+
   // Candidates for the drill-down tech support view
   const drillDownRecords = useMemo(() => {
     if (!selectedTechSupport) return [];
@@ -579,7 +592,7 @@ export default function FeedbackPage() {
                   </td>
                 </tr>
               ) : (
-                filteredFeedbacks.map((row) => {
+                paginatedFeedbacks.map((row) => {
                   const rating = calculateOverallRating(row.candidateFeedback, row.marketingReview);
                   return (
                     <tr
@@ -773,6 +786,14 @@ export default function FeedbackPage() {
             </tbody>
           </table>
         </div>
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalItems={filteredFeedbacks.length}
+          pageSize={pageSize}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={setPageSize}
+        />
       </SectionCard>
 
       {/* TECH SUPPORT DETAIL VIEW (Drawer / Modal) */}

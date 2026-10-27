@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Shield, UserRound } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { PageHeader, StatusBadge, SectionCard, EmptyState, KpiCard } from '../components/common';
+import { PageHeader, StatusBadge, SectionCard, EmptyState, KpiCard, Pagination } from '../components/common';
 import { INTERVIEW_STATUSES, roleIsMarketing } from '../data/mockData';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
@@ -173,9 +173,21 @@ export default function Interviews() {
   const { visibleInterviews, currentRole, currentUser, users } = useApp();
   const [active, setActive] = useState(null);
   const [statusFilter, setStatusFilter] = useState('all');
+  const [tablePage, setTablePage] = useState(1);
+  const [tablePageSize, setTablePageSize] = useState(10);
   const isMk = roleIsMarketing(currentRole);
 
   const filtered = useMemo(() => (visibleInterviews || []).filter(i => statusFilter === 'all' || i.status === statusFilter), [visibleInterviews, statusFilter]);
+
+  const handleStatusFilterChange = (val) => {
+    setStatusFilter(val);
+    setTablePage(1);
+  };
+
+  const paginatedTableItems = useMemo(() => {
+    const start = (tablePage - 1) * tablePageSize;
+    return filtered.slice(start, start + tablePageSize);
+  }, [filtered, tablePage, tablePageSize]);
 
   const totals = {
     scheduled: filtered.filter(i => i.status === 'Scheduled').length,
@@ -203,7 +215,7 @@ export default function Interviews() {
         <KpiCard testid="iv-hold" label="On Hold" value={totals.hold} />
       </div>
       <SectionCard title="Filter" actions={
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
+        <Select value={statusFilter} onValueChange={handleStatusFilterChange}>
           <SelectTrigger data-testid="iv-filter-status" className="w-44 bg-white border-slate-300 text-slate-900 h-9"><SelectValue /></SelectTrigger>
           <SelectContent className="bg-white border-slate-200 text-slate-900">
             <SelectItem value="all">All statuses</SelectItem>
@@ -215,12 +227,12 @@ export default function Interviews() {
           {STAGES.map(stage => {
             const items = filtered.filter(i => i.status === stage);
             return (
-              <div key={stage} className={`kanban-col rounded-xl bg-slate-50/70 border border-slate-200 ${stageTint[stage]} border-l-4 p-3`}>
-                <div className="flex items-center justify-between mb-3">
+              <div key={stage} className={`kanban-col rounded-xl bg-slate-50/70 border border-slate-200 ${stageTint[stage]} border-l-4 p-3 flex flex-col h-[580px] max-h-[580px]`}>
+                <div className="flex items-center justify-between mb-3 shrink-0">
                   <div className="text-xs font-bold text-slate-900 truncate mr-1" title={stage}>{stage}</div>
                   <span className="text-xs tabular-nums text-slate-700 px-2 py-0.5 rounded-full bg-slate-200/70 font-semibold shrink-0">{items.length}</span>
                 </div>
-                <div className="space-y-2.5">
+                <div className="space-y-2.5 overflow-y-auto pr-1.5 custom-scrollbar flex-1 min-h-0">
                   {items.length === 0 ? (
                     <div className="text-xs text-slate-400 italic px-2 py-6 text-center">No interviews</div>
                   ) : items.map(i => {
@@ -296,7 +308,7 @@ export default function Interviews() {
                 <tr>
                   <td colSpan={8} className="py-8 text-center text-xs text-slate-400 italic">No interviews found for this filter.</td>
                 </tr>
-              ) : filtered.map(i => (
+              ) : paginatedTableItems.map(i => (
                 <tr key={i.id} className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer transition-colors" onClick={() => setActive(i)}>
                   <td className="py-2.5 mono text-xs text-blue-700 font-semibold">{i.id}</td>
                   <td className="text-slate-900 font-medium text-xs">{i.candidateName || i.title?.split('—')?.[0]?.trim() || i.id}</td>
@@ -319,6 +331,14 @@ export default function Interviews() {
             </tbody>
           </table>
         </div>
+        <Pagination
+          currentPage={tablePage}
+          totalPages={Math.max(1, Math.ceil(filtered.length / tablePageSize))}
+          totalItems={filtered.length}
+          pageSize={tablePageSize}
+          onPageChange={setTablePage}
+          onPageSizeChange={setTablePageSize}
+        />
       </SectionCard>
       <EvaluationModal interview={active} onClose={() => setActive(null)} />
     </div>

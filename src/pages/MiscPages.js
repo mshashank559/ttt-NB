@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { toast } from 'sonner';
 import { Download, FileSpreadsheet, FileText, Shield, User as UserIcon, Settings as SettingsIcon, Sparkles, UserPlus, Search, Filter, Mail, Hash, Eye, Pencil, Trash2 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { PageHeader, SectionCard, StatusBadge, KpiCard } from '../components/common';
+import { PageHeader, SectionCard, StatusBadge, KpiCard, Pagination } from '../components/common';
 import AvatarPickerModal from '../components/AvatarPickerModal';
 import CreateUserModal, { ASSIGNABLE_ROLES } from '../components/CreateUserModal';
 import { ViewUserModal, EditUserModal, DeleteUserDialog } from '../components/UserActionModals';
@@ -56,6 +56,25 @@ export const Users = () => {
     const matchesRole = roleFilter === 'all' || u.role === roleFilter;
     return matchesSearch && matchesRole;
   });
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  const handleSearchChange = (e) => {
+    setSearchQuery(e.target.value);
+    setCurrentPage(1);
+  };
+
+  const handleRoleFilterChange = (e) => {
+    setRoleFilter(e.target.value);
+    setCurrentPage(1);
+  };
+
+  const totalPages = Math.max(1, Math.ceil(filteredUsers.length / pageSize));
+  const paginatedUsers = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredUsers.slice(start, start + pageSize);
+  }, [filteredUsers, currentPage, pageSize]);
 
   const availableFilterRoles = isTsm
     ? ASSIGNABLE_ROLES.filter(r => r.id === 'tse' || r.id === 'tsm')
@@ -148,7 +167,7 @@ export const Users = () => {
               <input
                 type="text"
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={handleSearchChange}
                 placeholder="Search name, email, TTT-NB ID..."
                 className="w-full h-8.5 pl-8 pr-3 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-[#0B1EE6] outline-none transition-all"
               />
@@ -157,7 +176,7 @@ export const Users = () => {
             {/* Role Filter */}
             <select
               value={roleFilter}
-              onChange={(e) => setRoleFilter(e.target.value)}
+              onChange={handleRoleFilterChange}
               className="h-8.5 px-2.5 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 text-xs font-semibold text-slate-700 dark:text-slate-200 outline-none cursor-pointer"
             >
               <option value="all">{isTsm ? 'All Roles (TSE & TSM)' : 'All Roles'}</option>
@@ -181,14 +200,14 @@ export const Users = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredUsers.length === 0 ? (
+              {paginatedUsers.length === 0 ? (
                 <tr>
                   <td colSpan="6" className="py-8 text-center text-xs text-slate-500">
                     No users matching criteria.
                   </td>
                 </tr>
               ) : (
-                filteredUsers.map(u => {
+                paginatedUsers.map(u => {
                   const roleMeta = ASSIGNABLE_ROLES.find(r => r.id === u.role) || {
                     label: ROLES[u.role]?.label || u.role,
                     color: 'text-slate-600 bg-slate-100 border-slate-200',
@@ -286,6 +305,14 @@ export const Users = () => {
             </tbody>
           </table>
         </div>
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalItems={filteredUsers.length}
+          pageSize={pageSize}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={setPageSize}
+        />
       </SectionCard>
 
       {/* Management User Creation Modal */}

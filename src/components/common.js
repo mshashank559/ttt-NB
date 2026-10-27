@@ -284,3 +284,110 @@ export const NeumorphicMetricCard = ({
     </div>
   </motion.div>
 );
+
+export const Pagination = ({
+  currentPage = 1,
+  totalPages = 1,
+  totalItems = 0,
+  pageSize = 10,
+  onPageChange,
+  onPageSizeChange,
+  pageSizeOptions = [10, 20, 50],
+  className = '',
+}) => {
+  if (totalItems === 0) return null;
+
+  const safeCurrentPage = Math.max(1, Math.min(currentPage, totalPages || 1));
+  const startItem = totalItems === 0 ? 0 : (safeCurrentPage - 1) * pageSize + 1;
+  const endItem = Math.min(safeCurrentPage * pageSize, totalItems);
+
+  const getPageNumbers = () => {
+    const pages = [];
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      if (safeCurrentPage <= 4) {
+        pages.push(1, 2, 3, 4, 5, '...', totalPages);
+      } else if (safeCurrentPage >= totalPages - 3) {
+        pages.push(1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
+      } else {
+        pages.push(1, '...', safeCurrentPage - 1, safeCurrentPage, safeCurrentPage + 1, '...', totalPages);
+      }
+    }
+    return pages;
+  };
+
+  return (
+    <div className={`flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-slate-200 dark:border-white/10 text-xs ${className}`}>
+      <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 font-medium">
+        <span>
+          Showing <strong className="text-slate-800 dark:text-white font-semibold">{startItem}</strong> to{' '}
+          <strong className="text-slate-800 dark:text-white font-semibold">{endItem}</strong> of{' '}
+          <strong className="text-slate-800 dark:text-white font-semibold">{totalItems}</strong> entries
+        </span>
+        {onPageSizeChange && (
+          <div className="flex items-center gap-1.5 ml-2 pl-3 border-l border-slate-200 dark:border-white/10">
+            <span>Per page:</span>
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                onPageSizeChange(Number(e.target.value));
+                if (onPageChange) onPageChange(1);
+              }}
+              className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-white/15 rounded-md px-1.5 py-1 text-xs font-semibold text-slate-800 dark:text-slate-200 focus:outline-none focus:border-[#1416c1] cursor-pointer"
+            >
+              {pageSizeOptions.map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+      </div>
+
+      <div className="flex items-center gap-1 select-none">
+        <button
+          type="button"
+          onClick={() => onPageChange && onPageChange(safeCurrentPage - 1)}
+          disabled={safeCurrentPage <= 1}
+          className="px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5 disabled:opacity-40 disabled:cursor-not-allowed font-medium transition-colors cursor-pointer"
+        >
+          Previous
+        </button>
+
+        <div className="hidden sm:flex items-center gap-1">
+          {getPageNumbers().map((p, idx) =>
+            p === '...' ? (
+              <span key={`ellipsis-${idx}`} className="px-2 py-1 text-slate-400">
+                ...
+              </span>
+            ) : (
+              <button
+                key={p}
+                type="button"
+                onClick={() => onPageChange && onPageChange(p)}
+                className={`min-w-8 h-8 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  p === safeCurrentPage
+                    ? 'bg-[#1416c1] text-white shadow-xs'
+                    : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5 border border-slate-200 dark:border-white/10'
+                }`}
+              >
+                {p}
+              </button>
+            )
+          )}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => onPageChange && onPageChange(safeCurrentPage + 1)}
+          disabled={safeCurrentPage >= totalPages}
+          className="px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5 disabled:opacity-40 disabled:cursor-not-allowed font-medium transition-colors cursor-pointer"
+        >
+          Next
+        </button>
+      </div>
+    </div>
+  );
+};

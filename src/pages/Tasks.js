@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import { Plus, Search, UserRound, Calendar as CalIcon, Clock, Building2, Briefcase, FileText, StickyNote, MessageSquare, ShieldAlert, CheckCircle2, Sparkles, Lock, Paperclip, UploadCloud, X, File, Download, Eye, Trash2, UserMinus, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useApp } from '../context/AppContext';
-import { PageHeader, StatusBadge, TaskTypeBadge, SectionCard, EmptyState } from '../components/common';
+import { PageHeader, StatusBadge, TaskTypeBadge, SectionCard, EmptyState, Pagination } from '../components/common';
 import { TASK_TYPES, TASK_STATUSES, MARKETING_TEAMS, getTseCodeName, getTsmCodeName, roleIsMarketing, getInterviewTimingMeta, sortTasksByInterviewPriority, getSmartTseRecommendations, INTERVIEW_OUTCOMES, TSE_IDS, getTseId, getTseRealName, checkTseAvailability, parseDurationMinutes } from '../data/mockData';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import { Input } from '../components/ui/input';
@@ -1551,6 +1551,19 @@ export default function Tasks() {
     return sortTasksByInterviewPriority(filtered);
   }, [filtered]);
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filters]);
+
+  const totalPages = Math.max(1, Math.ceil(sortedTasks.length / pageSize));
+  const paginatedTasks = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return sortedTasks.slice(start, start + pageSize);
+  }, [sortedTasks, currentPage, pageSize]);
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -1659,7 +1672,7 @@ export default function Tasks() {
                 </tr>
               </thead>
               <tbody>
-                {sortedTasks.map(t => {
+                {paginatedTasks.map(t => {
                   const a = users.find(u => u.id === t.assigneeId);
                   const isMarketing = roleIsMarketing(currentRole);
 
@@ -1945,6 +1958,14 @@ export default function Tasks() {
             </table>
           </div>
         )}
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalItems={sortedTasks.length}
+          pageSize={pageSize}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={setPageSize}
+        />
       </SectionCard>
 
       <CreateTaskModal open={createOpen} onOpenChange={setCreateOpen} />
