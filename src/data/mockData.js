@@ -996,11 +996,11 @@ export const mapTaskToInterview = (t, feedbacks = []) => {
     } else {
       status = t.interviewStatus;
     }
-  } else if (outcome === 'Cleared' || outcome === 'Passed' || outcome === 'Moved to Next Round' || outcome === 'Offer Received' || t.status === 'Cleared') {
+  } else if (outcome === 'Cleared' || outcome === 'Passed' || outcome === 'Moved to Next Round' || outcome === 'Offer Received' || outcome === 'Selected' || t.status === 'Cleared') {
     status = 'Cleared';
   } else if (outcome === 'Failed' || outcome === 'Rejected' || t.status === 'Rejected') {
     status = 'Rejected';
-  } else if (outcome === 'Hold' || t.status === 'Hold') {
+  } else if (outcome === 'Hold' || outcome === 'On Hold' || t.status === 'Hold') {
     status = 'Hold';
   } else if (t.status === 'Reschedule' || t.status === 'Rescheduled' || t.status === 'Interview Rescheduled') {
     status = 'Interview Rescheduled';

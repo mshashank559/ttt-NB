@@ -225,9 +225,15 @@ export default function Interviews() {
       }>
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4" data-testid="interview-kanban">
           {STAGES.map(stage => {
-            const items = filtered.filter(i => i.status === stage);
+            const items = filtered.filter(i => {
+              if (stage === 'Cleared') return i.status === 'Cleared' || (!['Rejected', 'Hold'].includes(i.status) && i.interviewOutcome === 'Selected');
+              if (stage === 'Rejected') return i.status === 'Rejected' || i.interviewOutcome === 'Rejected';
+              if (stage === 'Hold') return i.status === 'Hold' || i.interviewOutcome === 'On Hold';
+              if (stage === 'Interview Rescheduled') return i.status === 'Interview Rescheduled' || i.status === 'Rescheduled';
+              return i.status === stage && !['Selected', 'Rejected', 'On Hold'].includes(i.interviewOutcome);
+            });
             return (
-              <div key={stage} className={`kanban-col rounded-xl bg-slate-50/70 border border-slate-200 ${stageTint[stage]} border-l-4 p-3 flex flex-col h-[580px] max-h-[580px]`}>
+              <div key={stage} data-testid={`kanban-col-${stage.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`} className={`kanban-col rounded-xl bg-slate-50/70 border border-slate-200 ${stageTint[stage]} border-l-4 p-3 flex flex-col h-[580px] max-h-[580px]`}>
                 <div className="flex items-center justify-between mb-3 shrink-0">
                   <div className="text-xs font-bold text-slate-900 truncate mr-1" title={stage}>{stage}</div>
                   <span className="text-xs tabular-nums text-slate-700 px-2 py-0.5 rounded-full bg-slate-200/70 font-semibold shrink-0">{items.length}</span>
