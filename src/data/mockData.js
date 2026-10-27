@@ -25,6 +25,7 @@ export const POC_USERS_BY_TEAM = {
 export const TSE_CODE_NAMES = {
   // Real Name -> Code Name mappings
   'Harit verma': 'Abhishek',
+  'Harit Verma': 'Abhishek',
   'Harit': 'Abhishek',
   'Prem makwana': 'Kiran',
   'Prem': 'Kiran',

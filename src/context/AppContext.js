@@ -85,7 +85,21 @@ export const AppProvider = ({ children }) => {
             localStorage.setItem('ttt_feedbacks', JSON.stringify(INITIAL_FEEDBACK_RECORDS));
             return INITIAL_FEEDBACK_RECORDS;
           }
-          if (Array.isArray(parsed)) return parsed;
+          if (Array.isArray(parsed)) {
+            const cleaned = parsed.map(f => {
+              if (f.techSupport === 'Code Name Unassigned' || f.techSupportId === 'TSE-NB-001' || (f.employeeName && f.employeeName.toLowerCase().includes('harit'))) {
+                return {
+                  ...f,
+                  techSupport: 'Abhishek',
+                  employeeName: 'Harit verma',
+                  techSupportId: 'TSE-NB-001',
+                  techSupportEmail: 'nbtech1@netbounceplacement.com',
+                };
+              }
+              return f;
+            });
+            return cleaned;
+          }
         }
       } catch (e) {
         console.warn('Failed to parse saved feedbacks:', e);

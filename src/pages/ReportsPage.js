@@ -192,6 +192,28 @@ export default function ReportsPage() {
   const [pdfGenerating, setPdfGenerating] = useState(false);
   const [excelExporting, setExcelExporting] = useState(false);
 
+  // Normalize sessions: "Code Name Unassigned" or Harit Verma records belong to Abhishek (TSE-NB-001)
+  const normalizedFeedbacks = useMemo(() => {
+    return (feedbacks || []).map(f => {
+      const isHaritOrAbhishek =
+        f.techSupport === 'Code Name Unassigned' ||
+        f.techSupport === 'Abhishek' ||
+        f.techSupportId === 'TSE-NB-001' ||
+        (f.employeeName && f.employeeName.toLowerCase().includes('harit'));
+
+      if (isHaritOrAbhishek) {
+        return {
+          ...f,
+          techSupport: 'Abhishek',
+          employeeName: 'Harit verma',
+          techSupportId: 'TSE-NB-001',
+          techSupportEmail: 'nbtech1@netbounceplacement.com',
+        };
+      }
+      return f;
+    });
+  }, [feedbacks]);
+
   // Available Filter Options derived dynamically from actual data
   const filterOptions = useMemo(() => {
     const roles = new Set();
@@ -199,7 +221,7 @@ export default function ReportsPage() {
     const rounds = new Set();
     const types = new Set();
 
-    (feedbacks || []).forEach(f => {
+    (normalizedFeedbacks || []).forEach(f => {
       if (f.jobRole) roles.add(f.jobRole);
       if (f.company) companies.add(f.company);
       if (f.round) rounds.add(f.round);
@@ -212,11 +234,11 @@ export default function ReportsPage() {
       rounds: Array.from(rounds).sort(),
       types: Array.from(types).sort(),
     };
-  }, [feedbacks]);
+  }, [normalizedFeedbacks]);
 
   // Master Filtered Candidate Sessions
   const filteredSessions = useMemo(() => {
-    return (feedbacks || []).filter((item) => {
+    return (normalizedFeedbacks || []).filter((item) => {
       // 1. Search Query
       if (search.trim()) {
         const q = search.toLowerCase();
@@ -317,8 +339,12 @@ export default function ReportsPage() {
 
     // Populate with filtered sessions
     filteredSessions.forEach(session => {
-      const name = session.techSupport;
+      let name = session.techSupport;
       if (!name) return;
+
+      if (name === 'Code Name Unassigned' || session.techSupportId === 'TSE-NB-001' || (session.employeeName && session.employeeName.toLowerCase().includes('harit'))) {
+        name = 'Abhishek';
+      }
 
       if (!tseMap.has(name)) {
         tseMap.set(name, {

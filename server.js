@@ -246,6 +246,16 @@ async function seedDatabaseIfEmpty() {
       } else {
         console.log('✅ Database is already configured with real authoritative members.');
       }
+
+      // Automatically normalize any legacy "Code Name Unassigned" or Harit Verma tasks/feedbacks to Abhishek (TSE-NB-001)
+      await Feedback.updateMany(
+        { $or: [{ techSupport: 'Code Name Unassigned' }, { techSupport: 'Unassigned', employeeName: { $regex: /harit/i } }, { employeeName: { $regex: /harit/i }, techSupport: { $ne: 'Abhishek' } }] },
+        { $set: { techSupport: 'Abhishek', techSupportId: 'TSE-NB-001', employeeName: 'Harit verma', techSupportEmail: 'nbtech1@netbounceplacement.com' } }
+      );
+      await Task.updateMany(
+        { $or: [{ codeName: 'Code Name Unassigned' }, { techPerson: { $regex: /harit/i }, codeName: { $in: ['', null, 'Unassigned', 'Code Name Unassigned'] } }] },
+        { $set: { codeName: 'Abhishek' } }
+      );
     }
   } catch (err) {
     console.error('⚠️ Seeding error:', err.message);
@@ -775,6 +785,18 @@ app.get('/api/feedbacks', async (req, res) => {
           obj.techSupport = linkedTask.codeName || linkedTask.techPerson;
           obj.employeeName = getTseRealName(linkedTask.codeName || linkedTask.techPerson);
         }
+      }
+
+      // Unify "Code Name Unassigned" or Harit Verma records into Abhishek (TSE-NB-001)
+      if (
+        obj.techSupport === 'Code Name Unassigned' ||
+        obj.techSupportId === 'TSE-NB-001' ||
+        (obj.employeeName && obj.employeeName.toLowerCase().includes('harit'))
+      ) {
+        obj.techSupport = 'Abhishek';
+        obj.employeeName = 'Harit verma';
+        obj.techSupportId = 'TSE-NB-001';
+        obj.techSupportEmail = 'nbtech1@netbounceplacement.com';
       }
 
       // Sanitize identity privacy for Marketing roles: ONLY show IDs, never real names or aliases
