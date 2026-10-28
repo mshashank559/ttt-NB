@@ -5,7 +5,7 @@ import { Plus, Search, UserRound, Calendar as CalIcon, Clock, Building2, Briefca
 import { toast } from 'sonner';
 import { useApp } from '../context/AppContext';
 import { PageHeader, StatusBadge, TaskTypeBadge, SectionCard, EmptyState, Pagination } from '../components/common';
-import { TASK_TYPES, TASK_STATUSES, MARKETING_TEAMS, getTseCodeName, getTsmCodeName, roleIsMarketing, getInterviewTimingMeta, sortTasksByInterviewPriority, getSmartTseRecommendations, INTERVIEW_OUTCOMES, TSE_IDS, getTseId, getTseRealName, checkTseAvailability, parseDurationMinutes } from '../data/mockData';
+import { TASK_TYPES, TASK_STATUSES, MARKETING_TEAMS, getTseCodeName, getTsmCodeName, roleIsMarketing, getInterviewTimingMeta, sortTasksByInterviewPriority, getTaskScheduleMeta, getSmartTseRecommendations, INTERVIEW_OUTCOMES, TSE_IDS, getTseId, getTseRealName, checkTseAvailability, parseDurationMinutes } from '../data/mockData';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
@@ -1796,7 +1796,14 @@ export default function Tasks() {
                     >
                       {/* Date & EST Timing */}
                       <td className="py-3 px-4 mono text-xs text-slate-600 whitespace-nowrap">
-                        <div>{t.date || t.dueDate}</div>
+                        <div className="flex items-center gap-1.5">
+                          <span>{t.date || t.dueDate}</span>
+                          {getTaskScheduleMeta(t).tier === 2 && (
+                            <span className="px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-700 border border-amber-300 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-700 text-[9px] font-bold">
+                              OVERDUE
+                            </span>
+                          )}
+                        </div>
                         {timing && (
                           <div className="flex items-center gap-1 mt-0.5">
                             <Clock size={11} className={timing.isUrgent ? 'text-rose-600 animate-pulse' : 'text-blue-600'} />

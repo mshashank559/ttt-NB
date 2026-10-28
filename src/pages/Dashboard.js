@@ -10,7 +10,7 @@ import { toast } from 'sonner';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip as RTooltip, CartesianGrid, BarChart, Bar, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 import { useApp } from '../context/AppContext';
 import { KpiCard, PageHeader, StatusBadge, TaskTypeBadge, SectionCard, EmptyState, ArcGaugeCard, NeumorphicMetricCard, CircularProgressRing } from '../components/common';
-import { ROLES, USERS, TECH_SUPPORT_TEAM, getInterviewTimingMeta, getSmartTseRecommendations, roleIsMarketing, getTseRealName } from '../data/mockData';
+import { ROLES, USERS, TECH_SUPPORT_TEAM, getInterviewTimingMeta, getSmartTseRecommendations, roleIsMarketing, getTseRealName, sortTasksByInterviewPriority } from '../data/mockData';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
@@ -902,7 +902,7 @@ export default function Dashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-white/5">
-                {tasks.slice(0, 8).map(t => {
+                {sortTasksByInterviewPriority(tasks).slice(0, 8).map(t => {
                   const a = users.find(u => u.id === t.assigneeId);
                   const matchingTse = TECH_SUPPORT_TEAM.find(tse => 
                     tse.id === t.assigneeId || 
@@ -1068,7 +1068,7 @@ export default function Dashboard() {
 
   // ---------- TSE ----------
   if (currentRole === 'tse') {
-    const myTasks = tasks.filter(t => t.assigneeId === currentUser?.id || (currentUser?.name && (t.techPerson || '').toLowerCase() === currentUser?.name?.toLowerCase()));
+    const myTasks = sortTasksByInterviewPriority(tasks.filter(t => t.assigneeId === currentUser?.id || (currentUser?.name && (t.techPerson || '').toLowerCase() === currentUser?.name?.toLowerCase())));
     const myStats = {
       assigned: myTasks.length,
       inProgress: myTasks.filter(t => t.status === 'In Progress').length,

@@ -458,13 +458,14 @@ app.get('/api/tasks', async (req, res) => {
       }
     }
 
-    let tasks = await Task.find(filter).sort({ createdAt: -1 });
+    let rawTasks = await Task.find(filter).sort({ createdAt: -1 });
+    let tasks = rawTasks.map(t => (t.toObject ? t.toObject() : { ...t }));
+
+    const { sortTasksByInterviewPriority, TSE_CODE_NAMES, TSM_CODE_NAMES } = await import('./src/data/mockData.js');
 
     // Server-side identity privacy: never expose TSE/TSM real names to Marketing roles
     if (role === 'marketing_tl' || role === 'marketing_sr') {
-      const { TSE_CODE_NAMES, TSM_CODE_NAMES } = await import('./src/data/mockData.js');
-      tasks = tasks.map(t => {
-        const obj = t.toObject ? t.toObject() : { ...t };
+      tasks = tasks.map(obj => {
         const tseCode = obj.codeName || (TSE_CODE_NAMES && TSE_CODE_NAMES[obj.techPerson]) || 'Code Name Unassigned';
         obj.techPerson = tseCode;
         if (Array.isArray(obj.timeline)) {
@@ -476,6 +477,9 @@ app.get('/api/tasks', async (req, res) => {
         return obj;
       });
     }
+
+    // Sort with Global Task Panel Sorting & Upcoming Task Prioritization engine
+    tasks = sortTasksByInterviewPriority(tasks);
 
     res.json(tasks);
   } catch (err) {

@@ -10,7 +10,7 @@ import {
 import AvatarPickerModal from './AvatarPickerModal';
 import NbAiPanel from './NbAiPanel';
 import { useApp } from '../context/AppContext';
-import { ROLES, permissionsByRole } from '../data/mockData';
+import { ROLES, permissionsByRole, sortTasksByInterviewPriority } from '../data/mockData';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
@@ -323,7 +323,7 @@ const CommandPalette = () => {
           ))}
         </CommandGroup>
         <CommandGroup heading="Tasks">
-          {tasks.slice(0, 8).map(t => (
+          {sortTasksByInterviewPriority(tasks).slice(0, 8).map(t => (
             <CommandItem key={t.id} onSelect={() => go('/tasks')}>
               <span className="mono text-xs text-blue-300 mr-2">{t.id}</span>{t.title}
             </CommandItem>

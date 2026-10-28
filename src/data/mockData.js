@@ -1124,6 +1124,7 @@ export function getInterviewTimingMeta(interviewDateTime) {
       isElevated: true,
       minutesUntil: diffMinutes,
       estString,
+      estFormatted: estString,
       urgencyLabel: `🚨 URGENT (Starts in ${diffMinutes}m)`,
       urgencyBadge: 'urgent',
     };
@@ -1133,6 +1134,7 @@ export function getInterviewTimingMeta(interviewDateTime) {
       isElevated: true,
       minutesUntil: diffMinutes,
       estString,
+      estFormatted: estString,
       urgencyLabel: `⚡ Elevated Priority (In ${diffMinutes}m)`,
       urgencyBadge: 'elevated',
     };
@@ -1142,28 +1144,169 @@ export function getInterviewTimingMeta(interviewDateTime) {
       isElevated: false,
       minutesUntil: diffMinutes,
       estString,
+      estFormatted: estString,
       urgencyLabel: diffMinutes < 0 ? `Concluded (${estString})` : estString,
       urgencyBadge: 'normal',
     };
   }
 }
 
-// Priority Queue sorting: Urgent (<30m) > Elevated (<60m) > Earlier interview time
-export function sortTasksByInterviewPriority(tasks = []) {
-  return [...tasks].sort((a, b) => {
-    const metaA = getInterviewTimingMeta(a.interviewDateTime);
-    const metaB = getInterviewTimingMeta(b.interviewDateTime);
+/**
+ * Task Schedule Metadata Extractor
+ * Identifies:
+ * - Tier 1: Upcoming Tasks (Active/Pending/In Progress scheduled for today or future, nearest first)
+ * - Tier 2: Overdue Incomplete Tasks (Active tasks whose scheduled date has passed)
+ * - Tier 3: Completed Tasks (Done/Completed/Cleared/etc.)
+ * - Tier 4: Cancelled / Not Possible / Undated
+ */
+export function getTaskScheduleMeta(task, now = new Date()) {
+  if (!task) return { tier: 4, timestamp: 0, dateStr: '', statusCategory: 'unknown', isUrgent: false, isElevated: false };
 
-    if (metaA.isUrgent && !metaB.isUrgent) return -1;
-    if (!metaA.isUrgent && metaB.isUrgent) return 1;
+  const statusRaw = (task.status || '').trim().toLowerCase();
+  const outcomeRaw = (task.interviewOutcome || '').trim().toLowerCase();
 
-    if (metaA.isElevated && !metaB.isElevated) return -1;
-    if (!metaA.isElevated && metaB.isElevated) return 1;
+  const isCancelled = ['cancel', 'cancelled', 'not possible', 'not_possible'].includes(statusRaw) ||
+    ['cancel', 'cancelled', 'not possible'].includes(outcomeRaw);
 
-    if (a.interviewDateTime && b.interviewDateTime) {
-      return new Date(a.interviewDateTime).getTime() - new Date(b.interviewDateTime).getTime();
+  const isCompleted = !isCancelled && (
+    ['done', 'completed', 'cleared', 'rejected', 'hold', 'offer released', 'joined'].includes(statusRaw) ||
+    ['done', 'completed', 'cleared', 'rejected', 'hold', 'offer released', 'joined'].includes(outcomeRaw)
+  );
+
+  const isIncomplete = !isCancelled && !isCompleted;
+
+  // Extract scheduled date/time string with priority: rescheduledDateTime > interviewDateTime > dueDate > date
+  let rawDate = task.rescheduledDateTime || task.interviewDateTime || task.dueDate || task.date || '';
+  if (typeof rawDate !== 'string') rawDate = String(rawDate || '');
+  rawDate = rawDate.trim();
+
+  // Normalize separators like "2026 10 28" or "2026/10/28" -> "2026-10-28"
+  let normalized = rawDate;
+  const match = rawDate.match(/^(\d{4})[\s/-](\d{1,2})[\s/-](\d{1,2})(.*)$/);
+  if (match) {
+    const y = match[1];
+    const m = match[2].padStart(2, '0');
+    const d = match[3].padStart(2, '0');
+    const rest = match[4] ? match[4].trim() : '';
+    normalized = `${y}-${m}-${d}${rest ? (rest.startsWith('T') || rest.startsWith(' ') ? rest : ' ' + rest) : ''}`;
+  }
+
+  let dateStr = '';
+  let timestamp = null;
+
+  if (normalized) {
+    if (normalized.length >= 10 && /^\d{4}-\d{2}-\d{2}/.test(normalized)) {
+      dateStr = normalized.slice(0, 10);
     }
-    return 0;
+    const dObj = new Date(normalized);
+    if (!isNaN(dObj.getTime())) {
+      timestamp = dObj.getTime();
+      if (!dateStr) {
+        dateStr = `${dObj.getFullYear()}-${String(dObj.getMonth() + 1).padStart(2, '0')}-${String(dObj.getDate()).padStart(2, '0')}`;
+      }
+    } else if (dateStr) {
+      const [year, month, day] = dateStr.split('-').map(Number);
+      timestamp = new Date(year, month - 1, day, 0, 0, 0).getTime();
+    }
+  }
+
+  // Today's date string in local timezone
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+  let tier = 4;
+  let statusCategory = 'cancelled';
+
+  if (isCancelled) {
+    tier = 4;
+    statusCategory = 'cancelled';
+  } else if (isCompleted) {
+    tier = 3;
+    statusCategory = 'completed';
+  } else if (isIncomplete) {
+    if (!dateStr || !timestamp) {
+      tier = 4;
+      statusCategory = 'undated';
+    } else if (dateStr >= todayStr) {
+      tier = 1;
+      statusCategory = 'upcoming';
+    } else {
+      tier = 2;
+      statusCategory = 'overdue';
+    }
+  }
+
+  const isUrgent = tier === 1 && timestamp && (timestamp - now.getTime() >= 0 && timestamp - now.getTime() <= 30 * 60 * 1000);
+  const isElevated = tier === 1 && timestamp && (timestamp - now.getTime() > 30 * 60 * 1000 && timestamp - now.getTime() <= 60 * 60 * 1000);
+
+  return {
+    tier,
+    timestamp: timestamp || 0,
+    dateStr,
+    statusCategory,
+    isUrgent: Boolean(isUrgent),
+    isElevated: Boolean(isElevated),
+  };
+}
+
+/**
+ * Global Task Panel Sorting & Upcoming Task Prioritization
+ * Respects 4-Tier Hierarchy:
+ * 1. Upcoming Tasks (Today & Future, nearest date/time ascending)
+ * 2. Overdue Incomplete Tasks (Past due active, most recent overdue first)
+ * 3. Completed Tasks (Done/Completed, newest first, older historical lower)
+ * 4. Cancelled / Not Possible / Undated Tasks (at the bottom)
+ */
+export function sortTasksByInterviewPriority(tasks = [], now = new Date()) {
+  if (!Array.isArray(tasks) || tasks.length === 0) return [];
+
+  const metaMap = new Map();
+  tasks.forEach(t => {
+    metaMap.set(t, getTaskScheduleMeta(t, now));
+  });
+
+  return [...tasks].sort((a, b) => {
+    const metaA = metaMap.get(a);
+    const metaB = metaMap.get(b);
+
+    // Primary rule: Tier separation
+    if (metaA.tier !== metaB.tier) {
+      return metaA.tier - metaB.tier;
+    }
+
+    // Tier 1: Upcoming Tasks — Ascending chronological (nearest upcoming interview first)
+    if (metaA.tier === 1) {
+      if (metaA.isUrgent && !metaB.isUrgent) return -1;
+      if (!metaA.isUrgent && metaB.isUrgent) return 1;
+      if (metaA.isElevated && !metaB.isElevated) return -1;
+      if (!metaA.isElevated && metaB.isElevated) return 1;
+
+      if (metaA.timestamp !== metaB.timestamp) {
+        return metaA.timestamp - metaB.timestamp;
+      }
+      return (a.id || '').localeCompare(b.id || '');
+    }
+
+    // Tier 2: Overdue Incomplete Tasks — Most recent overdue date first (yesterday before last week)
+    if (metaA.tier === 2) {
+      if (metaA.timestamp !== metaB.timestamp) {
+        return metaB.timestamp - metaA.timestamp;
+      }
+      return (a.id || '').localeCompare(b.id || '');
+    }
+
+    // Tier 3: Completed Tasks — Most recently completed first
+    if (metaA.tier === 3) {
+      if (metaA.timestamp !== metaB.timestamp) {
+        return metaB.timestamp - metaA.timestamp;
+      }
+      return (a.id || '').localeCompare(b.id || '');
+    }
+
+    // Tier 4: Cancelled / Undated — Descending date or ID
+    if (metaA.timestamp !== metaB.timestamp) {
+      return metaB.timestamp - metaA.timestamp;
+    }
+    return (a.id || '').localeCompare(b.id || '');
   });
 }
 
