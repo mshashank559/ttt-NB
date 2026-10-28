@@ -718,7 +718,7 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
 };
 
 const TaskDrawer = ({ task, onClose }) => {
-  const { users, reassignTask, changeTaskStatus, assignMarketingSr, currentRole, currentUser, updateInterviewOutcome } = useApp();
+  const { users, reassignTask, changeTaskStatus, assignMarketingSr, currentRole, currentUser, updateInterviewOutcome, unassignTask, deleteTask } = useApp();
   const canViewRealName = ['tsm', 'management', 'upper_management'].includes(currentRole);
   const assignee = users.find(u => u.id === task?.assigneeId);
   const creator = users.find(u => u.id === task?.createdById);

@@ -32,6 +32,7 @@ const formatMessageText = (text) => {
 
 export default function NbAiPanel({ isOpen, onClose }) {
   const { tasks, visibleInterviews, interviews, users, currentUser, currentRole, feedbacks } = useApp();
+  const salutation = currentUser?.name || 'there';
 
   const [messages, setMessages] = useState(() => [
     {

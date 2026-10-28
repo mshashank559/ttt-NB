@@ -20,6 +20,8 @@ import {
   anonymizeInterview,
   getUserById,
   getTseId,
+  TSE_IDS,
+  getTseRealName,
 } from '../data/mockData';
 import { DEFAULT_AVATAR } from '../data/avatars';
 
@@ -695,6 +697,7 @@ export const AppProvider = ({ children }) => {
 
     const isRejectedOrHold = ['Rejected', 'Hold'].includes(newStatus);
     const finalOutcome = isRejectedOrHold ? null : rawOutcome;
+    const outcome = finalOutcome || rawOutcome;
 
     // 1. Update task in MongoDB & App state
     const taskId = interviewId;
