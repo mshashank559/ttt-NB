@@ -410,8 +410,33 @@ export const AppProvider = ({ children }) => {
   }, []);
 
   const addTask = useCallback((task) => {
-    const id = `TSK-${1001 + tasks.length}`;
-    const candidateId = task.candidateId || `CND-${2001 + tasks.length}`;
+    let maxNum = 1000;
+    try {
+      const savedTasks = JSON.parse(localStorage.getItem('ttt_tasks') || '[]');
+      const allKnown = [...(savedTasks || []), ...(tasks || [])];
+      allKnown.forEach(t => {
+        if (t && t.id) {
+          const m = String(t.id).match(/^TSK-(\d+)$/i);
+          if (m) {
+            const num = parseInt(m[1], 10);
+            if (num > maxNum) maxNum = num;
+          }
+        }
+      });
+    } catch (e) {
+      (tasks || []).forEach(t => {
+        if (t && t.id) {
+          const m = String(t.id).match(/^TSK-(\d+)$/i);
+          if (m) {
+            const num = parseInt(m[1], 10);
+            if (num > maxNum) maxNum = num;
+          }
+        }
+      });
+    }
+
+    const id = task.id || `TSK-${maxNum + 1}`;
+    const candidateId = task.candidateId || `CND-${maxNum + 1000}`;
     const assignee = getUserById(task.assigneeId);
     const creator = currentUser;
     const candidateName = task.candidateName || 'Candidate';
@@ -509,8 +534,18 @@ export const AppProvider = ({ children }) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newTask),
     })
-      .then(res => res.json())
-      .then(() => {
+      .then(res => {
+        if (!res.ok) {
+          return res.json().then(errData => {
+            console.warn('POST /api/tasks returned non-200:', errData);
+          });
+        }
+        return res.json();
+      })
+      .then((data) => {
+        if (data?.task?.id && data.task.id !== id) {
+          setTasks(prev => prev.map(t => t.id === id ? { ...t, id: data.task.id } : t));
+        }
         fetch('/api/feedbacks')
           .then(res => res.json())
           .then(list => {
@@ -521,7 +556,9 @@ export const AppProvider = ({ children }) => {
           })
           .catch(() => { });
       })
-      .catch(() => { });
+      .catch((err) => {
+        console.warn('Network or server error while posting task:', err);
+      });
 
     setNotifications(prev => [{
       id: `n-${Date.now()}`,

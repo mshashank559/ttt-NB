@@ -1157,59 +1157,101 @@ export function sortTasksByInterviewPriority(tasks = []) {
 
 // ----------------- MILESTONE 7: SMART TSE RECOMMENDATIONS -----------------
 export function getSmartTseRecommendations(candidateName, allTasks = [], allFeedbacks = [], tseUsers = []) {
-  if (!candidateName) return [];
-  const cLower = candidateName.trim().toLowerCase();
+  const cLower = (candidateName || '').trim().toLowerCase();
 
-  // Find candidate's past interview tasks & feedback
-  const pastCandidateTasks = allTasks.filter(t => (t.candidateName || '').toLowerCase() === cLower);
-  const pastCandidateFeedbacks = allFeedbacks.filter(f => (f.candidateName || '').toLowerCase() === cLower);
+  // Find candidate's past interview tasks & feedback if candidateName provided
+  const pastCandidateTasks = cLower
+    ? allTasks.filter(t => (t.candidateName || '').toLowerCase() === cLower)
+    : [];
+  const pastCandidateFeedbacks = cLower
+    ? allFeedbacks.filter(f => (f.candidateName || '').toLowerCase() === cLower)
+    : [];
 
-  return tseUsers.map(tse => {
-    const tseTasks = allTasks.filter(t => t.assigneeId === tse.id || (t.techPerson && t.techPerson.toLowerCase() === tse.name.toLowerCase()));
+  return (tseUsers || []).map(tse => {
+    const rawCodeName = tse.codeName || getTseCodeName(tse.name) || tse.name;
+    const rawRealName = getTseRealName(tse.id) || getTseRealName(rawCodeName) || getTseRealName(tse.name) || (tse.role === 'tse' ? tse.name : rawCodeName);
+    const officialId = tse.empId || TSE_IDS[rawCodeName] || TSE_IDS[rawRealName] || TSE_IDS[tse.id] || getTseId(rawCodeName);
+
+    const tseTasks = allTasks.filter(t =>
+      t.assigneeId === tse.id ||
+      (t.techPerson && t.techPerson.toLowerCase() === tse.name.toLowerCase()) ||
+      (t.codeName && t.codeName.toLowerCase() === rawCodeName.toLowerCase()) ||
+      (t.techPersonId && t.techPersonId === officialId)
+    );
     const activeTasksCount = tseTasks.filter(t => t.status === 'In Progress' || t.status === 'Pending').length;
 
     // Check past feedback for this TSE with this specific candidate
     const priorFeedback = pastCandidateFeedbacks.find(f =>
-      (f.techSupportId === tse.id) ||
-      (f.techSupport && f.techSupport.toLowerCase() === (tse.codeName || '').toLowerCase()) ||
-      (f.employeeName && f.employeeName.toLowerCase() === tse.name.toLowerCase())
+      (f.techSupportId && (f.techSupportId === tse.id || f.techSupportId === officialId)) ||
+      (f.techSupport && f.techSupport.toLowerCase() === rawCodeName.toLowerCase()) ||
+      (f.employeeName && f.employeeName.toLowerCase() === rawRealName.toLowerCase())
     );
 
-    const priorRating = priorFeedback?.candidateFeedback?.performanceRating || priorFeedback?.candidateFeedback?.experienceRating;
+    const priorRating = priorFeedback?.candidateFeedback?.performanceRating ||
+                        priorFeedback?.candidateFeedback?.experienceRating ||
+                        priorFeedback?.marketingReview?.overallRating;
+    const priorComment = priorFeedback?.candidateFeedback?.comments || priorFeedback?.marketingReview?.feedbackRemarks;
 
     let score = 50; // base score
-    let rationale = [];
     let isRecommended = true;
     let isWarning = false;
+    let bestRationale = '';
+    let feedbackRationale = '';
 
-    if (priorRating) {
-      if (priorRating >= 4.0) {
-        score += 40;
-        rationale.push(`⭐ Candidate previously rated this TSE ${priorRating}/5.0`);
-      } else if (priorRating <= 3.0) {
-        score -= 60;
-        isRecommended = false;
-        isWarning = true;
-        rationale.push(`⚠️ Not recommended: Candidate gave a low rating (${priorRating}/5.0) in previous round`);
-      }
+    // KA BEST: Capacity, Workload & Readiness
+    if (activeTasksCount === 0) {
+      score += 35;
+      bestRationale = 'Optimal Capacity • 0 active tasks in queue • Ready for immediate session';
+    } else if (activeTasksCount === 1) {
+      score += 25;
+      bestRationale = 'Low Workload • 1 active task • High availability and focus';
+    } else if (activeTasksCount <= 3) {
+      score += 15;
+      bestRationale = `Balanced Workload • ${activeTasksCount} active tasks • Active on schedule`;
+    } else if (activeTasksCount <= 5) {
+      score -= 10;
+      bestRationale = `Moderate Workload • ${activeTasksCount} active tasks in progress`;
+    } else {
+      score -= 30;
+      bestRationale = `High Workload • ${activeTasksCount} active tasks • May require schedule coordination`;
+      if (!priorRating) isRecommended = false;
     }
 
-    if (activeTasksCount > 4) {
-      score -= 20;
-      rationale.push(`Heavy workload (${activeTasksCount} active tasks)`);
+    // AS PER FEEDBACK: Candidate prior history & ratings
+    if (priorRating != null && Number(priorRating) > 0) {
+      const numRating = Number(priorRating);
+      if (numRating >= 4.0) {
+        score += 45;
+        feedbackRationale = `⭐ Candidate gave ${numRating}/5.0 in prior round${priorComment ? ` — "${priorComment.slice(0, 60)}..."` : ' (Strong candidate feedback)'}`;
+      } else if (numRating <= 3.0) {
+        score -= 55;
+        isRecommended = false;
+        isWarning = true;
+        feedbackRationale = `⚠️ Low Rating (${numRating}/5.0) in past round with this candidate${priorComment ? ` — "${priorComment.slice(0, 60)}..."` : ''}`;
+      } else {
+        feedbackRationale = `Candidate previously evaluated: ${numRating}/5.0 (Satisfactory performance)`;
+      }
+    } else if (pastCandidateTasks.length > 0) {
+      feedbackRationale = 'Prior rounds completed with candidate • No negative feedback logged';
     } else {
-      score += 10;
-      rationale.push(`Available capacity (${activeTasksCount} active tasks)`);
+      feedbackRationale = 'No prior interactions with this candidate • Excellent overall track record across technical rounds';
     }
 
     return {
       tse,
+      tseId: tse.id,
+      codeName: rawCodeName,
+      realName: rawRealName,
+      officialId,
       score,
       isRecommended: isRecommended && !isWarning,
       isWarning,
       activeTasksCount,
+      bestRationale,
+      feedbackRationale,
       priorRating: priorRating || null,
-      rationaleText: rationale.join(' • '),
+      message: `${bestRationale} • ${feedbackRationale}`,
+      tseName: rawCodeName,
     };
   }).sort((a, b) => b.score - a.score);
 }

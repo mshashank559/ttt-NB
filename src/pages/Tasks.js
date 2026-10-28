@@ -187,11 +187,13 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
     });
   }, [form.candidateName, tasks, feedbacks, currentRole]);
 
-  // Smart Recommendations for TSM
+  // Smart TSE Advisory Recommendations: Upper Management, Management, and TSM only
+  const canViewTseAdvisory = ['tsm', 'management', 'upper_management'].includes(currentRole);
+
   const recommendations = useMemo(() => {
-    if (isMarketingUser) return [];
+    if (!canViewTseAdvisory) return [];
     return getSmartTseRecommendations(form.candidateName, tasks, feedbacks, tseUsers);
-  }, [form.candidateName, tasks, feedbacks, tseUsers, isMarketingUser]);
+  }, [form.candidateName, tasks, feedbacks, tseUsers, canViewTseAdvisory]);
 
   const handleTeamChange = (teamId) => {
     const selectedTeam = MARKETING_TEAMS.find(t => t.id === teamId) || MARKETING_TEAMS[0];
@@ -527,31 +529,95 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
             </div>
           )}
 
-          {/* Smart TSE Advisory Recommendations (Milestone 7) */}
-          {recommendations.length > 0 && !roleIsMarketing(currentRole) && (
-            <div className="md:col-span-2 p-2.5 bg-gradient-to-r from-amber-50/80 to-blue-50/80 border border-amber-200/80 rounded-xl space-y-1.5">
-              <div className="text-[11px] font-bold text-amber-900 flex items-center gap-1">
-                <span>💡 Smart TSE Advisory Recommendation:</span>
-              </div>
-              {recommendations.map((rec, i) => (
-                <div
-                  key={i}
-                  className={`flex items-center justify-between p-2 rounded-lg text-xs border ${
-                    rec.type === 'recommend'
-                      ? 'bg-emerald-50/90 text-emerald-950 border-emerald-300'
-                      : 'bg-rose-50/90 text-rose-950 border-rose-300'
-                  }`}
-                >
-                  <span className="font-medium">{rec.message}</span>
-                  <button
-                    type="button"
-                    onClick={() => setForm(prev => ({ ...prev, assigneeId: rec.tseId }))}
-                    className="px-2.5 py-1 text-[11px] font-bold rounded bg-white text-slate-800 hover:bg-slate-100 border border-slate-200 shadow-2xs cursor-pointer"
-                  >
-                    Select {rec.tseName}
-                  </button>
+          {/* Smart TSE Advisory Recommendations: Upper Management, Management, and TSM */}
+          {recommendations.length > 0 && canViewTseAdvisory && (
+            <div className="md:col-span-2 p-3 bg-gradient-to-r from-blue-50/70 via-indigo-50/40 to-amber-50/70 border border-blue-200 rounded-2xl space-y-2.5 shadow-2xs" data-testid="tse-advisory-panel">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                  <Sparkles size={14} className="text-amber-500 fill-amber-500 shrink-0" />
+                  <span>Smart TSE Advisory Recommendation</span>
+                  <span className="text-[10px] font-bold text-blue-700 bg-blue-100/80 px-2 py-0.5 rounded-full border border-blue-200">
+                    Ranked by Capacity & Feedback
+                  </span>
                 </div>
-              ))}
+                <span className="text-[10px] font-medium text-slate-500">
+                  {canViewRealName ? 'Authorized: Code Name & Real Name visible' : 'Code Names only'}
+                </span>
+              </div>
+
+              <div className="space-y-2 pt-0.5">
+                {recommendations.slice(0, 4).map((rec, i) => {
+                  const isTopPick = i === 0 && rec.isRecommended;
+                  const isSelected = form.assigneeId === rec.tseId;
+
+                  return (
+                    <div
+                      key={rec.tseId || i}
+                      className={`p-2.5 rounded-xl border transition-all ${
+                        isSelected
+                          ? 'bg-blue-50/90 border-blue-500 ring-2 ring-blue-500/20 shadow-xs'
+                          : rec.isRecommended
+                            ? 'bg-white border-slate-200 hover:border-blue-300 hover:shadow-xs'
+                            : 'bg-rose-50/60 border-rose-200 text-rose-950'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0 space-y-1">
+                          {/* TOP: Code Name + Real Name (Upper Mgmt / Mgmt / TSM) + Official ID + Badges */}
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-bold text-slate-900 text-xs">
+                              {rec.codeName}
+                            </span>
+                            {canViewRealName && rec.realName && rec.realName.toLowerCase() !== rec.codeName.toLowerCase() && (
+                              <span className="text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded">
+                                {rec.realName}
+                              </span>
+                            )}
+                            <span className="text-[10px] font-mono text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                              {rec.officialId}
+                            </span>
+                            {isTopPick && (
+                              <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                🏆 Best Fit
+                              </span>
+                            )}
+                            {rec.isWarning && (
+                              <span className="text-[10px] font-bold text-rose-800 bg-rose-100 border border-rose-300 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                ⚠️ Caution: Low Past Rating
+                              </span>
+                            )}
+                          </div>
+
+                          {/* USKE NICHE: KA BEST (Capacity, Workload, Readiness) */}
+                          <div className="text-[11px] text-slate-700 flex items-center gap-1.5 font-medium">
+                            <span className="text-emerald-700 font-bold shrink-0">⚡ Best Match:</span>
+                            <span className="text-slate-800 font-medium">{rec.bestRationale}</span>
+                          </div>
+
+                          {/* USKE NICHE: AS PER FEEDBACK (Candidate previous ratings / track record) */}
+                          <div className="text-[11px] text-slate-600 flex items-center gap-1.5">
+                            <span className="text-purple-700 font-bold shrink-0">📝 As Per Feedback:</span>
+                            <span className="text-slate-700">{rec.feedbackRationale}</span>
+                          </div>
+                        </div>
+
+                        {/* SELECT BUTTON */}
+                        <button
+                          type="button"
+                          onClick={() => setForm(prev => ({ ...prev, assigneeId: rec.tseId }))}
+                          className={`shrink-0 px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                            isSelected
+                              ? 'bg-blue-600 text-white shadow-xs'
+                              : 'bg-white hover:bg-blue-600 hover:text-white text-slate-800 border border-slate-300 shadow-2xs'
+                          }`}
+                        >
+                          {isSelected ? '✓ Selected' : `Select ${rec.codeName}`}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
 

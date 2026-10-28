@@ -476,64 +476,104 @@ app.get('/api/tasks', async (req, res) => {
 app.post('/api/tasks', async (req, res) => {
   try {
     const taskData = req.body;
-    const { teamId, candidateName } = taskData;
+    const { candidateName } = taskData;
 
     if (!candidateName || !candidateName.trim()) {
       return res.status(400).json({ error: 'Candidate name is required.' });
     }
 
-    const task = new Task(taskData);
-    await task.save();
+    delete taskData._id;
+
+    // Helper to calculate next available ID
+    const getNextTaskId = async () => {
+      const allTasks = await Task.find({}, { id: 1 }).lean();
+      let maxNum = 1000;
+      allTasks.forEach(t => {
+        if (t && t.id) {
+          const match = String(t.id).match(/^TSK-(\d+)$/i);
+          if (match) {
+            const num = parseInt(match[1], 10);
+            if (num > maxNum) maxNum = num;
+          }
+        }
+      });
+      return `TSK-${maxNum + 1}`;
+    };
+
+    // Ensure unique ID
+    if (!taskData.id || await Task.findOne({ id: taskData.id })) {
+      taskData.id = await getNextTaskId();
+    }
+
+    let task;
+    try {
+      task = new Task(taskData);
+      await task.save();
+    } catch (saveErr) {
+      if (saveErr.code === 11000) {
+        // Fallback retry with freshly recalculated ID
+        taskData.id = await getNextTaskId();
+        task = new Task(taskData);
+        await task.save();
+      } else {
+        throw saveErr;
+      }
+    }
 
     // Auto-create linked feedback session
     const feedbackId = `fb-task-${task.id}`;
-    const existingFeedback = await Feedback.findOne({ id: feedbackId });
-    if (!existingFeedback) {
-      const { TECH_SUPPORT_TEAM, TSE_IDS, getTseRealName } = await import('./src/data/mockData.js');
-      const assignedTse = TECH_SUPPORT_TEAM.find(t => 
-        (task.codeName && t.supportName.toLowerCase() === task.codeName.toLowerCase()) ||
-        (task.techPerson && t.supportName.toLowerCase() === task.techPerson.toLowerCase()) ||
-        (task.techPerson && t.employeeName.toLowerCase().includes(task.techPerson.toLowerCase())) ||
-        (task.assigneeId && (t.id === task.assigneeId || TSE_IDS[task.assigneeId] === t.id))
-      );
+    try {
+      const existingFeedback = await Feedback.findOne({ id: feedbackId });
+      if (!existingFeedback) {
+        const { TECH_SUPPORT_TEAM, TSE_IDS, getTseRealName } = await import('./src/data/mockData.js');
+        const assignedTse = (TECH_SUPPORT_TEAM || []).find(t => 
+          (task.codeName && t.supportName.toLowerCase() === task.codeName.toLowerCase()) ||
+          (task.techPerson && t.supportName.toLowerCase() === task.techPerson.toLowerCase()) ||
+          (task.techPerson && t.employeeName.toLowerCase().includes(task.techPerson.toLowerCase())) ||
+          (task.assigneeId && (t.id === task.assigneeId || (TSE_IDS && TSE_IDS[task.assigneeId] === t.id)))
+        );
 
-      const resolvedCodeName = assignedTse?.supportName || task.codeName || (task.techPerson && task.techPerson !== 'Unassigned' ? task.techPerson : 'Unassigned');
-      const resolvedOfficialId = assignedTse?.id || (resolvedCodeName && TSE_IDS[resolvedCodeName]) || (task.assigneeId && TSE_IDS[task.assigneeId]) || (task.techPersonId?.startsWith('TSE-NB') ? task.techPersonId : '') || '';
-      const resolvedRealName = assignedTse?.employeeName || getTseRealName(resolvedCodeName) || (task.techPerson !== 'Unassigned' ? task.techPerson : '') || '';
-      const resolvedEmail = assignedTse?.email || '';
+        const resolvedCodeName = assignedTse?.supportName || task.codeName || (task.techPerson && task.techPerson !== 'Unassigned' ? task.techPerson : 'Unassigned');
+        const resolvedOfficialId = assignedTse?.id || (TSE_IDS && TSE_IDS[resolvedCodeName]) || (task.assigneeId && TSE_IDS && TSE_IDS[task.assigneeId]) || (task.techPersonId?.startsWith('TSE-NB') ? task.techPersonId : '') || '';
+        const resolvedRealName = assignedTse?.employeeName || (getTseRealName ? getTseRealName(resolvedCodeName) : '') || (task.techPerson !== 'Unassigned' ? task.techPerson : '') || '';
+        const resolvedEmail = assignedTse?.email || '';
 
-      const isShivam = task.teamId === 'team-shivam' || (task.teamName && task.teamName.includes('Shivam'));
-      const fallbackLeadId = isShivam ? 'u-1791911115518' : 'u-1791911058812';
-      const fallbackTeamName = isShivam ? 'Team Shivam' : 'Team Mukesh';
+        const isShivam = task.teamId === 'team-shivam' || (task.teamName && task.teamName.includes('Shivam'));
+        const fallbackLeadId = isShivam ? 'u-1791911115518' : 'u-1791911058812';
+        const fallbackTeamName = isShivam ? 'Team Shivam' : 'Team Mukesh';
 
-      const linkedFeedback = new Feedback({
-        id: feedbackId,
-        taskId: task.id,
-        date: task.date || new Date().toISOString().slice(0, 10),
-        techSupport: resolvedCodeName,
-        techSupportId: resolvedOfficialId,
-        techSupportEmail: resolvedEmail,
-        employeeName: resolvedRealName,
-        candidateName: task.candidateName || 'Candidate',
-        candidateEmail: task.candidateEmail || '',
-        recruiterName: task.assignedSrName || task.recruiterName || 'Marketing Team',
-        pocId: task.assignedSrId || task.pocId || '',
-        teamId: task.teamId || (isShivam ? 'team-shivam' : 'team-mukesh'),
-        teamLeadId: task.teamLeadId || fallbackLeadId,
-        teamName: task.teamName || fallbackTeamName,
-        jobRole: task.position || '',
-        company: task.companyName || '',
-        round: task.taskType || 'Interview',
-        techSupportType: task.taskType || 'Interview',
-        timestamp: new Date().toLocaleString('en-GB'),
-        candidateFeedback: { submitted: false },
-        marketingReview: null,
-      });
-      await linkedFeedback.save();
+        const linkedFeedback = new Feedback({
+          id: feedbackId,
+          taskId: task.id,
+          date: task.date || new Date().toISOString().slice(0, 10),
+          techSupport: resolvedCodeName,
+          techSupportId: resolvedOfficialId,
+          techSupportEmail: resolvedEmail,
+          employeeName: resolvedRealName,
+          candidateName: task.candidateName || 'Candidate',
+          candidateEmail: task.candidateEmail || '',
+          recruiterName: task.assignedSrName || task.recruiterName || 'Marketing Team',
+          pocId: task.assignedSrId || task.pocId || '',
+          teamId: task.teamId || (isShivam ? 'team-shivam' : 'team-mukesh'),
+          teamLeadId: task.teamLeadId || fallbackLeadId,
+          teamName: task.teamName || fallbackTeamName,
+          jobRole: task.position || '',
+          company: task.companyName || '',
+          round: task.taskType || 'Interview',
+          techSupportType: task.taskType || 'Interview',
+          timestamp: new Date().toLocaleString('en-GB'),
+          candidateFeedback: { submitted: false },
+          marketingReview: null,
+        });
+        await linkedFeedback.save();
+      }
+    } catch (fbErr) {
+      console.warn('Auto feedback creation notice:', fbErr.message);
     }
 
     res.status(201).json({ task, linkedFeedbackId: feedbackId });
   } catch (err) {
+    console.error('Error creating task:', err);
     res.status(500).json({ error: err.message });
   }
 });
