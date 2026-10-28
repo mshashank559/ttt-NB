@@ -504,7 +504,7 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
                 </span>
                 <span className="text-[11px] text-slate-500">Historical Tracking</span>
               </div>
-              <div className="space-y-1.5 max-h-28 overflow-y-auto pr-1">
+              <div className="space-y-1.5 max-h-28 overflow-y-auto pr-1 custom-scrollbar">
                 {priorHistory.map((h, idx) => (
                   <div key={idx} className="flex items-center justify-between text-xs bg-white p-2 rounded-lg border border-slate-200 shadow-2xs">
                     <div>
@@ -545,8 +545,8 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
                 </span>
               </div>
 
-              <div className="space-y-2 pt-0.5">
-                {recommendations.slice(0, 4).map((rec, i) => {
+              <div className="space-y-2 pt-0.5 max-h-[225px] overflow-y-auto pr-1.5 custom-scrollbar">
+                {recommendations.map((rec, i) => {
                   const isTopPick = i === 0 && rec.isRecommended;
                   const isSelected = form.assigneeId === rec.tseId;
 
