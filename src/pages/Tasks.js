@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Plus, Search, UserRound, Calendar as CalIcon, Clock, Building2, Briefcase, FileText, StickyNote, MessageSquare, ShieldAlert, CheckCircle2, Sparkles, Lock, Paperclip, UploadCloud, X, File, Download, Eye, Trash2, UserMinus, AlertTriangle } from 'lucide-react';
+import { Plus, Search, UserRound, Calendar as CalIcon, Clock, Building2, Briefcase, FileText, StickyNote, MessageSquare, ShieldAlert, CheckCircle2, Sparkles, Lock, Paperclip, UploadCloud, X, File, Download, Eye, Trash2, UserMinus, AlertTriangle, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import { useApp } from '../context/AppContext';
 import { PageHeader, StatusBadge, TaskTypeBadge, SectionCard, EmptyState, Pagination } from '../components/common';
@@ -776,6 +776,493 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
             className="btn-primary h-9 px-5 rounded-lg text-sm font-medium cursor-pointer"
           >
             Create Task
+          </button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+const EditTaskModal = ({ task, open, onOpenChange }) => {
+  const { users, updateTask, currentRole, currentUser } = useApp();
+  const tseUsers = users.filter(u => u.role === 'tse');
+  const canViewRealName = ['tsm', 'management', 'upper_management'].includes(currentRole);
+  const canAssignTse = ['tsm', 'management', 'upper_management'].includes(currentRole);
+  const isMarketingUser = roleIsMarketing(currentRole) || currentRole === 'marketing_tl' || currentRole === 'marketing_sr';
+
+  const [attachments, setAttachments] = useState([]);
+  const [isUploading, setIsUploading] = useState(false);
+
+  const [form, setForm] = useState({
+    candidateName: '',
+    companyName: '',
+    position: '',
+    taskType: 'Interview',
+    duration: '30 mins',
+    date: '',
+    interviewDateTime: '',
+    teamId: 'team-mukesh',
+    teamName: 'Team Mukesh',
+    teamLeadId: 'u-1791911058812',
+    assignedSrId: '',
+    assignedSrName: '',
+    assignedSrEmail: '',
+    assigneeId: '',
+    remark: '',
+    description: '',
+    notes: '',
+    status: 'Pending',
+  });
+
+  const availableSrs = useMemo(() => {
+    const targetTeamId = form.teamId || 'team-mukesh';
+    return (users || []).filter(u =>
+      u.role === 'marketing_sr' &&
+      (u.teamId === targetTeamId || u.team === targetTeamId ||
+       (targetTeamId === 'team-mukesh'
+          ? (u.teamName?.includes('Mukesh') || u.teamLeadId === 'u-1791911058812' || (u.name && ['Snehal', 'Ritik', 'Ausafkhan', 'Himanshu', 'Deepkumar', 'Rohan', 'Mukesh'].some(part => u.name.includes(part))))
+          : (u.teamName?.includes('Shivam') || u.teamLeadId === 'u-1791911115518' || (u.name && ['Vishal', 'Riyen', 'Smit', 'Rehan', 'Yug', 'Jinesh'].some(part => u.name.includes(part))))
+       )
+      )
+    );
+  }, [users, form.teamId]);
+
+  useEffect(() => {
+    if (task && open) {
+      setAttachments(Array.isArray(task.attachments) ? task.attachments : []);
+      setForm({
+        candidateName: task.candidateName || '',
+        companyName: task.companyName || '',
+        position: task.position || '',
+        taskType: task.taskType || 'Interview',
+        duration: task.duration || '30 mins',
+        date: task.date || task.dueDate || '',
+        interviewDateTime: task.interviewDateTime || '',
+        teamId: task.teamId || 'team-mukesh',
+        teamName: task.teamName || 'Team Mukesh',
+        teamLeadId: task.teamLeadId || 'u-1791911058812',
+        assignedSrId: task.assignedSrId || task.pocId || '',
+        assignedSrName: task.assignedSrName || task.recruiterName || '',
+        assignedSrEmail: task.assignedSrEmail || '',
+        assigneeId: task.assigneeId || '',
+        remark: task.remark || '',
+        description: task.description || '',
+        notes: task.notes || '',
+        status: task.status || 'Pending',
+      });
+    }
+  }, [task, open]);
+
+  const handleFileUpload = async (e) => {
+    const files = Array.from(e.target.files || []);
+    const validFiles = files.filter(f => f.size <= 10 * 1024 * 1024);
+    if (files.length > validFiles.length) {
+      toast.error('Some files exceeded the 10MB limit and were skipped.');
+    }
+    if (validFiles.length === 0) return;
+
+    const formData = new FormData();
+    validFiles.forEach(f => formData.append('files', f));
+    formData.append('uploadedBy', currentUser?.name || currentRole);
+
+    setIsUploading(true);
+    try {
+      const res = await fetch('/api/tasks/upload-attachments', {
+        method: 'POST',
+        body: formData,
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.attachments && data.attachments.length > 0) {
+          setAttachments(prev => [...prev, ...data.attachments]);
+          toast.success(`Attached ${data.attachments.length} file${data.attachments.length > 1 ? 's' : ''}`);
+        }
+      } else {
+        const err = await res.json();
+        toast.error(err.error || 'Failed to upload attachments.');
+      }
+    } catch (err) {
+      toast.error('Network error during file upload.');
+    } finally {
+      setIsUploading(false);
+      e.target.value = '';
+    }
+  };
+
+  const removeAttachment = (attId) => {
+    setAttachments(prev => prev.filter(a => a.id !== attId));
+  };
+
+  const handleTeamChange = (teamId) => {
+    const selectedTeam = MARKETING_TEAMS.find(t => t.id === teamId) || MARKETING_TEAMS[0];
+    setForm(prev => ({
+      ...prev,
+      teamId: selectedTeam.id,
+      teamName: selectedTeam.name,
+      teamLeadId: selectedTeam.leadId,
+      assignedSrId: '',
+      assignedSrName: '',
+      assignedSrEmail: '',
+    }));
+  };
+
+  const submit = () => {
+    if (!form.candidateName.trim()) {
+      toast.error('Please enter the candidate name');
+      return;
+    }
+
+    const taskDate = form.taskType === 'Interview' && form.interviewDateTime
+      ? form.interviewDateTime.slice(0, 10)
+      : (form.date || new Date().toISOString().slice(0, 10));
+
+    const selectedTse = canAssignTse ? tseUsers.find(u => u.id === form.assigneeId) : null;
+    const assignedTeam = MARKETING_TEAMS.find(t => t.id === form.teamId) || MARKETING_TEAMS[0];
+
+    const patch = {
+      candidateName: form.candidateName.trim(),
+      companyName: form.companyName.trim(),
+      position: form.position.trim(),
+      taskType: form.taskType,
+      duration: form.duration,
+      date: taskDate,
+      dueDate: taskDate,
+      interviewDateTime: form.taskType === 'Interview' ? form.interviewDateTime : '',
+      teamId: assignedTeam.id,
+      teamName: assignedTeam.name,
+      teamLeadId: assignedTeam.leadId,
+      assignedSrId: form.assignedSrId || '',
+      assignedSrName: form.assignedSrName || '',
+      assignedSrEmail: form.assignedSrEmail || '',
+      recruiterName: form.assignedSrName || task.recruiterName || assignedTeam.name,
+      remark: form.remark,
+      description: form.description,
+      notes: form.notes,
+      status: form.status,
+      title: `${form.candidateName.trim()} — ${form.taskType}${form.companyName ? ` (${form.companyName.trim()})` : ''}`,
+      attachments,
+    };
+
+    if (canAssignTse && form.assigneeId) {
+      patch.assigneeId = selectedTse?.id || form.assigneeId;
+      patch.techPerson = selectedTse?.name || task.techPerson;
+      patch.codeName = selectedTse?.codeName || (selectedTse?.name ? getTseCodeName(selectedTse.name) : task.codeName);
+    }
+
+    updateTask(task.id, patch, `Task details edited by ${currentUser?.name || currentRole}`);
+    toast.success('Task details updated successfully!');
+    onOpenChange(false);
+  };
+
+  if (!task) return null;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="bg-white border-slate-200 text-slate-900 max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl" data-testid="edit-task-modal">
+        <DialogHeader>
+          <div className="flex items-center gap-2">
+            <span className="p-1.5 rounded-lg bg-blue-50 text-blue-600 border border-blue-200">
+              <Pencil size={16} />
+            </span>
+            <DialogTitle className="text-slate-900 text-lg">Edit Task Details ({task.id})</DialogTitle>
+          </div>
+          <DialogDescription className="text-slate-500 text-xs">
+            Correct any information entered during task creation (Candidate, Company, Role, Slot timing, Notes, Attachments).
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+          {/* Marketing Team Lead */}
+          <div className="md:col-span-1">
+            <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+              <span>Marketing Team Lead</span>
+              <span className="text-rose-500">*</span>
+            </label>
+            {isMarketingUser && currentRole !== 'management' && currentRole !== 'upper_management' ? (
+              <div className="mt-1.5 h-10 px-3.5 rounded-lg bg-slate-100 border border-slate-300 text-slate-900 text-xs font-bold flex items-center justify-between">
+                <span>{form.teamName || 'Marketing Team'}</span>
+                <span className="text-[10px] text-blue-700 font-bold bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                  Assigned Team
+                </span>
+              </div>
+            ) : (
+              <Select value={form.teamId} onValueChange={handleTeamChange}>
+                <SelectTrigger data-testid="edit-task-form-team" className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white text-xs">
+                  <SelectValue placeholder="Select Marketing Team" />
+                </SelectTrigger>
+                <SelectContent className="bg-white border-slate-200 text-slate-900">
+                  {MARKETING_TEAMS.map(team => (
+                    <SelectItem key={team.id} value={team.id}>
+                      {team.name} ({team.leadName})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+
+          {/* Senior Recruiter */}
+          <div className="md:col-span-1">
+            <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+              <span>Senior Recruiter (Marketing SR)</span>
+              <span className="text-rose-500">*</span>
+            </label>
+            <Select
+              value={form.assignedSrId}
+              onValueChange={(srId) => {
+                const srUser = availableSrs.find(u => u.id === srId);
+                setForm(prev => ({
+                  ...prev,
+                  assignedSrId: srId,
+                  assignedSrName: srUser?.name || '',
+                  assignedSrEmail: srUser?.email || '',
+                }));
+              }}
+            >
+              <SelectTrigger data-testid="edit-task-form-sr" className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white text-xs">
+                <SelectValue placeholder="Select Senior Recruiter" />
+              </SelectTrigger>
+              <SelectContent className="bg-white border-slate-200 text-slate-900 max-h-56">
+                {availableSrs.map(sr => (
+                  <SelectItem key={sr.id} value={sr.id}>
+                    {sr.name} ({sr.empId || sr.tttNbId || 'SR'})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-[10px] text-slate-500 mt-1 font-medium">
+              {form.assignedSrName ? `Assigned: ${form.assignedSrName}` : 'Select responsible Senior Recruiter'}
+            </p>
+          </div>
+
+          {/* Task Type */}
+          <div>
+            <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Task (Type)</label>
+            <Select value={form.taskType} onValueChange={v => setForm({ ...form, taskType: v })}>
+              <SelectTrigger data-testid="edit-task-form-type" className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white text-xs">
+                <SelectValue placeholder="Select task type" />
+              </SelectTrigger>
+              <SelectContent className="bg-white border-slate-200 text-slate-900">
+                {TASK_TYPES.map(t => (
+                  <SelectItem key={t} value={t}>{t}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Date & EST Time Field */}
+          <div className="md:col-span-1">
+            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+              <Clock size={12} className="text-blue-600" />
+              <span>{form.taskType === 'Interview' ? 'Interview Date & Time (EST)' : 'Date'}</span>
+              <span className="text-rose-500">*</span>
+            </label>
+            <Input
+              type={form.taskType === 'Interview' ? 'datetime-local' : 'date'}
+              data-testid="edit-task-form-date"
+              value={form.taskType === 'Interview' ? form.interviewDateTime : form.date}
+              onChange={e => {
+                const val = e.target.value;
+                if (form.taskType === 'Interview') {
+                  setForm(prev => ({
+                    ...prev,
+                    interviewDateTime: val,
+                    date: val ? val.slice(0, 10) : prev.date
+                  }));
+                } else {
+                  setForm(prev => ({ ...prev, date: val }));
+                }
+              }}
+              className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white text-xs"
+            />
+          </div>
+
+          {/* Duration */}
+          <div>
+            <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Duration</label>
+            <Select value={form.duration} onValueChange={v => setForm({ ...form, duration: v })}>
+              <SelectTrigger data-testid="edit-task-form-duration" className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white text-xs">
+                <SelectValue placeholder="Duration" />
+              </SelectTrigger>
+              <SelectContent className="bg-white border-slate-200 text-slate-900">
+                {['30 mins', '45 mins', '60 mins', '90 mins', '120 mins'].map(d => (
+                  <SelectItem key={d} value={d}>{d}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Status */}
+          <div>
+            <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Status</label>
+            <Select value={form.status} onValueChange={v => setForm({ ...form, status: v })}>
+              <SelectTrigger data-testid="edit-task-form-status" className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white text-xs">
+                <SelectValue placeholder="Select status" />
+              </SelectTrigger>
+              <SelectContent className="bg-white border-slate-200 text-slate-900">
+                {TASK_STATUSES.map(s => (
+                  <SelectItem key={s} value={s}>{s}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Candidate Name */}
+          <div className="md:col-span-2">
+            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+              <span>Candidate Name</span>
+              <span className="text-rose-500">*</span>
+            </label>
+            <Input
+              data-testid="edit-task-form-candidate"
+              value={form.candidateName}
+              onChange={e => setForm({ ...form, candidateName: e.target.value })}
+              placeholder="e.g. Navya Sadineni, Rohit Adike"
+              className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white text-sm"
+            />
+          </div>
+
+          {/* Position */}
+          <div>
+            <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Position</label>
+            <Input
+              data-testid="edit-task-form-position"
+              value={form.position}
+              onChange={e => setForm({ ...form, position: e.target.value })}
+              placeholder="e.g. Clinical Data Analyst, SWE"
+              className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white text-xs"
+            />
+          </div>
+
+          {/* Company Name */}
+          <div>
+            <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Company Name</label>
+            <Input
+              data-testid="edit-task-form-company"
+              value={form.companyName}
+              onChange={e => setForm({ ...form, companyName: e.target.value })}
+              placeholder="e.g. Google, Unlearn, Morning star"
+              className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white text-xs"
+            />
+          </div>
+
+          {/* Tech Person (TSE) - Only if TSM / Management */}
+          {canAssignTse && (
+            <div className="md:col-span-2 space-y-1.5">
+              <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Tech Person (TSE)</label>
+              <Select value={form.assigneeId} onValueChange={v => setForm({ ...form, assigneeId: v })}>
+                <SelectTrigger data-testid="edit-task-form-assignee" className="bg-slate-50 border-slate-300 text-slate-900 focus:bg-white text-xs">
+                  <SelectValue placeholder="Select TSE" />
+                </SelectTrigger>
+                <SelectContent className="bg-white border-slate-200 text-slate-900 max-h-56">
+                  {tseUsers.map(u => {
+                    const codeName = u.codeName || u.name;
+                    const realName = getTseRealName(u.name) || getTseRealName(u.id);
+                    const displayName = canViewRealName && realName && realName.toLowerCase() !== codeName.toLowerCase()
+                      ? `${codeName} (${realName})`
+                      : codeName;
+
+                    return (
+                      <SelectItem key={u.id} value={u.id}>
+                        {displayName}
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {/* Remark */}
+          <div className="md:col-span-2">
+            <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Remark / Comment</label>
+            <Input
+              data-testid="edit-task-form-remark"
+              value={form.remark}
+              onChange={e => setForm({ ...form, remark: e.target.value })}
+              placeholder="e.g. Candidate available after 4 pm"
+              className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white text-xs"
+            />
+          </div>
+
+          {/* Description */}
+          <div className="md:col-span-2">
+            <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Description</label>
+            <Textarea
+              data-testid="edit-task-form-desc"
+              value={form.description}
+              onChange={e => setForm({ ...form, description: e.target.value })}
+              rows={2}
+              className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white resize-none text-xs"
+              placeholder="Add candidate assessment details or runbook steps..."
+            />
+          </div>
+
+          {/* Attachments Section */}
+          <div className="md:col-span-2 p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                <Paperclip size={13} className="text-blue-600" />
+                <span>Task Attachments</span>
+              </label>
+              <span className="text-[11px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                {attachments.length} attached
+              </span>
+            </div>
+
+            <label className="flex flex-col items-center justify-center p-3 border-2 border-dashed border-slate-300 hover:border-blue-500 bg-white rounded-xl transition-all cursor-pointer">
+              <input
+                type="file"
+                multiple
+                accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.png,.jpg,.jpeg,.webp,.txt"
+                onChange={handleFileUpload}
+                className="hidden"
+                disabled={isUploading}
+              />
+              <UploadCloud size={20} className="text-slate-400 group-hover:text-blue-600" />
+              <span className="text-xs font-semibold text-slate-700 mt-1">
+                {isUploading ? 'Uploading files...' : 'Click to add files (Resume, JD, Notes)'}
+              </span>
+            </label>
+
+            {attachments.length > 0 && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 max-h-36 overflow-y-auto pr-1">
+                {attachments.map(att => (
+                  <div key={att.id} className="flex items-center justify-between p-2 rounded-lg bg-white border border-slate-200 text-xs">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <FileText size={14} className="text-blue-600 shrink-0" />
+                      <span className="font-semibold text-slate-900 truncate max-w-[160px]" title={att.originalName}>
+                        {att.originalName}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeAttachment(att.id)}
+                      className="p-1 text-slate-400 hover:text-rose-600 rounded transition-colors cursor-pointer shrink-0"
+                      title="Remove attachment"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-2 mt-4 pt-3 border-t border-slate-200">
+          <button
+            onClick={() => onOpenChange(false)}
+            className="h-9 px-4 rounded-lg bg-slate-100 border border-slate-200 text-slate-700 text-sm hover:bg-slate-200 font-medium transition-colors cursor-pointer"
+          >
+            Cancel
+          </button>
+          <button
+            data-testid="edit-task-form-submit"
+            onClick={submit}
+            className="btn-primary h-9 px-5 rounded-lg text-sm font-medium cursor-pointer"
+          >
+            Save Changes
           </button>
         </div>
       </DialogContent>
@@ -1558,6 +2045,7 @@ export default function Tasks() {
   const location = useLocation();
   const [filters, setFilters] = useState({ status: 'all', taskType: 'all', assignee: 'all', sr: 'all', q: '' });
   const [createOpen, setCreateOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState(null);
   const [activeTask, setActiveTask] = useState(null);
 
   // Modals for Attachments Viewer & Delete Confirmation
@@ -1567,6 +2055,7 @@ export default function Tasks() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   const canManageTasks = currentRole === 'tsm' || currentRole === 'management' || currentRole === 'upper_management';
+  const canEditTask = ['tsm', 'marketing_tl', 'marketing_sr', 'management', 'upper_management'].includes(currentRole);
 
   const tseUsers = useMemo(() => (users || []).filter(u => u.role === 'tse'), [users]);
   const canAssignTse = ['tsm', 'management', 'upper_management'].includes(currentRole);
@@ -1734,7 +2223,7 @@ export default function Tasks() {
                   <th className="py-3 px-4 font-semibold">Comment</th>
                   <th className="py-3 px-4 font-semibold">Candidate Feedback</th>
                   <th className="py-3 px-4 font-semibold text-right">Assign TSE</th>
-                  {canManageTasks && <th className="py-3 px-3 font-semibold text-right">Actions</th>}
+                  {(canManageTasks || canEditTask) && <th className="py-3 px-3 font-semibold text-right">Actions</th>}
                 </tr>
               </thead>
               <tbody>
@@ -1994,11 +2483,22 @@ export default function Tasks() {
                         </div>
                       </td>
 
-                      {/* Actions Column (Feature 4: Unassign & Delete) */}
-                      {canManageTasks && (
+                      {/* Actions Column: Edit (Pencil), Unassign & Delete */}
+                      {(canManageTasks || canEditTask) && (
                         <td className="py-3 px-3 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                          <div className="flex items-center justify-end gap-1">
-                            {t.assigneeId && (
+                          <div className="flex items-center justify-end gap-1.5">
+                            {canEditTask && (
+                              <button
+                                type="button"
+                                title="Edit task details"
+                                data-testid={`btn-edit-task-${t.id}`}
+                                onClick={() => setEditingTask(t)}
+                                className="p-1.5 rounded-lg text-blue-600 hover:text-blue-700 hover:bg-blue-50 transition-colors cursor-pointer border border-blue-200/80 shadow-2xs"
+                              >
+                                <Pencil size={14} />
+                              </button>
+                            )}
+                            {canManageTasks && t.assigneeId && (
                               <button
                                 type="button"
                                 title="Unassign TSE from this task"
@@ -2009,18 +2509,20 @@ export default function Tasks() {
                                 <UserMinus size={14} />
                               </button>
                             )}
-                            <button
-                              type="button"
-                              title="Delete task from queue"
-                              data-testid={`btn-delete-task-${t.id}`}
-                              onClick={() => {
-                                setSelectedTaskForDelete(t);
-                                setDeleteDialogOpen(true);
-                              }}
-                              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-                            >
-                              <Trash2 size={14} />
-                            </button>
+                            {canManageTasks && (
+                              <button
+                                type="button"
+                                title="Delete task from queue"
+                                data-testid={`btn-delete-task-${t.id}`}
+                                onClick={() => {
+                                  setSelectedTaskForDelete(t);
+                                  setDeleteDialogOpen(true);
+                                }}
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            )}
                           </div>
                         </td>
                       )}
@@ -2042,6 +2544,7 @@ export default function Tasks() {
       </SectionCard>
 
       <CreateTaskModal open={createOpen} onOpenChange={setCreateOpen} />
+      <EditTaskModal task={editingTask} open={!!editingTask} onOpenChange={(open) => !open && setEditingTask(null)} />
       <TaskDrawer task={activeTask} onClose={() => setActiveTask(null)} />
       <AttachmentViewerModal
         task={selectedTaskForAttachments}
