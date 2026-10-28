@@ -897,6 +897,13 @@ export const filterAuthorizedData = (items, currentUser, currentRole) => {
 
     return items
       .filter(item => {
+        const cName = (item.candidateName || '').toLowerCase().trim();
+        // Strict candidate team isolation: Samanvi Arcot & Mayuri Kate belong exclusively to Team Shivam
+        if (cName.includes('samanvi arcot') || cName.includes('mayuri kate')) {
+          if (currentTeamId === 'team-mukesh') return false;
+          if (currentTeamId === 'team-shivam') return true;
+        }
+
         const itemTeamId = (item.teamId || item.team || item.marketingTeam || '').toLowerCase();
         const itemTeamName = (item.teamName || '').toLowerCase();
         const itemLeadId = item.teamLeadId || '';
@@ -926,6 +933,11 @@ export const filterAuthorizedData = (items, currentUser, currentRole) => {
 
     return items
       .filter(item => {
+        const cName = (item.candidateName || '').toLowerCase().trim();
+        // Strict candidate team isolation: Samanvi Arcot & Mayuri Kate belong exclusively to Team Shivam
+        if (cName.includes('samanvi arcot') || cName.includes('mayuri kate')) {
+          if (currentTeamId === 'team-mukesh') return false;
+        }
         const itemTeamId = (item.teamId || item.team || item.marketingTeam || '').toLowerCase();
         const itemTeamName = (item.teamName || '').toLowerCase();
 

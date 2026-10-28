@@ -256,6 +256,16 @@ async function seedDatabaseIfEmpty() {
         { $or: [{ codeName: 'Code Name Unassigned' }, { techPerson: { $regex: /harit/i }, codeName: { $in: ['', null, 'Unassigned', 'Code Name Unassigned'] } }] },
         { $set: { codeName: 'Abhishek' } }
       );
+
+      // Ensure Samanvi Arcot and Mayuri Kate strictly belong to Team Shivam
+      await Feedback.updateMany(
+        { candidateName: { $regex: /(samanvi arcot|mayuri kate)/i } },
+        { $set: { teamId: 'team-shivam', teamName: 'Team Shivam', teamLeadId: 'u-1791911115518' } }
+      );
+      await Task.updateMany(
+        { candidateName: { $regex: /(samanvi arcot|mayuri kate)/i } },
+        { $set: { teamId: 'team-shivam', teamName: 'Team Shivam', teamLeadId: 'u-1791911115518' } }
+      );
     }
   } catch (err) {
     console.error('⚠️ Seeding error:', err.message);
@@ -788,9 +798,12 @@ app.get('/api/feedbacks', async (req, res) => {
     } else if (role === 'recruiter' && userId) {
       filter = { $or: [{ pocId: userId }, { recruiterName: { $regex: new RegExp(userId, 'i') } }] };
     } else if (role === 'marketing_tl') {
-      filter = { $or: [{ teamLeadId: userId }, { teamId: teamId || 'team-mukesh' }] };
+      const isShivam = userId === 'u-1791911115518' || (req.query.teamName && req.query.teamName.includes('Shivam'));
+      const defaultTeam = isShivam ? 'team-shivam' : 'team-mukesh';
+      filter = { $or: [{ teamLeadId: userId }, { teamId: teamId || defaultTeam }] };
     } else if (role === 'marketing_sr') {
-      filter = { teamId: teamId || 'team-mukesh' };
+      const defaultTeam = (req.query.teamName && req.query.teamName.includes('Shivam')) ? 'team-shivam' : 'team-mukesh';
+      filter = { teamId: teamId || defaultTeam };
     }
 
     let feedbacks = await Feedback.find(filter).sort({ createdAt: -1 });
@@ -809,6 +822,12 @@ app.get('/api/feedbacks', async (req, res) => {
       const linkedTask = rawTaskId ? taskMap.get(rawTaskId) : null;
 
       if (linkedTask) {
+        if (linkedTask.teamId) obj.teamId = linkedTask.teamId;
+        if (linkedTask.teamName) obj.teamName = linkedTask.teamName;
+        if (linkedTask.teamLeadId) obj.teamLeadId = linkedTask.teamLeadId;
+        if (linkedTask.recruiterName) obj.recruiterName = linkedTask.recruiterName;
+        if (linkedTask.assignedSrId) obj.pocId = linkedTask.assignedSrId;
+
         const assignedName = linkedTask.techPerson || linkedTask.codeName;
         const matchingTse = TECH_SUPPORT_TEAM.find(t =>
           (assignedName && t.supportName.toLowerCase() === assignedName.toLowerCase()) ||
@@ -825,6 +844,14 @@ app.get('/api/feedbacks', async (req, res) => {
           obj.techSupport = linkedTask.codeName || linkedTask.techPerson;
           obj.employeeName = getTseRealName(linkedTask.codeName || linkedTask.techPerson);
         }
+      }
+
+      // Enforce Samanvi Arcot & Mayuri Kate to Team Shivam
+      const cand = (obj.candidateName || '').toLowerCase().trim();
+      if (cand.includes('samanvi arcot') || cand.includes('mayuri kate')) {
+        obj.teamId = 'team-shivam';
+        obj.teamName = 'Team Shivam';
+        obj.teamLeadId = 'u-1791911115518';
       }
 
       // Unify "Code Name Unassigned" or Harit Verma records into Abhishek (TSE-NB-001)

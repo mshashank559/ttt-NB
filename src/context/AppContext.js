@@ -87,21 +87,29 @@ export const AppProvider = ({ children }) => {
             localStorage.setItem('ttt_feedbacks', JSON.stringify(INITIAL_FEEDBACK_RECORDS));
             return INITIAL_FEEDBACK_RECORDS;
           }
-          if (Array.isArray(parsed)) {
             const cleaned = parsed.map(f => {
-              if (f.techSupport === 'Code Name Unassigned' || f.techSupportId === 'TSE-NB-001' || (f.employeeName && f.employeeName.toLowerCase().includes('harit'))) {
-                return {
-                  ...f,
+              let item = { ...f };
+              if (item.techSupport === 'Code Name Unassigned' || item.techSupportId === 'TSE-NB-001' || (item.employeeName && item.employeeName.toLowerCase().includes('harit'))) {
+                item = {
+                  ...item,
                   techSupport: 'Abhishek',
                   employeeName: 'Harit verma',
                   techSupportId: 'TSE-NB-001',
                   techSupportEmail: 'nbtech1@netbounceplacement.com',
                 };
               }
-              return f;
+              const cName = (item.candidateName || '').toLowerCase().trim();
+              if (cName.includes('samanvi arcot') || cName.includes('mayuri kate')) {
+                item = {
+                  ...item,
+                  teamId: 'team-shivam',
+                  teamName: 'Team Shivam',
+                  teamLeadId: 'u-1791911115518',
+                };
+              }
+              return item;
             });
             return cleaned;
-          }
         }
       } catch (e) {
         console.warn('Failed to parse saved feedbacks:', e);
@@ -164,9 +172,21 @@ export const AppProvider = ({ children }) => {
         if (feedbacksRes && feedbacksRes.ok) {
           const liveFeedbacks = await feedbacksRes.json();
           if (Array.isArray(liveFeedbacks)) {
-            setFeedbacks(liveFeedbacks);
+            const normalized = liveFeedbacks.map(f => {
+              const cName = (f.candidateName || '').toLowerCase().trim();
+              if (cName.includes('samanvi arcot') || cName.includes('mayuri kate')) {
+                return {
+                  ...f,
+                  teamId: 'team-shivam',
+                  teamName: 'Team Shivam',
+                  teamLeadId: 'u-1791911115518',
+                };
+              }
+              return f;
+            });
+            setFeedbacks(normalized);
             try {
-              localStorage.setItem('ttt_feedbacks', JSON.stringify(liveFeedbacks));
+              localStorage.setItem('ttt_feedbacks', JSON.stringify(normalized));
             } catch (e) { }
           }
         }
