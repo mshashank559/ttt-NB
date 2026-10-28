@@ -239,6 +239,18 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
       return;
     }
 
+    if (form.taskType === 'Interview') {
+      if (!form.interviewDateTime) {
+        toast.error('Please select Interview Date & Time (EST)');
+        return;
+      }
+    } else {
+      if (!form.date) {
+        toast.error('Please select the Task Date');
+        return;
+      }
+    }
+
     // Availability validation guard
     if (form.taskType === 'Interview' && !isMarketingUser && form.assigneeId && !selectedTseAvailability.available && !allowTseOverride) {
       toast.error('The selected TSE is occupied during this time window. Please select an available TSE or authorize emergency override.');
@@ -353,7 +365,15 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
           {/* Task Type */}
           <div>
             <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Task (Type)</label>
-            <Select value={form.taskType} onValueChange={v => setForm({ ...form, taskType: v })}>
+            <Select
+              value={form.taskType}
+              onValueChange={v => setForm(prev => ({
+                ...prev,
+                taskType: v,
+                interviewDateTime: v === 'Interview' ? prev.interviewDateTime : '',
+                date: prev.date || (prev.interviewDateTime ? prev.interviewDateTime.slice(0, 10) : prev.date)
+              }))}
+            >
               <SelectTrigger data-testid="task-form-type" className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white">
                 <SelectValue placeholder="Select task type" />
               </SelectTrigger>
@@ -365,10 +385,10 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
             </Select>
           </div>
 
-          {/* Single Date Field (ONLY 1 DATE FIELD) */}
+          {/* Single Date Field: Interview has Date & Time, other task types have only Date */}
           <div className="md:col-span-1">
             <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-              <Clock size={12} className="text-blue-600" />
+              <CalIcon size={12} className="text-blue-600" />
               <span>{form.taskType === 'Interview' ? 'Interview Date & Time (EST)' : 'Date'}</span>
               <span className="text-rose-500">*</span>
             </label>
@@ -385,14 +405,22 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
                     date: val ? val.slice(0, 10) : prev.date
                   }));
                 } else {
-                  setForm(prev => ({ ...prev, date: val }));
+                  setForm(prev => ({
+                    ...prev,
+                    date: val,
+                    interviewDateTime: ''
+                  }));
                 }
               }}
               className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white text-xs"
             />
-            {form.taskType === 'Interview' && (
+            {form.taskType === 'Interview' ? (
               <p className="text-[10px] text-blue-700 mt-1 font-medium">
                 EST standard timing · Auto-reminds 30 min before call.
+              </p>
+            ) : (
+              <p className="text-[10px] text-slate-500 mt-1 font-medium">
+                Scheduled task date (time is not required).
               </p>
             )}
           </div>
@@ -912,6 +940,18 @@ const EditTaskModal = ({ task, open, onOpenChange }) => {
       return;
     }
 
+    if (form.taskType === 'Interview') {
+      if (!form.interviewDateTime) {
+        toast.error('Please select Interview Date & Time (EST)');
+        return;
+      }
+    } else {
+      if (!form.date) {
+        toast.error('Please select the Task Date');
+        return;
+      }
+    }
+
     const taskDate = form.taskType === 'Interview' && form.interviewDateTime
       ? form.interviewDateTime.slice(0, 10)
       : (form.date || new Date().toISOString().slice(0, 10));
@@ -1038,7 +1078,15 @@ const EditTaskModal = ({ task, open, onOpenChange }) => {
           {/* Task Type */}
           <div>
             <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Task (Type)</label>
-            <Select value={form.taskType} onValueChange={v => setForm({ ...form, taskType: v })}>
+            <Select
+              value={form.taskType}
+              onValueChange={v => setForm(prev => ({
+                ...prev,
+                taskType: v,
+                interviewDateTime: v === 'Interview' ? prev.interviewDateTime : '',
+                date: prev.date || (prev.interviewDateTime ? prev.interviewDateTime.slice(0, 10) : prev.date)
+              }))}
+            >
               <SelectTrigger data-testid="edit-task-form-type" className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white text-xs">
                 <SelectValue placeholder="Select task type" />
               </SelectTrigger>
@@ -1053,7 +1101,7 @@ const EditTaskModal = ({ task, open, onOpenChange }) => {
           {/* Date & EST Time Field */}
           <div className="md:col-span-1">
             <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-              <Clock size={12} className="text-blue-600" />
+              <CalIcon size={12} className="text-blue-600" />
               <span>{form.taskType === 'Interview' ? 'Interview Date & Time (EST)' : 'Date'}</span>
               <span className="text-rose-500">*</span>
             </label>
@@ -1070,11 +1118,24 @@ const EditTaskModal = ({ task, open, onOpenChange }) => {
                     date: val ? val.slice(0, 10) : prev.date
                   }));
                 } else {
-                  setForm(prev => ({ ...prev, date: val }));
+                  setForm(prev => ({
+                    ...prev,
+                    date: val,
+                    interviewDateTime: ''
+                  }));
                 }
               }}
               className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white text-xs"
             />
+            {form.taskType === 'Interview' ? (
+              <p className="text-[10px] text-blue-700 mt-1 font-medium">
+                EST standard timing · Auto-reminds 30 min before call.
+              </p>
+            ) : (
+              <p className="text-[10px] text-slate-500 mt-1 font-medium">
+                Scheduled task date (time is not required).
+              </p>
+            )}
           </div>
 
           {/* Duration */}
@@ -2043,7 +2104,15 @@ export default function Tasks() {
   const { tasks, users, feedbacks, currentRole, currentUser, reassignTask, deleteTask, unassignTask } = useApp();
   const navigate = useNavigate();
   const location = useLocation();
-  const [filters, setFilters] = useState({ status: 'all', taskType: 'all', assignee: 'all', sr: 'all', q: '' });
+  const [filters, setFilters] = useState({
+    status: 'all',
+    taskType: 'all',
+    assignee: 'all',
+    sr: 'all',
+    q: '',
+    dateFrom: '',
+    dateTo: '',
+  });
   const [createOpen, setCreateOpen] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
   const [activeTask, setActiveTask] = useState(null);
@@ -2097,7 +2166,11 @@ export default function Tasks() {
         (t.remark && t.remark.toLowerCase().includes(query)) ||
         (t.taskType && t.taskType.toLowerCase().includes(query)) ||
         (t.id && t.id.toLowerCase().includes(query));
-      return matchStatus && matchType && matchAssignee && matchSr && matchQ;
+      const taskDate = (t.date || t.dueDate || (t.interviewDateTime ? t.interviewDateTime.slice(0, 10) : '') || '').slice(0, 10);
+      const matchFrom = !filters.dateFrom || (taskDate && taskDate >= filters.dateFrom);
+      const matchTo = !filters.dateTo || (taskDate && taskDate <= filters.dateTo);
+
+      return matchStatus && matchType && matchAssignee && matchSr && matchQ && matchFrom && matchTo;
     });
   }, [tasks, filters, currentRole, currentUser, isMarketingTl]);
 
@@ -2136,7 +2209,52 @@ export default function Tasks() {
       />
 
       {/* Filters */}
-      <SectionCard title="Filters" subtitle={`${sortedTasks.length} of ${tasks.length} tasks`}>
+      <SectionCard
+        title="Filters"
+        subtitle={`${sortedTasks.length} of ${tasks.length} tasks${(filters.dateFrom || filters.dateTo) ? ` (Date: ${filters.dateFrom || 'Any'} to ${filters.dateTo || 'Any'})` : ''}`}
+        actions={
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* From Date Filter */}
+            <div className="flex items-center gap-1.5 bg-white border border-slate-300 rounded-xl px-2.5 py-1 shadow-xs hover:border-blue-600 focus-within:border-blue-600 transition-colors">
+              <CalIcon size={13} className="text-slate-400 shrink-0" />
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider select-none">From:</span>
+              <input
+                type="date"
+                data-testid="task-filter-from-date"
+                value={filters.dateFrom}
+                onChange={(e) => setFilters(prev => ({ ...prev, dateFrom: e.target.value }))}
+                className="text-xs bg-transparent text-slate-800 outline-none font-medium cursor-pointer"
+              />
+            </div>
+
+            {/* To Date Filter */}
+            <div className="flex items-center gap-1.5 bg-white border border-slate-300 rounded-xl px-2.5 py-1 shadow-xs hover:border-blue-600 focus-within:border-blue-600 transition-colors">
+              <CalIcon size={13} className="text-slate-400 shrink-0" />
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider select-none">To:</span>
+              <input
+                type="date"
+                data-testid="task-filter-to-date"
+                value={filters.dateTo}
+                onChange={(e) => setFilters(prev => ({ ...prev, dateTo: e.target.value }))}
+                className="text-xs bg-transparent text-slate-800 outline-none font-medium cursor-pointer"
+              />
+            </div>
+
+            {/* Clear Dates Button */}
+            {(filters.dateFrom || filters.dateTo) && (
+              <button
+                type="button"
+                onClick={() => setFilters(prev => ({ ...prev, dateFrom: '', dateTo: '' }))}
+                className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg border border-rose-200 transition-colors cursor-pointer"
+                title="Clear date range filter"
+              >
+                <X size={12} />
+                <span>Clear Dates</span>
+              </button>
+            )}
+          </div>
+        }
+      >
         <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
           <div className="relative md:col-span-2">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
