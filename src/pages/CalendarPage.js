@@ -8,6 +8,7 @@ import {
 import { useApp } from '../context/AppContext';
 import { PageHeader, SectionCard, StatusBadge } from '../components/common';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -59,13 +60,130 @@ function formatDateString(isoString) {
 }
 
 export default function CalendarPage() {
-  const { events, tasks, interviews, feedbacks } = useApp();
+  const { events, tasks, interviews, feedbacks, users, currentRole } = useApp();
   const [view, setView] = useState('month');
   const [cursor, setCursor] = useState(new Date());
+  const [teamFilter, setTeamFilter] = useState('all');
   
   // Day enlargement modal state
   const [selectedDateKey, setSelectedDateKey] = useState(null);
   const [modalFilter, setModalFilter] = useState('all'); // 'all' | 'interviews' | 'tasks'
+
+  // Dynamic Teams mapped from users DB
+  const dynamicTeams = useMemo(() => {
+    const list = [{ id: 'all', label: 'All Teams' }];
+    const tls = (users || []).filter(u => u.role === 'marketing_tl');
+    tls.forEach(tl => {
+      const tId = tl.teamId || tl.team || (
+        (tl.name || '').toLowerCase().includes('mukesh') ? 'team-mukesh' :
+        (tl.name || '').toLowerCase().includes('shivam') ? 'team-shivam' : `team-${tl.id}`
+      );
+      const teamDisplayName = tl.teamName || (
+        (tl.name || '').toLowerCase().includes('mukesh') ? 'Team Mukesh' :
+        (tl.name || '').toLowerCase().includes('shivam') ? 'Team Shivam' : `Team ${tl.name.split(' ')[0]}`
+      );
+      if (!list.some(item => item.id === tId)) {
+        list.push({
+          id: tId,
+          label: `${teamDisplayName} (${tl.name})`,
+          shortLabel: teamDisplayName,
+          tlId: tl.id,
+          leadName: tl.name,
+        });
+      }
+    });
+    if (list.length === 1) {
+      list.push(
+        { id: 'team-mukesh', label: 'Team Mukesh (Mukesh Chaudhary)', shortLabel: 'Team Mukesh', leadName: 'Mukesh Chaudhary' },
+        { id: 'team-shivam', label: 'Team Shivam (Shivam Barot)', shortLabel: 'Team Shivam', leadName: 'Shivam Barot' }
+      );
+    }
+    return list;
+  }, [users]);
+
+  const selectedTeamMeta = useMemo(() => {
+    return dynamicTeams.find(t => t.id === teamFilter) || dynamicTeams[0];
+  }, [dynamicTeams, teamFilter]);
+
+  const selectedTeamSrs = useMemo(() => {
+    if (teamFilter === 'all') return (users || []).filter(u => u.role === 'marketing_sr');
+    return (users || []).filter(u =>
+      u.role === 'marketing_sr' && (
+        u.teamId === teamFilter ||
+        u.team === teamFilter ||
+        (teamFilter === 'team-mukesh' && ((u.teamName || '').toLowerCase().includes('mukesh') || u.teamLeadId === 'u-1791911058812')) ||
+        (teamFilter === 'team-shivam' && ((u.teamName || '').toLowerCase().includes('shivam') || u.teamLeadId === 'u-1791911115518'))
+      )
+    );
+  }, [users, teamFilter]);
+
+  const teamMemberIds = useMemo(() => {
+    if (teamFilter === 'all') return null;
+    const ids = new Set();
+    if (selectedTeamMeta.tlId) ids.add(selectedTeamMeta.tlId);
+    if (teamFilter === 'team-mukesh') ids.add('u-1791911058812');
+    if (teamFilter === 'team-shivam') ids.add('u-1791911115518');
+    selectedTeamSrs.forEach(sr => ids.add(sr.id));
+    return ids;
+  }, [teamFilter, selectedTeamMeta, selectedTeamSrs]);
+
+  const teamMemberNames = useMemo(() => {
+    if (teamFilter === 'all') return null;
+    const names = new Set();
+    if (selectedTeamMeta.leadName) names.add(selectedTeamMeta.leadName.toLowerCase());
+    selectedTeamSrs.forEach(sr => { if (sr.name) names.add(sr.name.toLowerCase()); });
+    return names;
+  }, [teamFilter, selectedTeamMeta, selectedTeamSrs]);
+
+  const isTaskMatchingTeam = (t) => {
+    if (teamFilter === 'all') return true;
+
+    // Strict candidate team mapping
+    const cName = (t.candidateName || '').toLowerCase();
+    if (teamFilter === 'team-shivam') {
+      if (cName.includes('samanvi') || cName.includes('mayuri')) return true;
+    }
+    if (teamFilter === 'team-mukesh') {
+      if (cName.includes('samanvi') || cName.includes('mayuri')) return false;
+    }
+
+    const tTeam = (t.teamId || t.team || t.marketingTeam || '').toLowerCase();
+    const tName = (t.teamName || '').toLowerCase();
+    const tLead = t.teamLeadId || '';
+
+    if (teamFilter === 'team-mukesh') {
+      if (tTeam === 'team-mukesh' || tName.includes('mukesh') || tLead === 'u-1791911058812') return true;
+    } else if (teamFilter === 'team-shivam') {
+      if (tTeam === 'team-shivam' || tName.includes('shivam') || tLead === 'u-1791911115518') return true;
+    } else if (tTeam === teamFilter.toLowerCase() || tName.includes(teamFilter.toLowerCase())) {
+      return true;
+    }
+
+    if (teamMemberIds) {
+      if (t.createdById && teamMemberIds.has(t.createdById)) return true;
+      if (t.creatorId && teamMemberIds.has(t.creatorId)) return true;
+      if (t.assignedSrId && teamMemberIds.has(t.assignedSrId)) return true;
+      if (t.recruiterId && teamMemberIds.has(t.recruiterId)) return true;
+    }
+
+    if (t.createdByName && teamMemberNames?.has(t.createdByName.toLowerCase())) return true;
+    if (t.assignedSrName && teamMemberNames?.has(t.assignedSrName.toLowerCase())) return true;
+    if (t.recruiterName && teamMemberNames?.has(t.recruiterName.toLowerCase())) return true;
+
+    if (t.assignedSrId) {
+      const srUser = (users || []).find(u => u.id === t.assignedSrId);
+      if (srUser) {
+        if (teamFilter === 'team-mukesh' && (srUser.teamId === 'team-mukesh' || srUser.team === 'team-mukesh' || (srUser.teamName || '').toLowerCase().includes('mukesh') || srUser.teamLeadId === 'u-1791911058812')) {
+          return true;
+        }
+        if (teamFilter === 'team-shivam' && (srUser.teamId === 'team-shivam' || srUser.team === 'team-shivam' || (srUser.teamName || '').toLowerCase().includes('shivam') || srUser.teamLeadId === 'u-1791911115518')) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  };
 
   // Combine and unify all activities using TASKS as the Single Source of Truth
   const unifiedEvents = useMemo(() => {
@@ -75,6 +193,7 @@ export default function CalendarPage() {
 
     // 1. Primary Source of Truth: TASKS (Exact 1:1 match with Task sidebar)
     (tasks || []).forEach(t => {
+      if (!isTaskMatchingTeam(t)) return;
       seenTaskIds.add(String(t.id));
 
       // Strictly match feedback by Unique Task ID (NEVER by candidate name)
@@ -104,9 +223,13 @@ export default function CalendarPage() {
         : null;
 
       const dateStr = t.date || t.dueDate || (t.interviewDateTime ? t.interviewDateTime.slice(0, 10) : '');
-      const timeStr = t.interviewDateTime
-        ? (t.interviewDateTime.includes('T') ? t.interviewDateTime.split('T')[1].slice(0, 5) : '')
-        : (t.time || '');
+      const timeStr = t.timing
+        ? t.timing
+        : (t.startTime && t.endTime
+            ? `${t.startTime} - ${t.endTime} EST`
+            : (t.interviewDateTime
+                ? (t.interviewDateTime.includes('T') ? `${t.interviewDateTime.split('T')[1].slice(0, 5)} EST` : '')
+                : (t.time || '')));
 
       const isInterview = t.taskType === 'Interview' || t.category === 'Interview' || Boolean(t.interviewDateTime);
       const techPersonDisplay = t.codeName || t.techPerson || 'Unassigned';
@@ -126,6 +249,8 @@ export default function CalendarPage() {
         type: isInterview ? 'interview' : 'task',
         title: `${t.candidateName || t.title} • ${t.companyName || 'Client Org'} (${t.taskType || 'Interview'})`,
         date: dateStr,
+        dateFrom: t.fromDate || t.dateFrom || dateStr,
+        dateTo: t.toDate || t.dateTo || dateStr,
         candidateName: t.candidateName || t.title,
         companyName: t.companyName || 'Client Org',
         sessionType: t.taskType || 'Interview',
@@ -133,7 +258,10 @@ export default function CalendarPage() {
         techPerson: techPersonDisplay,
         assigneeId: t.assigneeId,
         time: timeStr,
-        duration: t.duration || '30 mins',
+        timing: t.timing,
+        startTime: t.startTime,
+        endTime: t.endTime,
+        duration: t.duration || (timeStr ? timeStr : '30 mins'),
         position: t.position || 'Software Engineer',
         status: taskStatus,
         remark: remarkDisplay,
@@ -143,18 +271,21 @@ export default function CalendarPage() {
     });
 
     // 2. Non-task events (e.g. general company calendar events, deadlines, meetings)
-    (events || []).forEach(e => {
-      if (e.taskId && seenTaskIds.has(String(e.taskId))) return;
-      if (seenTaskIds.has(String(e.id)) || seenTaskIds.has(String(e.refId))) return;
-      list.push({
-        ...e,
-        id: `ev-${e.id}`,
-        type: e.type || 'meeting',
+    if (teamFilter === 'all') {
+      (events || []).forEach(e => {
+        if (e.taskId && seenTaskIds.has(String(e.taskId))) return;
+        if (seenTaskIds.has(String(e.id)) || seenTaskIds.has(String(e.refId))) return;
+        list.push({
+          ...e,
+          id: `ev-${e.id}`,
+          type: e.type || 'meeting',
+        });
       });
-    });
+    }
 
     // 3. Standalone interviews (Deduplicated: only add if not already present in tasks)
     (interviews || []).forEach(i => {
+      if (!isTaskMatchingTeam(i)) return;
       const interviewTaskId = i.taskId || i.taskRefId || (i.id && i.id.startsWith('task-') ? i.id.replace('task-', '') : null);
       if (interviewTaskId && seenTaskIds.has(String(interviewTaskId))) return;
       if (seenTaskIds.has(String(i.id))) return;
@@ -170,7 +301,7 @@ export default function CalendarPage() {
     });
 
     return list;
-  }, [tasks, feedbacks, events, interviews]);
+  }, [tasks, feedbacks, events, interviews, teamFilter, teamMemberIds, teamMemberNames, users]);
 
   // Group events by date key (YYYY-MM-DD)
   const eventByDate = useMemo(() => {
@@ -229,23 +360,42 @@ export default function CalendarPage() {
         title="Calendar" 
         subtitle="Tasks, candidate interviews, sessions, and client assessments in one unified view." 
         actions={
-          <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-lg border border-slate-200">
-            {['month', 'week', 'day'].map(v => (
-              <button 
-                key={v} 
-                data-testid={`cal-view-${v}`} 
-                onClick={() => setView(v)} 
-                className={`px-3 py-1 text-xs rounded-md capitalize font-medium transition-colors cursor-pointer ${view === v ? 'bg-[#1416c1] text-white shadow-sm font-semibold' : 'text-slate-600 hover:text-slate-900'}`}
-              >
-                {v}
-              </button>
-            ))}
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Marketing TL / Team Filter for Upper Management, Management, TSM, and other roles */}
+            {currentRole !== 'tse' && (
+              <Select value={teamFilter} onValueChange={setTeamFilter}>
+                <SelectTrigger data-testid="cal-filter-team" className="w-56 bg-white border-slate-300 text-slate-900 h-9 font-semibold text-xs shadow-xs">
+                  <SelectValue placeholder="All Teams" />
+                </SelectTrigger>
+                <SelectContent className="bg-white border-slate-200 text-slate-900">
+                  {dynamicTeams.map(t => (
+                    <SelectItem key={t.id} value={t.id} className="text-xs font-medium">
+                      {t.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+
+            <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-lg border border-slate-200">
+              {['month', 'week', 'day'].map(v => (
+                <button 
+                  key={v} 
+                  data-testid={`cal-view-${v}`} 
+                  onClick={() => setView(v)} 
+                  className={`px-3 py-1 text-xs rounded-md capitalize font-medium transition-colors cursor-pointer ${view === v ? 'bg-[#1416c1] text-white shadow-sm font-semibold' : 'text-slate-600 hover:text-slate-900'}`}
+                >
+                  {v}
+                </button>
+              ))}
+            </div>
           </div>
         }
       />
 
       <SectionCard
         title={label}
+        subtitle={teamFilter !== 'all' ? `Filtered by ${selectedTeamMeta.shortLabel || selectedTeamMeta.label}` : undefined}
         actions={
           <div className="flex items-center gap-1">
             <button 
@@ -589,9 +739,15 @@ export default function CalendarPage() {
                         <Clock size={14} />
                       </div>
                       <div className="min-w-0">
-                        <div className="text-[10px] uppercase font-semibold text-slate-500 tracking-wider">Duration / Time</div>
+                        <div className="text-[10px] uppercase font-semibold text-slate-500 tracking-wider">
+                          {act.type === 'interview' || act.taskType === 'Interview' ? 'Interview Timing (EST)' : 'Session Schedule'}
+                        </div>
                         <div className="text-xs font-bold text-slate-900 truncate">
-                          {act.time ? `${act.time} (${act.duration || '45m'})` : (act.duration || '30 mins')}
+                          {act.type === 'interview' || act.taskType === 'Interview'
+                            ? (act.timing || (act.startTime && act.endTime ? `${act.startTime} - ${act.endTime} EST` : (act.time ? `${act.time}` : act.duration || '—')))
+                            : (act.dateFrom && act.dateTo && act.dateFrom !== act.dateTo
+                                ? `${act.dateFrom} to ${act.dateTo}`
+                                : (act.date || 'Single Day Session'))}
                         </div>
                       </div>
                     </div>

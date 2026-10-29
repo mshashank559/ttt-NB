@@ -15,6 +15,58 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../components/ui/s
 const roleCanCreate = (r) => r === 'tsm' || r === 'management' || r === 'marketing_tl' || r === 'marketing_sr' || r === 'recruiter';
 const roleCanEditAny = (r) => r === 'tsm' || r === 'management';
 
+export function calculateTimeRangeDuration(startTime, endTime) {
+  if (!startTime || !endTime) return '30 mins';
+  const [sh, sm] = startTime.split(':').map(Number);
+  const [eh, em] = endTime.split(':').map(Number);
+  const startMins = sh * 60 + sm;
+  const endMins = eh * 60 + em;
+  const diff = endMins - startMins;
+  if (diff <= 0) return '30 mins';
+  if (diff % 60 === 0) {
+    const hrs = diff / 60;
+    return `${hrs} hr${hrs > 1 ? 's' : ''}`;
+  }
+  return `${diff} mins`;
+}
+
+export function formatEstTime(timeStr) {
+  if (!timeStr) return '';
+  const parts = timeStr.split(':');
+  if (parts.length < 2) return timeStr;
+  const h = Number(parts[0]);
+  const m = Number(parts[1]);
+  if (isNaN(h) || isNaN(m)) return timeStr;
+  const period = h >= 12 ? 'PM' : 'AM';
+  const displayH = h % 12 === 0 ? 12 : h % 12;
+  return `${String(displayH).padStart(2, '0')}:${String(m).padStart(2, '0')} ${period}`;
+}
+
+export function formatInterviewTimingDisplay(t) {
+  if (!t) return '—';
+  if (t.taskType === 'Interview') {
+    if (t.timing) return t.timing;
+    if (t.startTime && t.endTime) {
+      return `${formatEstTime(t.startTime)} - ${formatEstTime(t.endTime)} EST`;
+    }
+    if (t.interviewDateTime) {
+      const timePart = t.interviewDateTime.includes('T') ? t.interviewDateTime.split('T')[1].slice(0, 5) : '';
+      if (timePart) {
+        return `${formatEstTime(timePart)} EST${t.duration ? ` (${t.duration})` : ''}`;
+      }
+    }
+    return t.duration || '30 mins';
+  }
+
+  // Non-interview tasks: TAC, TQC, JDC, Demo, RUC
+  const from = t.fromDate || t.dateFrom || t.date || '';
+  const to = t.toDate || t.dateTo || t.dueDate || '';
+  if (from && to && from !== to) {
+    return `${from} to ${to}`;
+  }
+  return from || to || '—';
+}
+
 const CreateTaskModal = ({ open, onOpenChange }) => {
   const { users, addTask, tasks, feedbacks, currentRole, currentUser } = useApp();
   const tseUsers = users.filter(u => u.role === 'tse');
@@ -34,10 +86,15 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
 
   const [form, setForm] = useState({
     date: todayStr,
+    fromDate: todayStr,
+    toDate: todayStr,
+    startTime: '10:00',
+    endTime: '10:30',
+    timing: '10:00 AM - 10:30 AM EST',
     assigneeId: isMarketingUser ? '' : (tseUsers[0]?.id || ''),
     duration: '30 mins',
     taskType: 'Interview',
-    interviewDateTime: '',
+    interviewDateTime: `${todayStr}T10:00`,
     candidateName: '',
     position: '',
     companyName: '',
@@ -52,6 +109,42 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
     description: '',
     notes: '',
   });
+
+  const handleStartTimeChange = (newStartTime) => {
+    setForm(prev => {
+      const dur = calculateTimeRangeDuration(newStartTime, prev.endTime);
+      const timingStr = `${formatEstTime(newStartTime)} - ${formatEstTime(prev.endTime)} EST`;
+      const ivDt = prev.date ? `${prev.date}T${newStartTime}` : '';
+      return {
+        ...prev,
+        startTime: newStartTime,
+        duration: dur,
+        timing: timingStr,
+        interviewDateTime: ivDt,
+      };
+    });
+  };
+
+  const handleEndTimeChange = (newEndTime) => {
+    setForm(prev => {
+      const dur = calculateTimeRangeDuration(prev.startTime, newEndTime);
+      const timingStr = `${formatEstTime(prev.startTime)} - ${formatEstTime(newEndTime)} EST`;
+      return {
+        ...prev,
+        endTime: newEndTime,
+        duration: dur,
+        timing: timingStr,
+      };
+    });
+  };
+
+  const handleDateChange = (newDate) => {
+    setForm(prev => ({
+      ...prev,
+      date: newDate,
+      interviewDateTime: prev.startTime ? `${newDate}T${prev.startTime}` : `${newDate}T10:00`,
+    }));
+  };
 
   // Dynamic Senior Recruiters mapped from MongoDB Atlas / DB users
   const availableSrs = useMemo(() => {
@@ -213,10 +306,15 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
     setAllowTseOverride(false);
     setForm({
       date: todayStr,
+      fromDate: todayStr,
+      toDate: todayStr,
+      startTime: '10:00',
+      endTime: '10:30',
+      timing: '10:00 AM - 10:30 AM EST',
       assigneeId: isMarketingUser ? '' : (tseUsers[0]?.id || ''),
       duration: '30 mins',
       taskType: 'Interview',
-      interviewDateTime: '',
+      interviewDateTime: `${todayStr}T10:00`,
       candidateName: '',
       position: '',
       companyName: '',
@@ -240,16 +338,32 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
     }
 
     if (form.taskType === 'Interview') {
-      if (!form.interviewDateTime) {
-        toast.error('Please select Interview Date & Time (EST)');
+      if (!form.date) {
+        toast.error('Please select Interview Date (EST)');
+        return;
+      }
+      if (!form.startTime || !form.endTime) {
+        toast.error('Please select Start Time and End Time (EST)');
         return;
       }
     } else {
-      if (!form.date) {
+      if (!form.fromDate && !form.date) {
         toast.error('Please select the Task Date');
         return;
       }
     }
+
+    const calculatedDuration = form.taskType === 'Interview'
+      ? (calculateTimeRangeDuration(form.startTime, form.endTime) || '30 mins')
+      : (form.fromDate && form.toDate && form.fromDate !== form.toDate ? `${form.fromDate} to ${form.toDate}` : (form.duration || 'Full Day'));
+
+    const calculatedTiming = form.taskType === 'Interview' && form.startTime && form.endTime
+      ? `${formatEstTime(form.startTime)} - ${formatEstTime(form.endTime)} EST`
+      : '';
+
+    const interviewDateTime = form.taskType === 'Interview' && form.date && form.startTime
+      ? `${form.date}T${form.startTime}`
+      : '';
 
     // Availability validation guard
     if (form.taskType === 'Interview' && !isMarketingUser && form.assigneeId && !selectedTseAvailability.available && !allowTseOverride) {
@@ -258,14 +372,19 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
     }
 
     const selectedTse = tseUsers.find(u => u.id === form.assigneeId);
-    const taskDate = form.taskType === 'Interview' && form.interviewDateTime
-      ? form.interviewDateTime.slice(0, 10)
-      : form.date;
+    const taskDate = form.taskType === 'Interview' ? form.date : (form.fromDate || form.date);
+    const taskDueDate = form.taskType === 'Interview' ? form.date : (form.toDate || form.date);
 
     addTask({
       ...form,
       date: taskDate,
-      dueDate: taskDate,
+      dueDate: taskDueDate,
+      fromDate: form.fromDate || taskDate,
+      toDate: form.toDate || taskDueDate,
+      startTime: form.taskType === 'Interview' ? form.startTime : '',
+      endTime: form.taskType === 'Interview' ? form.endTime : '',
+      timing: calculatedTiming,
+      duration: calculatedDuration,
       assigneeId: isMarketingUser ? '' : (selectedTse?.id || ''),
       techPerson: isMarketingUser ? 'Unassigned' : (selectedTse?.name || 'Unassigned'),
       codeName: isMarketingUser ? 'Unassigned' : (selectedTse?.codeName || (selectedTse?.name ? getTseCodeName(selectedTse?.name) : 'Unassigned')),
@@ -275,7 +394,7 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
       recruiterName: form.assignedSrName || '',
       title: `${form.candidateName.trim()} — ${form.taskType}${form.companyName ? ` (${form.companyName.trim()})` : ''}`,
       category: form.taskType,
-      interviewDateTime: form.taskType === 'Interview' ? form.interviewDateTime : '',
+      interviewDateTime,
       attachments: attachments || [],
     });
     toast.success('Task created successfully!');
@@ -363,15 +482,14 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
           </div>
 
           {/* Task Type */}
-          <div>
+          <div className="md:col-span-2">
             <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Task (Type)</label>
             <Select
               value={form.taskType}
               onValueChange={v => setForm(prev => ({
                 ...prev,
                 taskType: v,
-                interviewDateTime: v === 'Interview' ? prev.interviewDateTime : '',
-                date: prev.date || (prev.interviewDateTime ? prev.interviewDateTime.slice(0, 10) : prev.date)
+                interviewDateTime: v === 'Interview' ? (prev.date && prev.startTime ? `${prev.date}T${prev.startTime}` : prev.interviewDateTime) : '',
               }))}
             >
               <SelectTrigger data-testid="task-form-type" className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white">
@@ -385,45 +503,93 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
             </Select>
           </div>
 
-          {/* Single Date Field: Interview has Date & Time, other task types have only Date */}
-          <div className="md:col-span-1">
-            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-              <CalIcon size={12} className="text-blue-600" />
-              <span>{form.taskType === 'Interview' ? 'Interview Date & Time (EST)' : 'Date'}</span>
-              <span className="text-rose-500">*</span>
-            </label>
-            <Input
-              type={form.taskType === 'Interview' ? 'datetime-local' : 'date'}
-              data-testid="task-form-single-date"
-              value={form.taskType === 'Interview' ? form.interviewDateTime : form.date}
-              onChange={e => {
-                const val = e.target.value;
-                if (form.taskType === 'Interview') {
-                  setForm(prev => ({
-                    ...prev,
-                    interviewDateTime: val,
-                    date: val ? val.slice(0, 10) : prev.date
-                  }));
-                } else {
-                  setForm(prev => ({
-                    ...prev,
-                    date: val,
-                    interviewDateTime: ''
-                  }));
-                }
-              }}
-              className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white text-xs"
-            />
-            {form.taskType === 'Interview' ? (
-              <p className="text-[10px] text-blue-700 mt-1 font-medium">
-                EST standard timing · Auto-reminds 30 min before call.
-              </p>
-            ) : (
-              <p className="text-[10px] text-slate-500 mt-1 font-medium">
-                Scheduled task date (time is not required).
-              </p>
-            )}
-          </div>
+          {/* Conditional Date / Time Inputs */}
+          {form.taskType === 'Interview' ? (
+            /* Interview: Date + Start Time + End Time (EST) */
+            <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 rounded-xl bg-blue-50/50 border border-blue-200">
+              <div>
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <CalIcon size={12} className="text-blue-600" />
+                  <span>Interview Date (EST)</span>
+                  <span className="text-rose-500">*</span>
+                </label>
+                <Input
+                  type="date"
+                  data-testid="task-form-interview-date"
+                  value={form.date}
+                  onChange={e => handleDateChange(e.target.value)}
+                  className="mt-1.5 bg-white border-slate-300 text-slate-900 text-xs font-medium"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <Clock size={12} className="text-blue-600" />
+                  <span>Start Time (EST)</span>
+                  <span className="text-rose-500">*</span>
+                </label>
+                <Input
+                  type="time"
+                  data-testid="task-form-start-time"
+                  value={form.startTime}
+                  onChange={e => handleStartTimeChange(e.target.value)}
+                  className="mt-1.5 bg-white border-slate-300 text-slate-900 text-xs font-medium"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <Clock size={12} className="text-blue-600" />
+                  <span>End Time (EST)</span>
+                  <span className="text-rose-500">*</span>
+                </label>
+                <Input
+                  type="time"
+                  data-testid="task-form-end-time"
+                  value={form.endTime}
+                  onChange={e => handleEndTimeChange(e.target.value)}
+                  className="mt-1.5 bg-white border-slate-300 text-slate-900 text-xs font-medium"
+                />
+              </div>
+              <div className="sm:col-span-3 flex items-center justify-between text-[11px] pt-1 border-t border-blue-200/60 font-semibold text-blue-900">
+                <span>Reflected Timing: <strong>{form.timing || `${formatEstTime(form.startTime)} - ${formatEstTime(form.endTime)} EST`}</strong></span>
+                <span className="text-slate-600 font-normal">Calculated Duration: <strong>{form.duration || '30 mins'}</strong></span>
+              </div>
+            </div>
+          ) : (
+            /* Non-Interview: From Date — To Date (No Time) */
+            <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-xl bg-slate-50 border border-slate-200">
+              <div>
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <CalIcon size={12} className="text-slate-600" />
+                  <span>From Date</span>
+                  <span className="text-rose-500">*</span>
+                </label>
+                <Input
+                  type="date"
+                  data-testid="task-form-from-date"
+                  value={form.fromDate || form.date}
+                  onChange={e => setForm(prev => ({ ...prev, fromDate: e.target.value, date: e.target.value }))}
+                  className="mt-1.5 bg-white border-slate-300 text-slate-900 text-xs font-medium"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <CalIcon size={12} className="text-slate-600" />
+                  <span>To Date</span>
+                  <span className="text-rose-500">*</span>
+                </label>
+                <Input
+                  type="date"
+                  data-testid="task-form-to-date"
+                  value={form.toDate || form.date}
+                  onChange={e => setForm(prev => ({ ...prev, toDate: e.target.value }))}
+                  className="mt-1.5 bg-white border-slate-300 text-slate-900 text-xs font-medium"
+                />
+              </div>
+              <div className="sm:col-span-2 text-[11px] text-slate-500 font-medium">
+                Scheduled session date range · Time is not required for {form.taskType} tasks.
+              </div>
+            </div>
+          )}
 
           {/* Tech Person (TSE) - Only visible when NOT Marketing TL / SR */}
           {!isMarketingUser && (
@@ -498,20 +664,8 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
             </div>
           )}
 
-          {/* Duration */}
-          <div>
-            <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Duration</label>
-            <Input
-              data-testid="task-form-duration"
-              value={form.duration}
-              onChange={e => setForm({ ...form, duration: e.target.value })}
-              placeholder="e.g. 30 mins, 15 mins, 2 hr, 70 mins"
-              className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white"
-            />
-          </div>
-
           {/* Candidate Name */}
-          <div>
+          <div className="md:col-span-2">
             <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Candidate Name</label>
             <Input
               data-testid="task-form-candidate"
@@ -828,6 +982,11 @@ const EditTaskModal = ({ task, open, onOpenChange }) => {
     taskType: 'Interview',
     duration: '30 mins',
     date: '',
+    fromDate: '',
+    toDate: '',
+    startTime: '10:00',
+    endTime: '10:30',
+    timing: '',
     interviewDateTime: '',
     teamId: 'team-mukesh',
     teamName: 'Team Mukesh',
@@ -858,13 +1017,23 @@ const EditTaskModal = ({ task, open, onOpenChange }) => {
   useEffect(() => {
     if (task && open) {
       setAttachments(Array.isArray(task.attachments) ? task.attachments : []);
+      const taskDate = task.date || task.dueDate || (task.interviewDateTime ? task.interviewDateTime.slice(0, 10) : '');
+      const extractedStart = task.startTime || (task.interviewDateTime && task.interviewDateTime.includes('T') ? task.interviewDateTime.split('T')[1].slice(0, 5) : '10:00');
+      const extractedEnd = task.endTime || '10:30';
+      const extractedTiming = task.timing || (extractedStart && extractedEnd ? `${formatEstTime(extractedStart)} - ${formatEstTime(extractedEnd)} EST` : '');
+
       setForm({
         candidateName: task.candidateName || '',
         companyName: task.companyName || '',
         position: task.position || '',
         taskType: task.taskType || 'Interview',
         duration: task.duration || '30 mins',
-        date: task.date || task.dueDate || '',
+        date: taskDate,
+        fromDate: task.fromDate || task.dateFrom || taskDate,
+        toDate: task.toDate || task.dateTo || task.dueDate || taskDate,
+        startTime: extractedStart,
+        endTime: extractedEnd,
+        timing: extractedTiming,
         interviewDateTime: task.interviewDateTime || '',
         teamId: task.teamId || 'team-mukesh',
         teamName: task.teamName || 'Team Mukesh',
@@ -880,6 +1049,42 @@ const EditTaskModal = ({ task, open, onOpenChange }) => {
       });
     }
   }, [task, open]);
+
+  const handleStartTimeChange = (newStartTime) => {
+    setForm(prev => {
+      const dur = calculateTimeRangeDuration(newStartTime, prev.endTime);
+      const timingStr = `${formatEstTime(newStartTime)} - ${formatEstTime(prev.endTime)} EST`;
+      const ivDt = prev.date ? `${prev.date}T${newStartTime}` : '';
+      return {
+        ...prev,
+        startTime: newStartTime,
+        duration: dur,
+        timing: timingStr,
+        interviewDateTime: ivDt,
+      };
+    });
+  };
+
+  const handleEndTimeChange = (newEndTime) => {
+    setForm(prev => {
+      const dur = calculateTimeRangeDuration(prev.startTime, newEndTime);
+      const timingStr = `${formatEstTime(prev.startTime)} - ${formatEstTime(newEndTime)} EST`;
+      return {
+        ...prev,
+        endTime: newEndTime,
+        duration: dur,
+        timing: timingStr,
+      };
+    });
+  };
+
+  const handleDateChange = (newDate) => {
+    setForm(prev => ({
+      ...prev,
+      date: newDate,
+      interviewDateTime: prev.startTime ? `${newDate}T${prev.startTime}` : `${newDate}T10:00`,
+    }));
+  };
 
   const handleFileUpload = async (e) => {
     const files = Array.from(e.target.files || []);
@@ -941,20 +1146,35 @@ const EditTaskModal = ({ task, open, onOpenChange }) => {
     }
 
     if (form.taskType === 'Interview') {
-      if (!form.interviewDateTime) {
-        toast.error('Please select Interview Date & Time (EST)');
+      if (!form.date) {
+        toast.error('Please select Interview Date (EST)');
+        return;
+      }
+      if (!form.startTime || !form.endTime) {
+        toast.error('Please select Start Time and End Time (EST)');
         return;
       }
     } else {
-      if (!form.date) {
+      if (!form.fromDate && !form.date) {
         toast.error('Please select the Task Date');
         return;
       }
     }
 
-    const taskDate = form.taskType === 'Interview' && form.interviewDateTime
-      ? form.interviewDateTime.slice(0, 10)
-      : (form.date || new Date().toISOString().slice(0, 10));
+    const calculatedDuration = form.taskType === 'Interview'
+      ? (calculateTimeRangeDuration(form.startTime, form.endTime) || form.duration || '30 mins')
+      : (form.fromDate && form.toDate && form.fromDate !== form.toDate ? `${form.fromDate} to ${form.toDate}` : (form.duration || 'Full Day'));
+
+    const calculatedTiming = form.taskType === 'Interview' && form.startTime && form.endTime
+      ? `${formatEstTime(form.startTime)} - ${formatEstTime(form.endTime)} EST`
+      : '';
+
+    const interviewDateTime = form.taskType === 'Interview' && form.date && form.startTime
+      ? `${form.date}T${form.startTime}`
+      : '';
+
+    const taskDate = form.taskType === 'Interview' ? form.date : (form.fromDate || form.date);
+    const taskDueDate = form.taskType === 'Interview' ? form.date : (form.toDate || form.date);
 
     const selectedTse = canAssignTse ? tseUsers.find(u => u.id === form.assigneeId) : null;
     const assignedTeam = MARKETING_TEAMS.find(t => t.id === form.teamId) || MARKETING_TEAMS[0];
@@ -964,10 +1184,15 @@ const EditTaskModal = ({ task, open, onOpenChange }) => {
       companyName: form.companyName.trim(),
       position: form.position.trim(),
       taskType: form.taskType,
-      duration: form.duration,
+      duration: calculatedDuration,
+      timing: calculatedTiming,
+      startTime: form.taskType === 'Interview' ? form.startTime : '',
+      endTime: form.taskType === 'Interview' ? form.endTime : '',
+      fromDate: form.fromDate || taskDate,
+      toDate: form.toDate || taskDueDate,
       date: taskDate,
-      dueDate: taskDate,
-      interviewDateTime: form.taskType === 'Interview' ? form.interviewDateTime : '',
+      dueDate: taskDueDate,
+      interviewDateTime,
       teamId: assignedTeam.id,
       teamName: assignedTeam.name,
       teamLeadId: assignedTeam.leadId,
@@ -1076,15 +1301,14 @@ const EditTaskModal = ({ task, open, onOpenChange }) => {
           </div>
 
           {/* Task Type */}
-          <div>
+          <div className="md:col-span-2">
             <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Task (Type)</label>
             <Select
               value={form.taskType}
               onValueChange={v => setForm(prev => ({
                 ...prev,
                 taskType: v,
-                interviewDateTime: v === 'Interview' ? prev.interviewDateTime : '',
-                date: prev.date || (prev.interviewDateTime ? prev.interviewDateTime.slice(0, 10) : prev.date)
+                interviewDateTime: v === 'Interview' ? (prev.date && prev.startTime ? `${prev.date}T${prev.startTime}` : prev.interviewDateTime) : '',
               }))}
             >
               <SelectTrigger data-testid="edit-task-form-type" className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white text-xs">
@@ -1098,60 +1322,93 @@ const EditTaskModal = ({ task, open, onOpenChange }) => {
             </Select>
           </div>
 
-          {/* Date & EST Time Field */}
-          <div className="md:col-span-1">
-            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-              <CalIcon size={12} className="text-blue-600" />
-              <span>{form.taskType === 'Interview' ? 'Interview Date & Time (EST)' : 'Date'}</span>
-              <span className="text-rose-500">*</span>
-            </label>
-            <Input
-              type={form.taskType === 'Interview' ? 'datetime-local' : 'date'}
-              data-testid="edit-task-form-date"
-              value={form.taskType === 'Interview' ? form.interviewDateTime : form.date}
-              onChange={e => {
-                const val = e.target.value;
-                if (form.taskType === 'Interview') {
-                  setForm(prev => ({
-                    ...prev,
-                    interviewDateTime: val,
-                    date: val ? val.slice(0, 10) : prev.date
-                  }));
-                } else {
-                  setForm(prev => ({
-                    ...prev,
-                    date: val,
-                    interviewDateTime: ''
-                  }));
-                }
-              }}
-              className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white text-xs"
-            />
-            {form.taskType === 'Interview' ? (
-              <p className="text-[10px] text-blue-700 mt-1 font-medium">
-                EST standard timing · Auto-reminds 30 min before call.
-              </p>
-            ) : (
-              <p className="text-[10px] text-slate-500 mt-1 font-medium">
-                Scheduled task date (time is not required).
-              </p>
-            )}
-          </div>
-
-          {/* Duration */}
-          <div>
-            <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Duration</label>
-            <Select value={form.duration} onValueChange={v => setForm({ ...form, duration: v })}>
-              <SelectTrigger data-testid="edit-task-form-duration" className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white text-xs">
-                <SelectValue placeholder="Duration" />
-              </SelectTrigger>
-              <SelectContent className="bg-white border-slate-200 text-slate-900">
-                {['30 mins', '45 mins', '60 mins', '90 mins', '120 mins'].map(d => (
-                  <SelectItem key={d} value={d}>{d}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {/* Conditional Date / Time Inputs for Edit Task Modal */}
+          {form.taskType === 'Interview' ? (
+            /* Interview: Date + Start Time + End Time (EST) */
+            <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 rounded-xl bg-blue-50/50 border border-blue-200">
+              <div>
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <CalIcon size={12} className="text-blue-600" />
+                  <span>Interview Date (EST)</span>
+                  <span className="text-rose-500">*</span>
+                </label>
+                <Input
+                  type="date"
+                  data-testid="edit-task-form-interview-date"
+                  value={form.date}
+                  onChange={e => handleDateChange(e.target.value)}
+                  className="mt-1.5 bg-white border-slate-300 text-slate-900 text-xs font-medium"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <Clock size={12} className="text-blue-600" />
+                  <span>Start Time (EST)</span>
+                  <span className="text-rose-500">*</span>
+                </label>
+                <Input
+                  type="time"
+                  data-testid="edit-task-form-start-time"
+                  value={form.startTime}
+                  onChange={e => handleStartTimeChange(e.target.value)}
+                  className="mt-1.5 bg-white border-slate-300 text-slate-900 text-xs font-medium"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <Clock size={12} className="text-blue-600" />
+                  <span>End Time (EST)</span>
+                  <span className="text-rose-500">*</span>
+                </label>
+                <Input
+                  type="time"
+                  data-testid="edit-task-form-end-time"
+                  value={form.endTime}
+                  onChange={e => handleEndTimeChange(e.target.value)}
+                  className="mt-1.5 bg-white border-slate-300 text-slate-900 text-xs font-medium"
+                />
+              </div>
+              <div className="sm:col-span-3 flex items-center justify-between text-[11px] pt-1 border-t border-blue-200/60 font-semibold text-blue-900">
+                <span>Reflected Timing: <strong>{form.timing || `${formatEstTime(form.startTime)} - ${formatEstTime(form.endTime)} EST`}</strong></span>
+                <span className="text-slate-600 font-normal">Calculated Duration: <strong>{form.duration || '30 mins'}</strong></span>
+              </div>
+            </div>
+          ) : (
+            /* Non-Interview: From Date — To Date (No Time) */
+            <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-xl bg-slate-50 border border-slate-200">
+              <div>
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <CalIcon size={12} className="text-slate-600" />
+                  <span>From Date</span>
+                  <span className="text-rose-500">*</span>
+                </label>
+                <Input
+                  type="date"
+                  data-testid="edit-task-form-from-date"
+                  value={form.fromDate || form.date}
+                  onChange={e => setForm(prev => ({ ...prev, fromDate: e.target.value, date: e.target.value }))}
+                  className="mt-1.5 bg-white border-slate-300 text-slate-900 text-xs font-medium"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <CalIcon size={12} className="text-slate-600" />
+                  <span>To Date</span>
+                  <span className="text-rose-500">*</span>
+                </label>
+                <Input
+                  type="date"
+                  data-testid="edit-task-form-to-date"
+                  value={form.toDate || form.date}
+                  onChange={e => setForm(prev => ({ ...prev, toDate: e.target.value }))}
+                  className="mt-1.5 bg-white border-slate-300 text-slate-900 text-xs font-medium"
+                />
+              </div>
+              <div className="sm:col-span-2 text-[11px] text-slate-500 font-medium">
+                Scheduled session date range · Time is not required for {form.taskType} tasks.
+              </div>
+            </div>
+          )}
 
           {/* Status */}
           <div>
@@ -2471,7 +2728,7 @@ export default function Tasks() {
                   <th className="py-3 px-4 font-semibold">
                     {isMarketingTl ? 'Pseudo Name' : (roleIsMarketing(currentRole) ? 'Tech ID' : 'Tech Person')}
                   </th>
-                  <th className="py-3 px-3 font-semibold">Duration</th>
+                  <th className="py-3 px-3 font-semibold">Timing / Session</th>
                   <th className="py-3 px-3 font-semibold">Task</th>
                   <th className="py-3 px-4 font-semibold">Candidate Name</th>
                   <th className="py-3 px-4 font-semibold">Position</th>
@@ -2608,9 +2865,11 @@ export default function Tasks() {
                         )}
                       </td>
 
-                      {/* Duration */}
-                      <td className="py-3 px-3 text-xs text-slate-600 whitespace-nowrap">
-                        {t.duration || '—'}
+                      {/* Timing / Session */}
+                      <td className="py-3 px-3 text-xs whitespace-nowrap">
+                        <span className="font-semibold text-slate-800">
+                          {formatInterviewTimingDisplay(t)}
+                        </span>
                       </td>
 
                       {/* Task Type */}
