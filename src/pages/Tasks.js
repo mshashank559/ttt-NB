@@ -2109,6 +2109,7 @@ export default function Tasks() {
     taskType: 'all',
     assignee: 'all',
     sr: 'all',
+    team: 'all',
     q: '',
     dateFrom: '',
     dateTo: '',
@@ -2135,9 +2136,126 @@ export default function Tasks() {
     currentUser?.id === 'u-1791911058812' || (currentUser?.name || '').toLowerCase().includes('mukesh') ? 'team-mukesh' :
     currentUser?.id === 'u-1791911115518' || (currentUser?.name || '').toLowerCase().includes('shivam') ? 'team-shivam' : ''
   );
+
+  const dynamicTeams = useMemo(() => {
+    const list = [{ id: 'all', label: 'All Teams' }];
+    const tls = (users || []).filter(u => u.role === 'marketing_tl');
+    tls.forEach(tl => {
+      const tId = tl.teamId || tl.team || (
+        (tl.name || '').toLowerCase().includes('mukesh') ? 'team-mukesh' :
+        (tl.name || '').toLowerCase().includes('shivam') ? 'team-shivam' : `team-${tl.id}`
+      );
+      const teamDisplayName = tl.teamName || (
+        (tl.name || '').toLowerCase().includes('mukesh') ? 'Team Mukesh' :
+        (tl.name || '').toLowerCase().includes('shivam') ? 'Team Shivam' : `Team ${tl.name.split(' ')[0]}`
+      );
+      if (!list.some(item => item.id === tId)) {
+        list.push({
+          id: tId,
+          label: `${teamDisplayName} (${tl.name})`,
+          shortLabel: teamDisplayName,
+          tlId: tl.id,
+          leadName: tl.name,
+        });
+      }
+    });
+    if (list.length === 1) {
+      list.push(
+        { id: 'team-mukesh', label: 'Team Mukesh (Mukesh Chaudhary)', shortLabel: 'Team Mukesh', leadName: 'Mukesh Chaudhary' },
+        { id: 'team-shivam', label: 'Team Shivam (Shivam Barot)', shortLabel: 'Team Shivam', leadName: 'Shivam Barot' }
+      );
+    }
+    return list;
+  }, [users]);
+
+  const selectedTeamMeta = useMemo(() => {
+    return dynamicTeams.find(t => t.id === filters.team) || dynamicTeams[0];
+  }, [dynamicTeams, filters.team]);
+
+  const selectedTeamSrs = useMemo(() => {
+    if (!filters.team || filters.team === 'all') return (users || []).filter(u => u.role === 'marketing_sr');
+    return (users || []).filter(u =>
+      u.role === 'marketing_sr' && (
+        u.teamId === filters.team ||
+        u.team === filters.team ||
+        (filters.team === 'team-mukesh' && ((u.teamName || '').toLowerCase().includes('mukesh') || u.teamLeadId === 'u-1791911058812')) ||
+        (filters.team === 'team-shivam' && ((u.teamName || '').toLowerCase().includes('shivam') || u.teamLeadId === 'u-1791911115518'))
+      )
+    );
+  }, [users, filters.team]);
+
+  const teamMemberIds = useMemo(() => {
+    if (!filters.team || filters.team === 'all') return null;
+    const ids = new Set();
+    if (selectedTeamMeta.tlId) ids.add(selectedTeamMeta.tlId);
+    if (filters.team === 'team-mukesh') ids.add('u-1791911058812');
+    if (filters.team === 'team-shivam') ids.add('u-1791911115518');
+    selectedTeamSrs.forEach(sr => ids.add(sr.id));
+    return ids;
+  }, [filters.team, selectedTeamMeta, selectedTeamSrs]);
+
+  const teamMemberNames = useMemo(() => {
+    if (!filters.team || filters.team === 'all') return null;
+    const names = new Set();
+    if (selectedTeamMeta.leadName) names.add(selectedTeamMeta.leadName.toLowerCase());
+    selectedTeamSrs.forEach(sr => { if (sr.name) names.add(sr.name.toLowerCase()); });
+    return names;
+  }, [filters.team, selectedTeamMeta, selectedTeamSrs]);
+
   const myTeamSrs = useMemo(() => {
-    return (users || []).filter(u => u.role === 'marketing_sr' && (!tlTeam || u.team === tlTeam));
-  }, [users, tlTeam]);
+    const activeTeam = filters.team !== 'all' ? filters.team : tlTeam;
+    return (users || []).filter(u => u.role === 'marketing_sr' && (!activeTeam || u.team === activeTeam || u.teamId === activeTeam));
+  }, [users, tlTeam, filters.team]);
+
+  const isTaskMatchingTeam = (t) => {
+    if (!filters.team || filters.team === 'all') return true;
+
+    // Strict candidate team mapping
+    const cName = (t.candidateName || '').toLowerCase();
+    if (filters.team === 'team-shivam') {
+      if (cName.includes('samanvi') || cName.includes('mayuri')) return true;
+    }
+    if (filters.team === 'team-mukesh') {
+      if (cName.includes('samanvi') || cName.includes('mayuri')) return false;
+    }
+
+    const tTeam = (t.teamId || t.team || t.marketingTeam || '').toLowerCase();
+    const tName = (t.teamName || '').toLowerCase();
+    const tLead = t.teamLeadId || '';
+
+    if (filters.team === 'team-mukesh') {
+      if (tTeam === 'team-mukesh' || tName.includes('mukesh') || tLead === 'u-1791911058812') return true;
+    } else if (filters.team === 'team-shivam') {
+      if (tTeam === 'team-shivam' || tName.includes('shivam') || tLead === 'u-1791911115518') return true;
+    } else if (tTeam === filters.team.toLowerCase() || tName.includes(filters.team.toLowerCase())) {
+      return true;
+    }
+
+    if (teamMemberIds) {
+      if (t.createdById && teamMemberIds.has(t.createdById)) return true;
+      if (t.creatorId && teamMemberIds.has(t.creatorId)) return true;
+      if (t.assignedSrId && teamMemberIds.has(t.assignedSrId)) return true;
+      if (t.recruiterId && teamMemberIds.has(t.recruiterId)) return true;
+    }
+
+    if (t.createdByName && teamMemberNames?.has(t.createdByName.toLowerCase())) return true;
+    if (t.assignedSrName && teamMemberNames?.has(t.assignedSrName.toLowerCase())) return true;
+    if (t.recruiterName && teamMemberNames?.has(t.recruiterName.toLowerCase())) return true;
+
+    if (t.assignedSrId) {
+      const srUser = (users || []).find(u => u.id === t.assignedSrId);
+      if (srUser) {
+        if (filters.team === 'team-mukesh' && (srUser.teamId === 'team-mukesh' || srUser.team === 'team-mukesh' || (srUser.teamName || '').toLowerCase().includes('mukesh') || srUser.teamLeadId === 'u-1791911058812')) {
+          return true;
+        }
+        if (filters.team === 'team-shivam' && (srUser.teamId === 'team-shivam' || srUser.team === 'team-shivam' || (srUser.teamName || '').toLowerCase().includes('shivam') || srUser.teamLeadId === 'u-1791911115518')) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  };
 
   useEffect(() => {
     if (location.search.includes('create=1')) {
@@ -2169,10 +2287,11 @@ export default function Tasks() {
       const taskDate = (t.date || t.dueDate || (t.interviewDateTime ? t.interviewDateTime.slice(0, 10) : '') || '').slice(0, 10);
       const matchFrom = !filters.dateFrom || (taskDate && taskDate >= filters.dateFrom);
       const matchTo = !filters.dateTo || (taskDate && taskDate <= filters.dateTo);
+      const matchTeam = isTaskMatchingTeam(t);
 
-      return matchStatus && matchType && matchAssignee && matchSr && matchQ && matchFrom && matchTo;
+      return matchStatus && matchType && matchAssignee && matchSr && matchQ && matchFrom && matchTo && matchTeam;
     });
-  }, [tasks, filters, currentRole, currentUser, isMarketingTl]);
+  }, [tasks, filters, currentRole, currentUser, isMarketingTl, teamMemberIds, teamMemberNames, users]);
 
   // Milestone 2: Automated Priority Sorting (Urgent & Elevated at the top)
   const sortedTasks = useMemo(() => {
@@ -2211,7 +2330,7 @@ export default function Tasks() {
       {/* Filters */}
       <SectionCard
         title="Filters"
-        subtitle={`${sortedTasks.length} of ${tasks.length} tasks${(filters.dateFrom || filters.dateTo) ? ` (Date: ${filters.dateFrom || 'Any'} to ${filters.dateTo || 'Any'})` : ''}`}
+        subtitle={`${sortedTasks.length} of ${tasks.length} tasks${filters.team !== 'all' ? ` (${selectedTeamMeta.shortLabel || selectedTeamMeta.label})` : ''}${(filters.dateFrom || filters.dateTo) ? ` (Date: ${filters.dateFrom || 'Any'} to ${filters.dateTo || 'Any'})` : ''}`}
         actions={
           <div className="flex items-center gap-2 flex-wrap">
             {/* From Date Filter */}
@@ -2255,8 +2374,8 @@ export default function Tasks() {
           </div>
         }
       >
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-          <div className="relative md:col-span-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
+          <div className="relative sm:col-span-2 lg:col-span-2">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <Input
               data-testid="task-filter-search"
@@ -2266,6 +2385,26 @@ export default function Tasks() {
               className="pl-9 bg-white border-slate-300 text-slate-900 placeholder:text-slate-400"
             />
           </div>
+
+          {/* Marketing TL / Team Filter for Upper Management, Management, TSM, and other roles */}
+          {currentRole !== 'tse' && (
+            <Select
+              value={filters.team}
+              onValueChange={v => setFilters({ ...filters, team: v, sr: 'all' })}
+            >
+              <SelectTrigger data-testid="task-filter-team" className="bg-white border-slate-300 text-slate-900 font-semibold text-xs">
+                <SelectValue placeholder="All Teams" />
+              </SelectTrigger>
+              <SelectContent className="bg-white border-slate-200 text-slate-900">
+                {dynamicTeams.map(t => (
+                  <SelectItem key={t.id} value={t.id} className="text-xs font-medium">
+                    {t.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
           <Select value={filters.status} onValueChange={v => setFilters({ ...filters, status: v })}>
             <SelectTrigger data-testid="task-filter-status" className="bg-white border-slate-300 text-slate-900">
               <SelectValue placeholder="All statuses" />
@@ -2275,6 +2414,7 @@ export default function Tasks() {
               {TASK_STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
             </SelectContent>
           </Select>
+
           <Select value={filters.taskType} onValueChange={v => setFilters({ ...filters, taskType: v })}>
             <SelectTrigger data-testid="task-filter-type" className="bg-white border-slate-300 text-slate-900">
               <SelectValue placeholder="All task types" />
