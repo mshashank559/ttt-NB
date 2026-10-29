@@ -4,7 +4,7 @@ import {
   ListChecks, CheckCircle2, Clock3, AlertTriangle, UserRoundCheck, Users as UsersIcon,
   Target, PieChart as PieIcon, Plus, ArrowUpRight, UserPlus, Star, AlertOctagon,
   Calendar, CheckSquare, Sparkles, ShieldAlert, ArrowRight, ShieldCheck, Search,
-  Copy, ExternalLink, Lock, Check, UserCheck
+  Copy, ExternalLink, Lock, Check, UserCheck, ClipboardList, ChevronLeft, ChevronRight, Filter
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip as RTooltip, CartesianGrid, BarChart, Bar, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
@@ -95,6 +95,9 @@ export default function Dashboard() {
   const [slaResolutionNote, setSlaResolutionNote] = useState('');
   const [slaResolutionStatus, setSlaResolutionStatus] = useState('Resolved');
   const [srAssignments, setSrAssignments] = useState({});
+  const [umViewMode, setUmViewMode] = useState('tasks');
+  const [umSelectedDate, setUmSelectedDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [umSelectedTeam, setUmSelectedTeam] = useState('all');
 
   // Milestone 2: Urgent Priority Queue Detection
   const urgentInterviews = useMemo(() => {
@@ -182,141 +185,780 @@ export default function Dashboard() {
 
   // ---------- UPPER MANAGEMENT ----------
   if (currentRole === 'upper_management') {
+    // Dynamic Marketing Teams extracted directly from live users data
+    const dynamicTeams = [
+      { id: 'all', label: 'All Teams', shortLabel: 'All Teams', leadName: 'Company Wide' }
+    ];
+    const tls = (users || []).filter(u => u.role === 'marketing_tl');
+    tls.forEach(tl => {
+      const tId = tl.teamId || tl.team || (
+        (tl.name || '').toLowerCase().includes('mukesh') ? 'team-mukesh' :
+        (tl.name || '').toLowerCase().includes('shivam') ? 'team-shivam' : `team-${tl.id}`
+      );
+      const teamDisplayName = tl.teamName || (
+        (tl.name || '').toLowerCase().includes('mukesh') ? 'Team Mukesh' :
+        (tl.name || '').toLowerCase().includes('shivam') ? 'Team Shivam' : `Team ${tl.name.split(' ')[0]}`
+      );
+      if (!dynamicTeams.some(item => item.id === tId)) {
+        dynamicTeams.push({
+          id: tId,
+          label: `${teamDisplayName} (${tl.name})`,
+          shortLabel: teamDisplayName,
+          tlId: tl.id,
+          leadName: tl.name,
+        });
+      }
+    });
+    // Fallback if TL users not initialized
+    if (dynamicTeams.length === 1) {
+      dynamicTeams.push(
+        { id: 'team-mukesh', label: 'Team Mukesh (Mukesh Chaudhary)', shortLabel: 'Team Mukesh', leadName: 'Mukesh Chaudhary' },
+        { id: 'team-shivam', label: 'Team Shivam (Shivam Barot)', shortLabel: 'Team Shivam', leadName: 'Shivam Barot' }
+      );
+    }
+
+    const selectedTeamMeta = dynamicTeams.find(t => t.id === umSelectedTeam) || dynamicTeams[0];
+
+    // Senior Recruiters belonging to the selected team
+    const selectedTeamSrs = (users || []).filter(u =>
+      u.role === 'marketing_sr' && (
+        umSelectedTeam === 'all' ||
+        u.teamId === umSelectedTeam ||
+        u.team === umSelectedTeam ||
+        (umSelectedTeam === 'team-mukesh' && ((u.teamName || '').toLowerCase().includes('mukesh') || u.teamLeadId === 'u-1791911058812')) ||
+        (umSelectedTeam === 'team-shivam' && ((u.teamName || '').toLowerCase().includes('shivam') || u.teamLeadId === 'u-1791911115518'))
+      )
+    );
+
+    const teamMemberIds = new Set();
+    if (selectedTeamMeta.tlId) teamMemberIds.add(selectedTeamMeta.tlId);
+    if (umSelectedTeam === 'team-mukesh') teamMemberIds.add('u-1791911058812');
+    if (umSelectedTeam === 'team-shivam') teamMemberIds.add('u-1791911115518');
+    selectedTeamSrs.forEach(sr => teamMemberIds.add(sr.id));
+
+    const teamMemberNames = new Set();
+    if (selectedTeamMeta.leadName) teamMemberNames.add(selectedTeamMeta.leadName.toLowerCase());
+    selectedTeamSrs.forEach(sr => { if (sr.name) teamMemberNames.add(sr.name.toLowerCase()); });
+
+    // Strict Team Filtering for Tasks and Interviews
+    const isTeamTask = (t) => {
+      if (umSelectedTeam === 'all') return true;
+      const tTeam = (t.teamId || t.team || t.marketingTeam || '').toLowerCase();
+      const tName = (t.teamName || '').toLowerCase();
+      const tLead = t.teamLeadId || '';
+
+      const cName = (t.candidateName || '').toLowerCase();
+      if (umSelectedTeam === 'team-shivam') {
+        if (cName.includes('samanvi') || cName.includes('mayuri')) return true;
+      }
+      if (umSelectedTeam === 'team-mukesh') {
+        if (cName.includes('samanvi') || cName.includes('mayuri')) return false;
+      }
+
+      if (umSelectedTeam === 'team-mukesh') {
+        if (tTeam === 'team-mukesh' || tName.includes('mukesh') || tLead === 'u-1791911058812') return true;
+      } else if (umSelectedTeam === 'team-shivam') {
+        if (tTeam === 'team-shivam' || tName.includes('shivam') || tLead === 'u-1791911115518') return true;
+      } else if (tTeam === umSelectedTeam.toLowerCase() || tName.includes(umSelectedTeam.toLowerCase())) {
+        return true;
+      }
+
+      if (teamMemberIds.size > 0) {
+        if (t.createdById && teamMemberIds.has(t.createdById)) return true;
+        if (t.creatorId && teamMemberIds.has(t.creatorId)) return true;
+        if (t.assignedSrId && teamMemberIds.has(t.assignedSrId)) return true;
+        if (t.recruiterId && teamMemberIds.has(t.recruiterId)) return true;
+      }
+
+      if (t.createdByName && teamMemberNames.has(t.createdByName.toLowerCase())) return true;
+      if (t.assignedSrName && teamMemberNames.has(t.assignedSrName.toLowerCase())) return true;
+      if (t.recruiterName && teamMemberNames.has(t.recruiterName.toLowerCase())) return true;
+
+      return false;
+    };
+
+    const isTeamInterview = (iv) => {
+      if (umSelectedTeam === 'all') return true;
+      const matchingTask = (tasks || []).find(t => t.id === iv.id || t.id === iv.taskId);
+      if (matchingTask) return isTeamTask(matchingTask);
+
+      const cName = (iv.candidateName || '').toLowerCase();
+      if (umSelectedTeam === 'team-shivam') {
+        if (cName.includes('samanvi') || cName.includes('mayuri')) return true;
+      }
+      if (umSelectedTeam === 'team-mukesh') {
+        if (cName.includes('samanvi') || cName.includes('mayuri')) return false;
+      }
+
+      const iTeam = (iv.teamId || iv.team || iv.marketingTeam || '').toLowerCase();
+      const iName = (iv.teamName || '').toLowerCase();
+      const iLead = iv.teamLeadId || '';
+
+      if (umSelectedTeam === 'team-mukesh') {
+        if (iTeam === 'team-mukesh' || iName.includes('mukesh') || iLead === 'u-1791911058812') return true;
+      } else if (umSelectedTeam === 'team-shivam') {
+        if (iTeam === 'team-shivam' || iName.includes('shivam') || iLead === 'u-1791911115518') return true;
+      } else if (iTeam === umSelectedTeam.toLowerCase() || iName.includes(umSelectedTeam.toLowerCase())) {
+        return true;
+      }
+
+      if (teamMemberIds.size > 0) {
+        if (iv.createdById && teamMemberIds.has(iv.createdById)) return true;
+        if (iv.assignedSrId && teamMemberIds.has(iv.assignedSrId)) return true;
+        if (iv.recruiterId && teamMemberIds.has(iv.recruiterId)) return true;
+      }
+
+      if (iv.assignedSrName && teamMemberNames.has(iv.assignedSrName.toLowerCase())) return true;
+      if (iv.recruiterName && teamMemberNames.has(iv.recruiterName.toLowerCase())) return true;
+
+      return false;
+    };
+
+    const filteredUmTasks = (tasks || []).filter(isTeamTask);
+    const sourceAllInterviews = (interviews && interviews.length) ? interviews : (visibleInterviews || []);
+    const filteredUmInterviews = sourceAllInterviews.filter(isTeamInterview);
+
+    const umTaskTotals = {
+      total: filteredUmTasks.length,
+      completed: filteredUmTasks.filter(t => t.status === 'Completed' || t.status === 'Done').length,
+      pending: filteredUmTasks.filter(t => t.status === 'Pending').length,
+      inProgress: filteredUmTasks.filter(t => t.status === 'In Progress').length,
+      overdue: filteredUmTasks.filter(t => new Date(t.dueDate) < new Date() && t.status !== 'Completed' && t.status !== 'Done').length,
+    };
+    const umCompletionRate = umTaskTotals.total ? Math.round((umTaskTotals.completed / umTaskTotals.total) * 100) : 0;
+    const umTrend = buildTrend(filteredUmTasks);
+
+    const getIvDateStr = (iv) => {
+      const raw = iv.date || iv.interviewDateTime || iv.dueDate || iv.createdAt;
+      if (!raw) return '';
+      if (typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
+      const d = new Date(raw);
+      if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+      return '';
+    };
+
+    const isIvUnassigned = (iv) => {
+      const isAUnassigned = (!iv.assigneeId || iv.assigneeId === 'Unassigned' || iv.assigneeId === 'Code Name Unassigned');
+      const isTPUnassigned = (!iv.techPerson || iv.techPerson === 'Unassigned' || iv.techPerson === 'Code Name Unassigned');
+      const isCNUnassigned = (!iv.codeName || iv.codeName === 'Unassigned' || iv.codeName === 'Code Name Unassigned');
+      return isAUnassigned && isTPUnassigned && isCNUnassigned;
+    };
+
+    // Date-specific interview metrics for selected date
+    const dayInterviews = filteredUmInterviews.filter(iv => getIvDateStr(iv) === umSelectedDate);
+    const dayAssigned = dayInterviews.filter(iv => !isIvUnassigned(iv));
+    const dayUnassigned = dayInterviews.filter(iv => isIvUnassigned(iv));
+
+    const dayTotals = {
+      total: dayInterviews.length,
+      assigned: dayAssigned.length,
+      unassigned: dayUnassigned.length,
+      scheduled: dayInterviews.filter(i => i.status === 'Scheduled').length,
+      rescheduled: dayInterviews.filter(i => i.status === 'Interview Rescheduled' || i.status === 'Rescheduled').length,
+      completedRec: dayInterviews.filter(i => i.status === 'Interview Completed - Feedback Received' || i.feedbackSubmitted).length,
+      completedPend: dayInterviews.filter(i => i.status === 'Interview Completed - Feedback Pending').length,
+      cleared: dayInterviews.filter(i => i.interviewOutcome === 'Selected' || i.interviewOutcome === 'Cleared' || i.status === 'Cleared').length,
+      rejected: dayInterviews.filter(i => i.interviewOutcome === 'Rejected' || i.status === 'Rejected').length,
+      hold: dayInterviews.filter(i => i.interviewOutcome === 'On Hold' || i.status === 'Hold').length,
+    };
+
+    // Team overall pipeline metrics
+    const pipelineCleared = filteredUmInterviews.filter(i => i.interviewOutcome === 'Selected' || i.interviewOutcome === 'Cleared' || i.status === 'Cleared').length;
+    const pipelineCompleted = filteredUmInterviews.filter(i => i.status === 'Interview Completed - Feedback Received' || i.status === 'Cleared' || i.status === 'Interview Completed').length;
+    const pipelineConducted = pipelineCompleted + pipelineCleared;
+    const pipelineClearRate = pipelineConducted > 0
+      ? Math.round((pipelineCleared / pipelineConducted) * 100)
+      : (filteredUmInterviews.length > 0 ? Math.round((pipelineCleared / filteredUmInterviews.length) * 100) : 0);
+
+    const shiftDate = (delta) => {
+      try {
+        const d = new Date(umSelectedDate);
+        if (isNaN(d.getTime())) {
+          setUmSelectedDate(new Date().toISOString().slice(0, 10));
+          return;
+        }
+        d.setDate(d.getDate() + delta);
+        setUmSelectedDate(d.toISOString().slice(0, 10));
+      } catch (e) {
+        setUmSelectedDate(new Date().toISOString().slice(0, 10));
+      }
+    };
+
+    const isToday = umSelectedDate === new Date().toISOString().slice(0, 10);
+    const dateFormattedLabel = (() => {
+      try {
+        const p = umSelectedDate.split('-');
+        if (p.length === 3) {
+          const d = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
+          return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+        }
+      } catch (e) {}
+      return umSelectedDate;
+    })();
+
     return (
       <div className="space-y-6">
-        <PageHeader title="Executive Overview" subtitle="Cross-functional operational performance across NetBounce" />
-        
-        {/* Ghulam Image 1 Style Hero Arc Gauge & Metric Cards */}
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-          <ArcGaugeCard
-            className="xl:col-span-1"
-            title="Interview Clear Rate"
-            subtitle="Candidate qualification & clearance ratio"
-            percentage={interviewClearRate}
-            primaryMetric={`${interviewClearRate}%`}
-            meterLabel="Clear Rate"
-            secondaryLabel="Target Benchmark"
-            secondaryValue="60%"
-            stat1Label="Interview Rounds"
-            stat1Value={`${totalRoundsConducted} Evaluated`}
-            stat2Label="Candidates Cleared"
-            stat2Value={`${ivTotals.cleared} Qualified`}
-          />
-          <div className="xl:col-span-2 grid grid-cols-2 sm:grid-cols-3 gap-4">
-            <NeumorphicMetricCard
-              testid="kpi-total-tasks"
-              label="Total Tasks"
-              value={totals.total}
-              subValue="All Operations"
-              delta={totals.total > 0 ? `+${totals.total}` : null}
-              percentage={totals.total > 0 ? 100 : 0}
-              ringColor="#1416c1"
-            />
-            <NeumorphicMetricCard
-              testid="kpi-completed"
-              label="Completed"
-              value={totals.completed}
-              subValue="Closed Out"
-              delta={totals.completed > 0 ? `+${totals.completed}` : null}
-              percentage={completionRate}
-              ringColor="#10b981"
-            />
-            <NeumorphicMetricCard
-              testid="kpi-pending"
-              label="Pending"
-              value={totals.pending}
-              subValue="Queued"
-              trend={totals.pending > 0 ? "up" : "down"}
-              delta={totals.pending > 0 ? `+${totals.pending}` : null}
-              percentage={totals.total > 0 ? Math.round((totals.pending / totals.total) * 100) : 0}
-              ringColor="#f59e0b"
-            />
-            <NeumorphicMetricCard
-              testid="kpi-rate"
-              label="Completion Rate"
-              value={`${completionRate}%`}
-              subValue="Target: 85%"
-              percentage={completionRate}
-              ringColor="#06b6d4"
-            />
-            <NeumorphicMetricCard
-              testid="kpi-iv-completed"
-              label="Interviews"
-              value={allInterviews.length}
-              subValue="Rounds Done"
-              delta={allInterviews.length > 0 ? `+${allInterviews.length}` : null}
-              percentage={allInterviews.length > 0 ? Math.min(allInterviews.length * 10, 100) : 0}
-              ringColor="#8b5cf6"
-            />
-            <NeumorphicMetricCard
-              testid="kpi-cleared"
-              label="Candidates Cleared"
-              value={ivTotals.cleared}
-              subValue="Qualified"
-              delta={ivTotals.cleared > 0 ? `+${ivTotals.cleared}` : null}
-              percentage={allInterviews.length > 0 ? Math.round((ivTotals.cleared / allInterviews.length) * 100) : 0}
-              ringColor="#10b981"
-            />
+        {/* Header with Title and Global Controls */}
+        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 pb-2 border-b border-slate-200 dark:border-white/10">
+          <div>
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+                Executive Overview
+              </h1>
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                Upper Management
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              Cross-functional operational performance, team oversight, and real-time interview pipeline across NetBounce.
+            </p>
+          </div>
+
+          {/* Action Bar: Toggle + Team Filter + Date Controls */}
+          <div className="flex items-center gap-3 flex-wrap">
+            {/* 1. Tasks / Interviews Toggle Button */}
+            <div className="flex items-center p-1 bg-slate-100 dark:bg-white/5 rounded-2xl border border-slate-200 dark:border-white/10 shadow-xs">
+              <button
+                type="button"
+                data-testid="um-toggle-tasks"
+                onClick={() => setUmViewMode('tasks')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  umViewMode === 'tasks'
+                    ? 'bg-[#1416c1] text-white shadow-md shadow-blue-900/30'
+                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-white/5'
+                }`}
+              >
+                <ClipboardList size={14} />
+                <span>Tasks</span>
+                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                  umViewMode === 'tasks' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-white/10 text-slate-700 dark:text-slate-300'
+                }`}>
+                  {filteredUmTasks.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                data-testid="um-toggle-interviews"
+                onClick={() => setUmViewMode('interviews')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  umViewMode === 'interviews'
+                    ? 'bg-[#1416c1] text-white shadow-md shadow-blue-900/30'
+                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-white/5'
+                }`}
+              >
+                <UserRoundCheck size={14} />
+                <span>Interviews</span>
+                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                  umViewMode === 'interviews' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-white/10 text-slate-700 dark:text-slate-300'
+                }`}>
+                  {filteredUmInterviews.length}
+                </span>
+              </button>
+            </div>
+
+            {/* 2. Dynamic Team Filter */}
+            <div className="flex items-center gap-2 bg-white dark:bg-[#111A2E] px-3 py-2 rounded-2xl border border-slate-300 dark:border-white/15 shadow-xs">
+              <UsersIcon size={14} className="text-blue-600 dark:text-blue-400 shrink-0" />
+              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider select-none">Team:</label>
+              <select
+                data-testid="um-team-filter-select"
+                value={umSelectedTeam}
+                onChange={(e) => setUmSelectedTeam(e.target.value)}
+                className="text-xs font-bold text-slate-900 dark:text-white bg-transparent outline-none cursor-pointer pr-1"
+              >
+                {dynamicTeams.map(team => (
+                  <option key={team.id} value={team.id} className="text-slate-900 bg-white">
+                    {team.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* 3. Date Selector (Always Available / Active in Interviews) */}
+            <div className={`flex items-center gap-1 bg-white dark:bg-[#111A2E] p-1 rounded-2xl border shadow-xs transition-colors ${
+              umViewMode === 'interviews' ? 'border-blue-400 dark:border-blue-500 ring-2 ring-blue-500/10' : 'border-slate-300 dark:border-white/15'
+            }`}>
+              <button
+                type="button"
+                data-testid="um-prev-date-btn"
+                onClick={() => shiftDate(-1)}
+                title="Previous Day"
+                className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-white/10 text-slate-600 dark:text-slate-300 transition-colors cursor-pointer"
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <div className="flex items-center gap-1.5 px-2">
+                <Calendar size={13} className="text-blue-600 dark:text-blue-400 shrink-0" />
+                <input
+                  type="date"
+                  data-testid="um-date-picker"
+                  value={umSelectedDate}
+                  onChange={(e) => setUmSelectedDate(e.target.value)}
+                  className="text-xs font-bold bg-transparent text-slate-800 dark:text-white outline-none cursor-pointer"
+                />
+              </div>
+              <button
+                type="button"
+                data-testid="um-next-date-btn"
+                onClick={() => shiftDate(1)}
+                title="Next Day"
+                className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-white/10 text-slate-600 dark:text-slate-300 transition-colors cursor-pointer"
+              >
+                <ChevronRight size={16} />
+              </button>
+              {!isToday && (
+                <button
+                  type="button"
+                  data-testid="um-today-btn"
+                  onClick={() => setUmSelectedDate(new Date().toISOString().slice(0, 10))}
+                  className="ml-1 px-2.5 py-1 rounded-xl bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-[11px] font-bold hover:bg-blue-100 transition-colors cursor-pointer"
+                >
+                  Today
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <SectionCard className="lg:col-span-2" title="Overall Task Performance" subtitle="Last 7 days daily output">
-            {totals.total === 0 ? (
-              <div className="h-72 flex flex-col items-center justify-center text-center p-6 bg-slate-50/50 dark:bg-white/[0.02] rounded-2xl border border-dashed border-slate-200 dark:border-white/10">
-                <div className="w-12 h-12 rounded-2xl bg-blue-50 dark:bg-blue-900/20 text-[#0B1EE6] dark:text-blue-400 flex items-center justify-center mb-2.5 shadow-xs">
-                  <ListChecks className="w-6 h-6" />
+        {/* ============================================================== */}
+        {/* VIEW A: INTERVIEWS PIPELINE VIEW                               */}
+        {/* ============================================================== */}
+        {umViewMode === 'interviews' && (
+          <div className="space-y-6">
+            {/* Active Date & Scope Banner */}
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-700 via-indigo-700 to-[#1416c1] text-white shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-white/15 backdrop-blur-md border border-white/20 flex items-center justify-center shrink-0">
+                  <Calendar size={20} className="text-cyan-300" />
                 </div>
-                <p className="text-sm font-bold text-slate-800 dark:text-slate-200">No task output recorded yet</p>
-                <p className="text-xs text-slate-400 mt-1 max-w-sm">
-                  Executive task performance metrics will plot here once operational tasks are provisioned.
-                </p>
+                <div>
+                  <div className="font-bold text-base flex items-center gap-2">
+                    <span>Interview Pipeline for {dateFormattedLabel}</span>
+                    {isToday && (
+                      <span className="px-2 py-0.5 rounded-full bg-cyan-400 text-[#0c147e] text-[10px] font-black uppercase tracking-wider">
+                        Today
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-xs text-blue-100 mt-0.5 flex items-center gap-2 flex-wrap">
+                    <span>Scope: <strong className="text-white">{selectedTeamMeta.label}</strong></span>
+                    <span>• Total for this date: <strong className="text-white">{dayTotals.total} round{dayTotals.total !== 1 ? 's' : ''}</strong></span>
+                    <span>• Assigned: <strong className="text-emerald-300">{dayTotals.assigned}</strong></span>
+                    <span>• Unassigned: <strong className="text-rose-300">{dayTotals.unassigned}</strong></span>
+                  </div>
+                </div>
               </div>
-            ) : (
-              <div className="h-72">
-                <ResponsiveContainer>
-                  <AreaChart data={trend}>
-                    <defs>
-                      <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#3B82F6" stopOpacity={0.4}/><stop offset="100%" stopColor="#3B82F6" stopOpacity={0}/></linearGradient>
-                      <linearGradient id="g2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#F59E0B" stopOpacity={0.3}/><stop offset="100%" stopColor="#F59E0B" stopOpacity={0}/></linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                    <XAxis dataKey="day" stroke="#64748B" /><YAxis stroke="#64748B" />
-                    <RTooltip contentStyle={chartTooltipStyle} />
-                    <Area type="monotone" dataKey="completed" stroke="#3B82F6" strokeWidth={2.5} fill="url(#g1)" />
-                    <Area type="monotone" dataKey="pending" stroke="#F59E0B" strokeWidth={2.5} fill="url(#g2)" />
-                  </AreaChart>
-                </ResponsiveContainer>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => navigate('/interviews')}
+                  className="px-4 py-2 rounded-xl bg-white text-blue-900 font-bold text-xs hover:bg-blue-50 shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  <span>Open Full Interviews Panel</span>
+                  <ArrowRight size={13} />
+                </button>
+              </div>
+            </div>
+
+            {/* Selected Date Summary KPIs */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-3">
+              <div className="p-3.5 rounded-2xl bg-white dark:bg-[#111A2E] border-2 border-emerald-300 dark:border-emerald-800 shadow-sm">
+                <div className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">Assigned</div>
+                <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1 tabular-nums">{dayTotals.assigned}</div>
+                <div className="text-[10px] text-slate-400 mt-0.5 font-medium">TSE Allocated</div>
+              </div>
+
+              <div className={`p-3.5 rounded-2xl bg-white dark:bg-[#111A2E] border-2 shadow-sm transition-all ${
+                dayTotals.unassigned > 0 ? 'border-rose-400 dark:border-rose-700 bg-rose-50/20' : 'border-slate-200 dark:border-white/10'
+              }`}>
+                <div className={`text-[11px] font-bold uppercase tracking-wider ${dayTotals.unassigned > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-500'}`}>
+                  Unassigned
+                </div>
+                <div className={`text-2xl font-black mt-1 tabular-nums ${dayTotals.unassigned > 0 ? 'text-rose-600 dark:text-rose-400 animate-pulse' : 'text-slate-700 dark:text-slate-300'}`}>
+                  {dayTotals.unassigned}
+                </div>
+                <div className="text-[10px] text-slate-400 mt-0.5 font-medium">Needs TSE</div>
+              </div>
+
+              <KpiCard testid="um-day-scheduled" label="Scheduled" value={dayTotals.scheduled} />
+              <KpiCard testid="um-day-rescheduled" label="Rescheduled" value={dayTotals.rescheduled} />
+              <KpiCard testid="um-day-fbrec" label="FB Received" value={dayTotals.completedRec} />
+              <KpiCard testid="um-day-fbpend" label="FB Pending" value={dayTotals.completedPend} />
+              <KpiCard testid="um-day-cleared" label="Selected" value={dayTotals.cleared} />
+              <KpiCard testid="um-day-rejected" label="Rejected / Hold" value={dayTotals.rejected + dayTotals.hold} />
+            </div>
+
+            {/* Interviews Scheduled for Selected Date Table */}
+            <SectionCard
+              title={`Interviews for ${dateFormattedLabel}`}
+              subtitle={`Detailed schedule for ${selectedTeamMeta.label} on this specific day`}
+              actions={
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-500">
+                    {dayInterviews.length} round{dayInterviews.length !== 1 ? 's' : ''} logged
+                  </span>
+                </div>
+              }
+            >
+              {dayInterviews.length === 0 ? (
+                <div className="h-60 flex flex-col items-center justify-center text-center p-6 bg-slate-50/50 dark:bg-white/[0.02] rounded-2xl border border-dashed border-slate-200 dark:border-white/10">
+                  <div className="w-12 h-12 rounded-2xl bg-blue-50 dark:bg-blue-900/20 text-[#0B1EE6] dark:text-blue-400 flex items-center justify-center mb-2.5 shadow-xs">
+                    <UserRoundCheck className="w-6 h-6" />
+                  </div>
+                  <p className="text-sm font-bold text-slate-800 dark:text-slate-200">
+                    No interviews scheduled for {dateFormattedLabel}
+                  </p>
+                  <p className="text-xs text-slate-400 mt-1 max-w-sm">
+                    There are no interview sessions logged for {selectedTeamMeta.label} on this date. Use the date arrows above to inspect other dates.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setUmSelectedDate(new Date().toISOString().slice(0, 10))}
+                    className="mt-3 px-3 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-bold hover:bg-blue-100 transition-colors"
+                  >
+                    Jump to Today
+                  </button>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-white/10">
+                        <th className="py-2.5 font-bold">Time (EST)</th>
+                        <th className="font-bold">Candidate</th>
+                        <th className="font-bold">Position / Tech</th>
+                        <th className="font-bold">Client / Company</th>
+                        <th className="font-bold">Marketing Team & SR</th>
+                        <th className="font-bold">Assigned TSE</th>
+                        <th className="font-bold">Status</th>
+                        <th className="font-bold">Outcome</th>
+                        <th className="font-bold text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+                      {dayInterviews.map(iv => {
+                        const unassigned = isIvUnassigned(iv);
+                        const assignedTseName = iv.techPerson && iv.techPerson !== 'Unassigned' && iv.techPerson !== 'Code Name Unassigned'
+                          ? iv.techPerson
+                          : (iv.codeName && iv.codeName !== 'Unassigned' && iv.codeName !== 'Code Name Unassigned' ? iv.codeName : iv.assigneeName);
+
+                        return (
+                          <tr key={iv.id} className="border-b border-slate-100 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
+                            <td className="py-3 mono text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                              {iv.time || (iv.interviewDateTime ? getInterviewTimingMeta(iv.interviewDateTime).estFormatted : '—')}
+                            </td>
+                            <td className="py-3">
+                              <div className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                                <span>{iv.candidateName || 'Candidate'}</span>
+                              </div>
+                              <div className="mono text-[10px] text-blue-600 dark:text-blue-400 font-semibold">{iv.id}</div>
+                            </td>
+                            <td className="text-xs text-slate-600 dark:text-slate-300">
+                              {iv.position || iv.technology || 'Technical Support'}
+                            </td>
+                            <td className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                              {iv.company || '—'}
+                            </td>
+                            <td className="text-xs">
+                              <div className="font-bold text-slate-800 dark:text-slate-200">
+                                {iv.teamName || selectedTeamMeta.shortLabel}
+                              </div>
+                              <div className="text-[11px] text-slate-400 font-medium">
+                                SR: {iv.assignedSrName || iv.recruiterName || 'Unassigned'}
+                              </div>
+                            </td>
+                            <td>
+                              {unassigned ? (
+                                <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300 border border-rose-300 dark:border-rose-800 flex items-center gap-1 w-fit animate-pulse">
+                                  <AlertTriangle size={11} /> Unassigned
+                                </span>
+                              ) : (
+                                <div className="flex items-center gap-1.5">
+                                  <div className="h-6 w-6 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-[10px] font-bold flex items-center justify-center shrink-0">
+                                    {(assignedTseName || 'TSE').slice(0, 2).toUpperCase()}
+                                  </div>
+                                  <span className="font-bold text-xs text-indigo-700 dark:text-indigo-400">
+                                    {assignedTseName}
+                                  </span>
+                                </div>
+                              )}
+                            </td>
+                            <td>
+                              <StatusBadge value={iv.status} />
+                            </td>
+                            <td>
+                              {iv.interviewOutcome ? (
+                                <span className={`px-2 py-0.5 rounded-md text-xs font-bold ${
+                                  iv.interviewOutcome === 'Selected' || iv.interviewOutcome === 'Cleared'
+                                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300'
+                                    : iv.interviewOutcome === 'Rejected'
+                                    ? 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300'
+                                    : 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'
+                                }`}>
+                                  {iv.interviewOutcome}
+                                </span>
+                              ) : (
+                                <span className="text-xs text-slate-400 italic">—</span>
+                              )}
+                            </td>
+                            <td className="py-3 text-right">
+                              <button
+                                onClick={() => navigate('/interviews')}
+                                className="text-xs text-blue-600 dark:text-blue-400 font-bold hover:underline"
+                              >
+                                View Pipeline →
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </SectionCard>
+
+            {/* Overall Pipeline Funnel & Team Capacity Gauge */}
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+              <ArcGaugeCard
+                className="xl:col-span-1"
+                title={`${selectedTeamMeta.shortLabel} Clear Rate`}
+                subtitle="Candidate qualification ratio in this scope"
+                percentage={pipelineClearRate}
+                primaryMetric={`${pipelineClearRate}%`}
+                meterLabel="Clear Rate"
+                secondaryLabel="Benchmark"
+                secondaryValue="60%"
+                stat1Label="Interview Rounds"
+                stat1Value={`${pipelineConducted} Evaluated`}
+                stat2Label="Candidates Cleared"
+                stat2Value={`${pipelineCleared} Qualified`}
+              />
+
+              <div className="xl:col-span-2">
+                <SectionCard
+                  title="Interview Pipeline Progression Funnel"
+                  subtitle={`Stage breakdown for ${selectedTeamMeta.label} across all recorded rounds`}
+                >
+                  <InterviewFunnel interviews={filteredUmInterviews} />
+                </SectionCard>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ============================================================== */}
+        {/* VIEW B: TASKS OPERATIONAL VIEW                                 */}
+        {/* ============================================================== */}
+        {umViewMode === 'tasks' && (
+          <div className="space-y-6">
+            {/* Ghulam Image 1 Style Hero Arc Gauge & Metric Cards (Team Filtered) */}
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+              <ArcGaugeCard
+                className="xl:col-span-1"
+                title={`${selectedTeamMeta.shortLabel} Clear Rate`}
+                subtitle="Candidate qualification & clearance ratio"
+                percentage={pipelineClearRate}
+                primaryMetric={`${pipelineClearRate}%`}
+                meterLabel="Clear Rate"
+                secondaryLabel="Target Benchmark"
+                secondaryValue="60%"
+                stat1Label="Interview Rounds"
+                stat1Value={`${pipelineConducted} Evaluated`}
+                stat2Label="Candidates Cleared"
+                stat2Value={`${pipelineCleared} Qualified`}
+              />
+              <div className="xl:col-span-2 grid grid-cols-2 sm:grid-cols-3 gap-4">
+                <NeumorphicMetricCard
+                  testid="kpi-total-tasks"
+                  label="Total Tasks"
+                  value={umTaskTotals.total}
+                  subValue={selectedTeamMeta.shortLabel}
+                  delta={umTaskTotals.total > 0 ? `+${umTaskTotals.total}` : null}
+                  percentage={umTaskTotals.total > 0 ? 100 : 0}
+                  ringColor="#1416c1"
+                />
+                <NeumorphicMetricCard
+                  testid="kpi-completed"
+                  label="Completed"
+                  value={umTaskTotals.completed}
+                  subValue="Closed Out"
+                  delta={umTaskTotals.completed > 0 ? `+${umTaskTotals.completed}` : null}
+                  percentage={umCompletionRate}
+                  ringColor="#10b981"
+                />
+                <NeumorphicMetricCard
+                  testid="kpi-pending"
+                  label="Pending"
+                  value={umTaskTotals.pending}
+                  subValue="Queued"
+                  trend={umTaskTotals.pending > 0 ? "up" : "down"}
+                  delta={umTaskTotals.pending > 0 ? `+${umTaskTotals.pending}` : null}
+                  percentage={umTaskTotals.total > 0 ? Math.round((umTaskTotals.pending / umTaskTotals.total) * 100) : 0}
+                  ringColor="#f59e0b"
+                />
+                <NeumorphicMetricCard
+                  testid="kpi-rate"
+                  label="Completion Rate"
+                  value={`${umCompletionRate}%`}
+                  subValue="Target: 85%"
+                  percentage={umCompletionRate}
+                  ringColor="#06b6d4"
+                />
+                <NeumorphicMetricCard
+                  testid="kpi-iv-completed"
+                  label="Interviews"
+                  value={filteredUmInterviews.length}
+                  subValue="Pipeline Rounds"
+                  delta={filteredUmInterviews.length > 0 ? `+${filteredUmInterviews.length}` : null}
+                  percentage={filteredUmInterviews.length > 0 ? Math.min(filteredUmInterviews.length * 10, 100) : 0}
+                  ringColor="#8b5cf6"
+                />
+                <NeumorphicMetricCard
+                  testid="kpi-cleared"
+                  label="Candidates Cleared"
+                  value={pipelineCleared}
+                  subValue="Qualified"
+                  delta={pipelineCleared > 0 ? `+${pipelineCleared}` : null}
+                  percentage={filteredUmInterviews.length > 0 ? Math.round((pipelineCleared / filteredUmInterviews.length) * 100) : 0}
+                  ringColor="#10b981"
+                />
+              </div>
+            </div>
+
+            {/* Performance Trend & Funnel */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <SectionCard
+                className="lg:col-span-2"
+                title={`Task Performance Trend (${selectedTeamMeta.shortLabel})`}
+                subtitle="Last 7 days daily output"
+              >
+                {umTaskTotals.total === 0 ? (
+                  <div className="h-72 flex flex-col items-center justify-center text-center p-6 bg-slate-50/50 dark:bg-white/[0.02] rounded-2xl border border-dashed border-slate-200 dark:border-white/10">
+                    <div className="w-12 h-12 rounded-2xl bg-blue-50 dark:bg-blue-900/20 text-[#0B1EE6] dark:text-blue-400 flex items-center justify-center mb-2.5 shadow-xs">
+                      <ListChecks className="w-6 h-6" />
+                    </div>
+                    <p className="text-sm font-bold text-slate-800 dark:text-slate-200">No task output recorded for this team yet</p>
+                    <p className="text-xs text-slate-400 mt-1 max-w-sm">
+                      Task performance metrics will plot here once operational tasks are provisioned under {selectedTeamMeta.label}.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="h-72">
+                    <ResponsiveContainer>
+                      <AreaChart data={umTrend}>
+                        <defs>
+                          <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#3B82F6" stopOpacity={0.4}/><stop offset="100%" stopColor="#3B82F6" stopOpacity={0}/></linearGradient>
+                          <linearGradient id="g2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#F59E0B" stopOpacity={0.3}/><stop offset="100%" stopColor="#F59E0B" stopOpacity={0}/></linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                        <XAxis dataKey="day" stroke="#64748B" /><YAxis stroke="#64748B" />
+                        <RTooltip contentStyle={chartTooltipStyle} />
+                        <Area type="monotone" dataKey="completed" stroke="#3B82F6" strokeWidth={2.5} fill="url(#g1)" />
+                        <Area type="monotone" dataKey="pending" stroke="#F59E0B" strokeWidth={2.5} fill="url(#g2)" />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </SectionCard>
+              <SectionCard title="Interview Funnel" subtitle="Pipeline progression stages">
+                <InterviewFunnel interviews={filteredUmInterviews} />
+              </SectionCard>
+            </div>
+
+            {/* Active Tasks by Team Table */}
+            <SectionCard
+              title={`Active Tasks (${selectedTeamMeta.shortLabel})`}
+              subtitle={`All operational tasks matching ${selectedTeamMeta.label}`}
+              actions={
+                <button onClick={() => navigate('/tasks')} className="text-xs text-blue-600 dark:text-blue-400 hover:underline font-bold">
+                  Open Tasks Queue →
+                </button>
+              }
+            >
+              {filteredUmTasks.length === 0 ? (
+                <div className="p-8 text-center bg-slate-50 dark:bg-white/5 rounded-2xl border border-dashed border-slate-200 dark:border-white/10">
+                  <CheckCircle2 size={32} className="mx-auto text-emerald-500 mb-2" />
+                  <div className="text-sm font-bold text-slate-800 dark:text-white">No tasks currently logged</div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm mx-auto">
+                    No active tasks match {selectedTeamMeta.label}.
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-white/10">
+                        <th className="py-2.5 font-bold">Task ID</th>
+                        <th className="font-bold">Candidate / Title</th>
+                        <th className="font-bold">Type</th>
+                        <th className="font-bold">Assigned TSE</th>
+                        <th className="font-bold">Senior Recruiter</th>
+                        <th className="font-bold">Status</th>
+                        <th className="font-bold">Remarks</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+                      {sortTasksByInterviewPriority(filteredUmTasks).slice(0, 10).map(t => (
+                        <tr key={t.id} className="border-b border-slate-100 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
+                          <td className="py-2.5 mono text-xs text-blue-700 dark:text-blue-400 font-bold">{t.id}</td>
+                          <td>
+                            <div className="font-medium text-slate-900 dark:text-white">{t.candidateName || t.title}</div>
+                            <div className="text-[11px] text-slate-400">{t.company || t.title}</div>
+                          </td>
+                          <td><TaskTypeBadge type={t.taskType || 'Interview'} /></td>
+                          <td className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">
+                            {t.assigneeName || t.techPerson || 'TSE'}
+                          </td>
+                          <td className="text-xs">
+                            {t.assignedSrName ? (
+                              <span className="font-bold text-slate-800 dark:text-slate-200">{t.assignedSrName}</span>
+                            ) : (
+                              <span className="text-rose-500 font-bold text-[11px]">Unassigned</span>
+                            )}
+                          </td>
+                          <td><StatusBadge value={t.status} /></td>
+                          <td className="text-xs text-slate-600 dark:text-slate-300 max-w-[200px] truncate">
+                            {t.completionRemark || t.notes || '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </SectionCard>
+
+            {/* Department Breakdown (When All Teams selected) */}
+            {umSelectedTeam === 'all' && (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {['Tech Support', 'Marketing', 'Overall'].map((d, i) => (
+                  <SectionCard key={d} title={d} subtitle={i === 2 ? 'Aggregate overview' : `${d} operational unit`}>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="p-3 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/5">
+                        <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">Tasks</div>
+                        <div className="text-xl font-bold text-slate-900 dark:text-white tabular-nums mt-0.5">{Math.round(totals.total * (i===2?1:i===0?0.75:0.25))}</div>
+                      </div>
+                      <div className="p-3 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/5">
+                        <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">Completion</div>
+                        <div className="text-xl font-bold text-emerald-600 dark:text-emerald-400 tabular-nums mt-0.5">{completionRate - i*4}%</div>
+                      </div>
+                      <div className="p-3 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/5">
+                        <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">Pending</div>
+                        <div className="text-xl font-bold text-amber-600 dark:text-amber-400 tabular-nums mt-0.5">{Math.round(totals.pending * (i===2?1:i===0?0.7:0.3))}</div>
+                      </div>
+                      <div className="p-3 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/5">
+                        <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">Interviews</div>
+                        <div className="text-xl font-bold text-blue-600 dark:text-blue-400 tabular-nums mt-0.5">{Math.round(visibleInterviews.length * (i===2?1:i===0?0.4:0.6))}</div>
+                      </div>
+                    </div>
+                  </SectionCard>
+                ))}
               </div>
             )}
-          </SectionCard>
-          <SectionCard title="Interview Funnel" subtitle="Pipeline progression stages"><InterviewFunnel interviews={visibleInterviews} /></SectionCard>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {['Tech Support','Marketing','Overall'].map((d, i) => (
-            <SectionCard key={d} title={d} subtitle={i === 2 ? 'Aggregate overview' : `${d} operational unit`}>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="p-3 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/5">
-                  <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">Tasks</div>
-                  <div className="text-xl font-bold text-slate-900 dark:text-white tabular-nums mt-0.5">{Math.round(totals.total * (i===2?1:i===0?0.75:0.25))}</div>
-                </div>
-                <div className="p-3 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/5">
-                  <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">Completion</div>
-                  <div className="text-xl font-bold text-emerald-600 dark:text-emerald-400 tabular-nums mt-0.5">{completionRate - i*4}%</div>
-                </div>
-                <div className="p-3 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/5">
-                  <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">Pending</div>
-                  <div className="text-xl font-bold text-amber-600 dark:text-amber-400 tabular-nums mt-0.5">{Math.round(totals.pending * (i===2?1:i===0?0.7:0.3))}</div>
-                </div>
-                <div className="p-3 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/5">
-                  <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">Interviews</div>
-                  <div className="text-xl font-bold text-blue-600 dark:text-blue-400 tabular-nums mt-0.5">{Math.round(visibleInterviews.length * (i===2?1:i===0?0.4:0.6))}</div>
-                </div>
-              </div>
-            </SectionCard>
-          ))}
-        </div>
+          </div>
+        )}
       </div>
     );
   }
