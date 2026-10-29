@@ -15,31 +15,100 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../components/ui/s
 const roleCanCreate = (r) => r === 'tsm' || r === 'management' || r === 'marketing_tl' || r === 'marketing_sr' || r === 'recruiter';
 const roleCanEditAny = (r) => r === 'tsm' || r === 'management';
 
-export function calculateTimeRangeDuration(startTime, endTime) {
+export function to24HourTime(timeStr, period = 'AM') {
+  if (!timeStr) return '10:00';
+  const clean = String(timeStr).trim();
+  const matchPeriod = clean.match(/(am|pm)/i);
+  let resolvedPeriod = matchPeriod ? matchPeriod[0].toUpperCase() : (period || 'AM');
+  let timeOnly = clean.replace(/(am|pm)/i, '').trim();
+
+  const parts = timeOnly.split(':');
+  let h = parseInt(parts[0], 10);
+  let m = parseInt(parts[1] || '0', 10);
+  if (isNaN(h)) h = 10;
+  if (isNaN(m)) m = 0;
+
+  if (resolvedPeriod === 'PM') {
+    if (h < 12) h += 12;
+  } else if (resolvedPeriod === 'AM') {
+    if (h === 12) h = 0;
+  }
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+export function to12HourParts(timeStr, defaultPeriod = 'AM') {
+  if (!timeStr) return { time: '10:00', period: defaultPeriod };
+  const clean = String(timeStr).trim();
+  const matchPeriod = clean.match(/(am|pm)/i);
+  if (matchPeriod) {
+    const p = matchPeriod[0].toUpperCase();
+    const t = clean.replace(/(am|pm)/i, '').trim();
+    return { time: t, period: p };
+  }
+  const parts = clean.split(':');
+  let h = parseInt(parts[0], 10);
+  let m = parseInt(parts[1] || '0', 10);
+  if (isNaN(h)) return { time: '10:00', period: defaultPeriod };
+  if (isNaN(m)) m = 0;
+
+  let period = defaultPeriod;
+  if (h >= 12) {
+    period = 'PM';
+    if (h > 12) h -= 12;
+  } else if (h === 0) {
+    h = 12;
+    period = 'AM';
+  }
+  return {
+    time: `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`,
+    period,
+  };
+}
+
+export function formatTiming12(timeStr, period = 'AM') {
+  if (!timeStr) return '';
+  const parsed = to12HourParts(timeStr, period);
+  return `${parsed.time} ${parsed.period}`;
+}
+
+export function calculateTimeRangeDuration(startTime, endTime, startPeriod = 'AM', endPeriod = 'AM') {
   if (!startTime || !endTime) return '30 mins';
-  const [sh, sm] = startTime.split(':').map(Number);
-  const [eh, em] = endTime.split(':').map(Number);
-  const startMins = sh * 60 + sm;
-  const endMins = eh * 60 + em;
-  const diff = endMins - startMins;
+  const start24 = to24HourTime(startTime, startPeriod);
+  const end24 = to24HourTime(endTime, endPeriod);
+  const [sh, sm] = start24.split(':').map(Number);
+  const [eh, em] = end24.split(':').map(Number);
+  let startMins = sh * 60 + sm;
+  let endMins = eh * 60 + em;
+  let diff = endMins - startMins;
+  if (diff < 0) diff += 24 * 60;
   if (diff <= 0) return '30 mins';
   if (diff % 60 === 0) {
     const hrs = diff / 60;
     return `${hrs} hr${hrs > 1 ? 's' : ''}`;
   }
+  if (diff > 60) {
+    const hrs = Math.floor(diff / 60);
+    const mins = diff % 60;
+    return `${hrs} hr${hrs > 1 ? 's' : ''}${mins > 0 ? ` ${mins} mins` : ''}`;
+  }
   return `${diff} mins`;
 }
 
-export function formatEstTime(timeStr) {
+export function formatEstTime(timeStr, period) {
   if (!timeStr) return '';
-  const parts = timeStr.split(':');
-  if (parts.length < 2) return timeStr;
+  if (period) {
+    return formatTiming12(timeStr, period);
+  }
+  const clean = String(timeStr).trim();
+  if (/(am|pm)/i.test(clean)) return clean;
+  const parts = clean.split(':');
+  if (parts.length < 2) return clean;
   const h = Number(parts[0]);
   const m = Number(parts[1]);
-  if (isNaN(h) || isNaN(m)) return timeStr;
-  const period = h >= 12 ? 'PM' : 'AM';
+  if (isNaN(h) || isNaN(m)) return clean;
+  const p = h >= 12 ? 'PM' : 'AM';
   const displayH = h % 12 === 0 ? 12 : h % 12;
-  return `${String(displayH).padStart(2, '0')}:${String(m).padStart(2, '0')} ${period}`;
+  return `${String(displayH).padStart(2, '0')}:${String(m).padStart(2, '0')} ${p}`;
 }
 
 export function formatInterviewTimingDisplay(t) {
@@ -47,7 +116,9 @@ export function formatInterviewTimingDisplay(t) {
   if (t.taskType === 'Interview') {
     if (t.timing) return t.timing;
     if (t.startTime && t.endTime) {
-      return `${formatEstTime(t.startTime)} - ${formatEstTime(t.endTime)} EST`;
+      const sp = t.startPeriod || '';
+      const ep = t.endPeriod || '';
+      return `${formatEstTime(t.startTime, sp)} - ${formatEstTime(t.endTime, ep)} EST`;
     }
     if (t.interviewDateTime) {
       const timePart = t.interviewDateTime.includes('T') ? t.interviewDateTime.split('T')[1].slice(0, 5) : '';
@@ -66,6 +137,78 @@ export function formatInterviewTimingDisplay(t) {
   }
   return from || to || '—';
 }
+
+const COMMON_INTERVIEW_TIMES = [
+  '08:00', '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
+  '12:00', '12:30', '01:00', '01:30', '02:00', '02:30', '03:00', '03:30',
+  '04:00', '04:30', '05:00', '05:30', '06:00', '06:30', '07:00', '07:30',
+  '08:00', '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
+];
+
+const TimeWithAmPmInput = ({
+  id,
+  testId,
+  label,
+  value,
+  period,
+  onChangeTime,
+  onChangePeriod,
+  required = false,
+}) => {
+  return (
+    <div>
+      <datalist id="common-interview-times">
+        {COMMON_INTERVIEW_TIMES.map((t, idx) => (
+          <option key={`${t}-${idx}`} value={t} />
+        ))}
+      </datalist>
+      <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+        <Clock size={12} className="text-blue-600" />
+        <span>{label}</span>
+        {required && <span className="text-rose-500">*</span>}
+      </label>
+      <div className="mt-1.5 flex items-center gap-1.5">
+        <div className="relative flex-1 min-w-0">
+          <Input
+            id={id}
+            type="text"
+            data-testid={testId}
+            placeholder="10:00"
+            list="common-interview-times"
+            value={value}
+            onChange={e => onChangeTime(e.target.value)}
+            className="bg-white border-slate-300 text-slate-900 text-xs font-semibold h-9 px-2.5 pr-7 w-full shadow-sm"
+          />
+          <Clock size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+        </div>
+        <div className="inline-flex rounded-lg border border-slate-300 p-0.5 bg-slate-100 shrink-0 shadow-inner">
+          <button
+            type="button"
+            onClick={() => onChangePeriod('AM')}
+            className={`px-2.5 py-1 text-[11px] font-bold rounded-md transition-all ${
+              (period || 'AM') === 'AM'
+                ? 'bg-[#1416c1] text-white shadow-sm ring-1 ring-blue-700'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
+            }`}
+          >
+            AM
+          </button>
+          <button
+            type="button"
+            onClick={() => onChangePeriod('PM')}
+            className={`px-2.5 py-1 text-[11px] font-bold rounded-md transition-all ${
+              period === 'PM'
+                ? 'bg-[#1416c1] text-white shadow-sm ring-1 ring-blue-700'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
+            }`}
+          >
+            PM
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const CreateTaskModal = ({ open, onOpenChange }) => {
   const { users, addTask, tasks, feedbacks, currentRole, currentUser } = useApp();
@@ -89,7 +232,9 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
     fromDate: todayStr,
     toDate: todayStr,
     startTime: '10:00',
+    startPeriod: 'AM',
     endTime: '10:30',
+    endPeriod: 'AM',
     timing: '10:00 AM - 10:30 AM EST',
     assigneeId: isMarketingUser ? '' : (tseUsers[0]?.id || ''),
     duration: '30 mins',
@@ -111,13 +256,49 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
   });
 
   const handleStartTimeChange = (newStartTime) => {
+    let cleanVal = newStartTime;
+    let period = form.startPeriod || 'AM';
+    if (/(am|pm)/i.test(newStartTime)) {
+      period = newStartTime.match(/(am|pm)/i)[0].toUpperCase();
+      cleanVal = newStartTime.replace(/(am|pm)/i, '').trim();
+    }
+    const parts = cleanVal.split(':');
+    if (parts.length >= 2) {
+      const h = parseInt(parts[0], 10);
+      if (!isNaN(h) && h >= 12 && h < 24) {
+        period = 'PM';
+        const displayH = h === 12 ? 12 : h - 12;
+        cleanVal = `${String(displayH).padStart(2, '0')}:${parts[1].slice(0, 2)}`;
+      } else if (!isNaN(h) && h === 0) {
+        period = 'AM';
+        cleanVal = `12:${parts[1].slice(0, 2)}`;
+      }
+    }
     setForm(prev => {
-      const dur = calculateTimeRangeDuration(newStartTime, prev.endTime);
-      const timingStr = `${formatEstTime(newStartTime)} - ${formatEstTime(prev.endTime)} EST`;
-      const ivDt = prev.date ? `${prev.date}T${newStartTime}` : '';
+      const dur = calculateTimeRangeDuration(cleanVal, prev.endTime, period, prev.endPeriod || 'AM');
+      const timingStr = `${formatTiming12(cleanVal, period)} - ${formatTiming12(prev.endTime, prev.endPeriod || 'AM')} EST`;
+      const time24 = to24HourTime(cleanVal, period);
+      const ivDt = prev.date ? `${prev.date}T${time24}` : '';
       return {
         ...prev,
-        startTime: newStartTime,
+        startTime: cleanVal,
+        startPeriod: period,
+        duration: dur,
+        timing: timingStr,
+        interviewDateTime: ivDt,
+      };
+    });
+  };
+
+  const handleStartPeriodChange = (newPeriod) => {
+    setForm(prev => {
+      const dur = calculateTimeRangeDuration(prev.startTime, prev.endTime, newPeriod, prev.endPeriod || 'AM');
+      const timingStr = `${formatTiming12(prev.startTime, newPeriod)} - ${formatTiming12(prev.endTime, prev.endPeriod || 'AM')} EST`;
+      const time24 = to24HourTime(prev.startTime, newPeriod);
+      const ivDt = prev.date ? `${prev.date}T${time24}` : '';
+      return {
+        ...prev,
+        startPeriod: newPeriod,
         duration: dur,
         timing: timingStr,
         interviewDateTime: ivDt,
@@ -126,12 +307,44 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
   };
 
   const handleEndTimeChange = (newEndTime) => {
+    let cleanVal = newEndTime;
+    let period = form.endPeriod || 'AM';
+    if (/(am|pm)/i.test(newEndTime)) {
+      period = newEndTime.match(/(am|pm)/i)[0].toUpperCase();
+      cleanVal = newEndTime.replace(/(am|pm)/i, '').trim();
+    }
+    const parts = cleanVal.split(':');
+    if (parts.length >= 2) {
+      const h = parseInt(parts[0], 10);
+      if (!isNaN(h) && h >= 12 && h < 24) {
+        period = 'PM';
+        const displayH = h === 12 ? 12 : h - 12;
+        cleanVal = `${String(displayH).padStart(2, '0')}:${parts[1].slice(0, 2)}`;
+      } else if (!isNaN(h) && h === 0) {
+        period = 'AM';
+        cleanVal = `12:${parts[1].slice(0, 2)}`;
+      }
+    }
     setForm(prev => {
-      const dur = calculateTimeRangeDuration(prev.startTime, newEndTime);
-      const timingStr = `${formatEstTime(prev.startTime)} - ${formatEstTime(newEndTime)} EST`;
+      const dur = calculateTimeRangeDuration(prev.startTime, cleanVal, prev.startPeriod || 'AM', period);
+      const timingStr = `${formatTiming12(prev.startTime, prev.startPeriod || 'AM')} - ${formatTiming12(cleanVal, period)} EST`;
       return {
         ...prev,
-        endTime: newEndTime,
+        endTime: cleanVal,
+        endPeriod: period,
+        duration: dur,
+        timing: timingStr,
+      };
+    });
+  };
+
+  const handleEndPeriodChange = (newPeriod) => {
+    setForm(prev => {
+      const dur = calculateTimeRangeDuration(prev.startTime, prev.endTime, prev.startPeriod || 'AM', newPeriod);
+      const timingStr = `${formatTiming12(prev.startTime, prev.startPeriod || 'AM')} - ${formatTiming12(prev.endTime, newPeriod)} EST`;
+      return {
+        ...prev,
+        endPeriod: newPeriod,
         duration: dur,
         timing: timingStr,
       };
@@ -139,11 +352,16 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
   };
 
   const handleDateChange = (newDate) => {
-    setForm(prev => ({
-      ...prev,
-      date: newDate,
-      interviewDateTime: prev.startTime ? `${newDate}T${prev.startTime}` : `${newDate}T10:00`,
-    }));
+    setForm(prev => {
+      const time24 = to24HourTime(prev.startTime, prev.startPeriod || 'AM');
+      return {
+        ...prev,
+        date: newDate,
+        fromDate: newDate,
+        toDate: newDate,
+        interviewDateTime: prev.startTime ? `${newDate}T${time24}` : `${newDate}T10:00`,
+      };
+    });
   };
 
   // Dynamic Senior Recruiters mapped from MongoDB Atlas / DB users
@@ -309,7 +527,9 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
       fromDate: todayStr,
       toDate: todayStr,
       startTime: '10:00',
+      startPeriod: 'AM',
       endTime: '10:30',
+      endPeriod: 'AM',
       timing: '10:00 AM - 10:30 AM EST',
       assigneeId: isMarketingUser ? '' : (tseUsers[0]?.id || ''),
       duration: '30 mins',
@@ -354,15 +574,16 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
     }
 
     const calculatedDuration = form.taskType === 'Interview'
-      ? (calculateTimeRangeDuration(form.startTime, form.endTime) || '30 mins')
+      ? (calculateTimeRangeDuration(form.startTime, form.endTime, form.startPeriod || 'AM', form.endPeriod || 'AM') || '30 mins')
       : (form.fromDate && form.toDate && form.fromDate !== form.toDate ? `${form.fromDate} to ${form.toDate}` : (form.duration || 'Full Day'));
 
     const calculatedTiming = form.taskType === 'Interview' && form.startTime && form.endTime
-      ? `${formatEstTime(form.startTime)} - ${formatEstTime(form.endTime)} EST`
+      ? `${formatTiming12(form.startTime, form.startPeriod || 'AM')} - ${formatTiming12(form.endTime, form.endPeriod || 'AM')} EST`
       : '';
 
+    const time24 = to24HourTime(form.startTime, form.startPeriod || 'AM');
     const interviewDateTime = form.taskType === 'Interview' && form.date && form.startTime
-      ? `${form.date}T${form.startTime}`
+      ? `${form.date}T${time24}`
       : '';
 
     // Availability validation guard
@@ -382,7 +603,9 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
       fromDate: form.fromDate || taskDate,
       toDate: form.toDate || taskDueDate,
       startTime: form.taskType === 'Interview' ? form.startTime : '',
+      startPeriod: form.taskType === 'Interview' ? (form.startPeriod || 'AM') : '',
       endTime: form.taskType === 'Interview' ? form.endTime : '',
+      endPeriod: form.taskType === 'Interview' ? (form.endPeriod || 'AM') : '',
       timing: calculatedTiming,
       duration: calculatedDuration,
       assigneeId: isMarketingUser ? '' : (selectedTse?.id || ''),
@@ -489,7 +712,7 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
               onValueChange={v => setForm(prev => ({
                 ...prev,
                 taskType: v,
-                interviewDateTime: v === 'Interview' ? (prev.date && prev.startTime ? `${prev.date}T${prev.startTime}` : prev.interviewDateTime) : '',
+                interviewDateTime: v === 'Interview' ? (prev.date && prev.startTime ? `${prev.date}T${to24HourTime(prev.startTime, prev.startPeriod || 'AM')}` : prev.interviewDateTime) : '',
               }))}
             >
               <SelectTrigger data-testid="task-form-type" className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white">
@@ -521,36 +744,28 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
                   className="mt-1.5 bg-white border-slate-300 text-slate-900 text-xs font-medium"
                 />
               </div>
-              <div>
-                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-                  <Clock size={12} className="text-blue-600" />
-                  <span>Start Time (EST)</span>
-                  <span className="text-rose-500">*</span>
-                </label>
-                <Input
-                  type="time"
-                  data-testid="task-form-start-time"
-                  value={form.startTime}
-                  onChange={e => handleStartTimeChange(e.target.value)}
-                  className="mt-1.5 bg-white border-slate-300 text-slate-900 text-xs font-medium"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-                  <Clock size={12} className="text-blue-600" />
-                  <span>End Time (EST)</span>
-                  <span className="text-rose-500">*</span>
-                </label>
-                <Input
-                  type="time"
-                  data-testid="task-form-end-time"
-                  value={form.endTime}
-                  onChange={e => handleEndTimeChange(e.target.value)}
-                  className="mt-1.5 bg-white border-slate-300 text-slate-900 text-xs font-medium"
-                />
-              </div>
+              <TimeWithAmPmInput
+                id="task-form-start-time"
+                testId="task-form-start-time"
+                label="Start Time (EST)"
+                value={form.startTime}
+                period={form.startPeriod || 'AM'}
+                onChangeTime={handleStartTimeChange}
+                onChangePeriod={handleStartPeriodChange}
+                required
+              />
+              <TimeWithAmPmInput
+                id="task-form-end-time"
+                testId="task-form-end-time"
+                label="End Time (EST)"
+                value={form.endTime}
+                period={form.endPeriod || 'AM'}
+                onChangeTime={handleEndTimeChange}
+                onChangePeriod={handleEndPeriodChange}
+                required
+              />
               <div className="sm:col-span-3 flex items-center justify-between text-[11px] pt-1 border-t border-blue-200/60 font-semibold text-blue-900">
-                <span>Reflected Timing: <strong>{form.timing || `${formatEstTime(form.startTime)} - ${formatEstTime(form.endTime)} EST`}</strong></span>
+                <span>Reflected Timing: <strong>{form.timing || `${formatTiming12(form.startTime, form.startPeriod || 'AM')} - ${formatTiming12(form.endTime, form.endPeriod || 'AM')} EST`}</strong></span>
                 <span className="text-slate-600 font-normal">Calculated Duration: <strong>{form.duration || '30 mins'}</strong></span>
               </div>
             </div>
@@ -985,7 +1200,9 @@ const EditTaskModal = ({ task, open, onOpenChange }) => {
     fromDate: '',
     toDate: '',
     startTime: '10:00',
+    startPeriod: 'AM',
     endTime: '10:30',
+    endPeriod: 'AM',
     timing: '',
     interviewDateTime: '',
     teamId: 'team-mukesh',
@@ -1018,9 +1235,11 @@ const EditTaskModal = ({ task, open, onOpenChange }) => {
     if (task && open) {
       setAttachments(Array.isArray(task.attachments) ? task.attachments : []);
       const taskDate = task.date || task.dueDate || (task.interviewDateTime ? task.interviewDateTime.slice(0, 10) : '');
-      const extractedStart = task.startTime || (task.interviewDateTime && task.interviewDateTime.includes('T') ? task.interviewDateTime.split('T')[1].slice(0, 5) : '10:00');
-      const extractedEnd = task.endTime || '10:30';
-      const extractedTiming = task.timing || (extractedStart && extractedEnd ? `${formatEstTime(extractedStart)} - ${formatEstTime(extractedEnd)} EST` : '');
+      const rawStart = task.startTime || (task.interviewDateTime && task.interviewDateTime.includes('T') ? task.interviewDateTime.split('T')[1].slice(0, 5) : '10:00');
+      const rawEnd = task.endTime || '10:30';
+      const parsedStart = to12HourParts(rawStart, task.startPeriod || 'AM');
+      const parsedEnd = to12HourParts(rawEnd, task.endPeriod || 'AM');
+      const extractedTiming = task.timing || (parsedStart.time && parsedEnd.time ? `${formatTiming12(parsedStart.time, parsedStart.period)} - ${formatTiming12(parsedEnd.time, parsedEnd.period)} EST` : '');
 
       setForm({
         candidateName: task.candidateName || '',
@@ -1031,8 +1250,10 @@ const EditTaskModal = ({ task, open, onOpenChange }) => {
         date: taskDate,
         fromDate: task.fromDate || task.dateFrom || taskDate,
         toDate: task.toDate || task.dateTo || task.dueDate || taskDate,
-        startTime: extractedStart,
-        endTime: extractedEnd,
+        startTime: parsedStart.time,
+        startPeriod: parsedStart.period,
+        endTime: parsedEnd.time,
+        endPeriod: parsedEnd.period,
         timing: extractedTiming,
         interviewDateTime: task.interviewDateTime || '',
         teamId: task.teamId || 'team-mukesh',
@@ -1051,13 +1272,49 @@ const EditTaskModal = ({ task, open, onOpenChange }) => {
   }, [task, open]);
 
   const handleStartTimeChange = (newStartTime) => {
+    let cleanVal = newStartTime;
+    let period = form.startPeriod || 'AM';
+    if (/(am|pm)/i.test(newStartTime)) {
+      period = newStartTime.match(/(am|pm)/i)[0].toUpperCase();
+      cleanVal = newStartTime.replace(/(am|pm)/i, '').trim();
+    }
+    const parts = cleanVal.split(':');
+    if (parts.length >= 2) {
+      const h = parseInt(parts[0], 10);
+      if (!isNaN(h) && h >= 12 && h < 24) {
+        period = 'PM';
+        const displayH = h === 12 ? 12 : h - 12;
+        cleanVal = `${String(displayH).padStart(2, '0')}:${parts[1].slice(0, 2)}`;
+      } else if (!isNaN(h) && h === 0) {
+        period = 'AM';
+        cleanVal = `12:${parts[1].slice(0, 2)}`;
+      }
+    }
     setForm(prev => {
-      const dur = calculateTimeRangeDuration(newStartTime, prev.endTime);
-      const timingStr = `${formatEstTime(newStartTime)} - ${formatEstTime(prev.endTime)} EST`;
-      const ivDt = prev.date ? `${prev.date}T${newStartTime}` : '';
+      const dur = calculateTimeRangeDuration(cleanVal, prev.endTime, period, prev.endPeriod || 'AM');
+      const timingStr = `${formatTiming12(cleanVal, period)} - ${formatTiming12(prev.endTime, prev.endPeriod || 'AM')} EST`;
+      const time24 = to24HourTime(cleanVal, period);
+      const ivDt = prev.date ? `${prev.date}T${time24}` : '';
       return {
         ...prev,
-        startTime: newStartTime,
+        startTime: cleanVal,
+        startPeriod: period,
+        duration: dur,
+        timing: timingStr,
+        interviewDateTime: ivDt,
+      };
+    });
+  };
+
+  const handleStartPeriodChange = (newPeriod) => {
+    setForm(prev => {
+      const dur = calculateTimeRangeDuration(prev.startTime, prev.endTime, newPeriod, prev.endPeriod || 'AM');
+      const timingStr = `${formatTiming12(prev.startTime, newPeriod)} - ${formatTiming12(prev.endTime, prev.endPeriod || 'AM')} EST`;
+      const time24 = to24HourTime(prev.startTime, newPeriod);
+      const ivDt = prev.date ? `${prev.date}T${time24}` : '';
+      return {
+        ...prev,
+        startPeriod: newPeriod,
         duration: dur,
         timing: timingStr,
         interviewDateTime: ivDt,
@@ -1066,12 +1323,44 @@ const EditTaskModal = ({ task, open, onOpenChange }) => {
   };
 
   const handleEndTimeChange = (newEndTime) => {
+    let cleanVal = newEndTime;
+    let period = form.endPeriod || 'AM';
+    if (/(am|pm)/i.test(newEndTime)) {
+      period = newEndTime.match(/(am|pm)/i)[0].toUpperCase();
+      cleanVal = newEndTime.replace(/(am|pm)/i, '').trim();
+    }
+    const parts = cleanVal.split(':');
+    if (parts.length >= 2) {
+      const h = parseInt(parts[0], 10);
+      if (!isNaN(h) && h >= 12 && h < 24) {
+        period = 'PM';
+        const displayH = h === 12 ? 12 : h - 12;
+        cleanVal = `${String(displayH).padStart(2, '0')}:${parts[1].slice(0, 2)}`;
+      } else if (!isNaN(h) && h === 0) {
+        period = 'AM';
+        cleanVal = `12:${parts[1].slice(0, 2)}`;
+      }
+    }
     setForm(prev => {
-      const dur = calculateTimeRangeDuration(prev.startTime, newEndTime);
-      const timingStr = `${formatEstTime(prev.startTime)} - ${formatEstTime(newEndTime)} EST`;
+      const dur = calculateTimeRangeDuration(prev.startTime, cleanVal, prev.startPeriod || 'AM', period);
+      const timingStr = `${formatTiming12(prev.startTime, prev.startPeriod || 'AM')} - ${formatTiming12(cleanVal, period)} EST`;
       return {
         ...prev,
-        endTime: newEndTime,
+        endTime: cleanVal,
+        endPeriod: period,
+        duration: dur,
+        timing: timingStr,
+      };
+    });
+  };
+
+  const handleEndPeriodChange = (newPeriod) => {
+    setForm(prev => {
+      const dur = calculateTimeRangeDuration(prev.startTime, prev.endTime, prev.startPeriod || 'AM', newPeriod);
+      const timingStr = `${formatTiming12(prev.startTime, prev.startPeriod || 'AM')} - ${formatTiming12(prev.endTime, newPeriod)} EST`;
+      return {
+        ...prev,
+        endPeriod: newPeriod,
         duration: dur,
         timing: timingStr,
       };
@@ -1079,11 +1368,16 @@ const EditTaskModal = ({ task, open, onOpenChange }) => {
   };
 
   const handleDateChange = (newDate) => {
-    setForm(prev => ({
-      ...prev,
-      date: newDate,
-      interviewDateTime: prev.startTime ? `${newDate}T${prev.startTime}` : `${newDate}T10:00`,
-    }));
+    setForm(prev => {
+      const time24 = to24HourTime(prev.startTime, prev.startPeriod || 'AM');
+      return {
+        ...prev,
+        date: newDate,
+        fromDate: newDate,
+        toDate: newDate,
+        interviewDateTime: prev.startTime ? `${newDate}T${time24}` : `${newDate}T10:00`,
+      };
+    });
   };
 
   const handleFileUpload = async (e) => {
@@ -1162,15 +1456,16 @@ const EditTaskModal = ({ task, open, onOpenChange }) => {
     }
 
     const calculatedDuration = form.taskType === 'Interview'
-      ? (calculateTimeRangeDuration(form.startTime, form.endTime) || form.duration || '30 mins')
+      ? (calculateTimeRangeDuration(form.startTime, form.endTime, form.startPeriod || 'AM', form.endPeriod || 'AM') || form.duration || '30 mins')
       : (form.fromDate && form.toDate && form.fromDate !== form.toDate ? `${form.fromDate} to ${form.toDate}` : (form.duration || 'Full Day'));
 
     const calculatedTiming = form.taskType === 'Interview' && form.startTime && form.endTime
-      ? `${formatEstTime(form.startTime)} - ${formatEstTime(form.endTime)} EST`
+      ? `${formatTiming12(form.startTime, form.startPeriod || 'AM')} - ${formatTiming12(form.endTime, form.endPeriod || 'AM')} EST`
       : '';
 
+    const time24 = to24HourTime(form.startTime, form.startPeriod || 'AM');
     const interviewDateTime = form.taskType === 'Interview' && form.date && form.startTime
-      ? `${form.date}T${form.startTime}`
+      ? `${form.date}T${time24}`
       : '';
 
     const taskDate = form.taskType === 'Interview' ? form.date : (form.fromDate || form.date);
@@ -1187,7 +1482,9 @@ const EditTaskModal = ({ task, open, onOpenChange }) => {
       duration: calculatedDuration,
       timing: calculatedTiming,
       startTime: form.taskType === 'Interview' ? form.startTime : '',
+      startPeriod: form.taskType === 'Interview' ? (form.startPeriod || 'AM') : '',
       endTime: form.taskType === 'Interview' ? form.endTime : '',
+      endPeriod: form.taskType === 'Interview' ? (form.endPeriod || 'AM') : '',
       fromDate: form.fromDate || taskDate,
       toDate: form.toDate || taskDueDate,
       date: taskDate,
@@ -1308,7 +1605,7 @@ const EditTaskModal = ({ task, open, onOpenChange }) => {
               onValueChange={v => setForm(prev => ({
                 ...prev,
                 taskType: v,
-                interviewDateTime: v === 'Interview' ? (prev.date && prev.startTime ? `${prev.date}T${prev.startTime}` : prev.interviewDateTime) : '',
+                interviewDateTime: v === 'Interview' ? (prev.date && prev.startTime ? `${prev.date}T${to24HourTime(prev.startTime, prev.startPeriod || 'AM')}` : prev.interviewDateTime) : '',
               }))}
             >
               <SelectTrigger data-testid="edit-task-form-type" className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white text-xs">
@@ -1340,36 +1637,28 @@ const EditTaskModal = ({ task, open, onOpenChange }) => {
                   className="mt-1.5 bg-white border-slate-300 text-slate-900 text-xs font-medium"
                 />
               </div>
-              <div>
-                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-                  <Clock size={12} className="text-blue-600" />
-                  <span>Start Time (EST)</span>
-                  <span className="text-rose-500">*</span>
-                </label>
-                <Input
-                  type="time"
-                  data-testid="edit-task-form-start-time"
-                  value={form.startTime}
-                  onChange={e => handleStartTimeChange(e.target.value)}
-                  className="mt-1.5 bg-white border-slate-300 text-slate-900 text-xs font-medium"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-                  <Clock size={12} className="text-blue-600" />
-                  <span>End Time (EST)</span>
-                  <span className="text-rose-500">*</span>
-                </label>
-                <Input
-                  type="time"
-                  data-testid="edit-task-form-end-time"
-                  value={form.endTime}
-                  onChange={e => handleEndTimeChange(e.target.value)}
-                  className="mt-1.5 bg-white border-slate-300 text-slate-900 text-xs font-medium"
-                />
-              </div>
+              <TimeWithAmPmInput
+                id="edit-task-form-start-time"
+                testId="edit-task-form-start-time"
+                label="Start Time (EST)"
+                value={form.startTime}
+                period={form.startPeriod || 'AM'}
+                onChangeTime={handleStartTimeChange}
+                onChangePeriod={handleStartPeriodChange}
+                required
+              />
+              <TimeWithAmPmInput
+                id="edit-task-form-end-time"
+                testId="edit-task-form-end-time"
+                label="End Time (EST)"
+                value={form.endTime}
+                period={form.endPeriod || 'AM'}
+                onChangeTime={handleEndTimeChange}
+                onChangePeriod={handleEndPeriodChange}
+                required
+              />
               <div className="sm:col-span-3 flex items-center justify-between text-[11px] pt-1 border-t border-blue-200/60 font-semibold text-blue-900">
-                <span>Reflected Timing: <strong>{form.timing || `${formatEstTime(form.startTime)} - ${formatEstTime(form.endTime)} EST`}</strong></span>
+                <span>Reflected Timing: <strong>{form.timing || `${formatTiming12(form.startTime, form.startPeriod || 'AM')} - ${formatTiming12(form.endTime, form.endPeriod || 'AM')} EST`}</strong></span>
                 <span className="text-slate-600 font-normal">Calculated Duration: <strong>{form.duration || '30 mins'}</strong></span>
               </div>
             </div>
