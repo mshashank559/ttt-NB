@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { formatTaskDate, formatTaskDuration } from './Tasks';
 
 const palette = ['#3B82F6', '#10B981', '#8B5CF6', '#F59E0B', '#06B6D4', '#EC4899', '#64748B'];
 
@@ -892,6 +893,7 @@ export default function Dashboard() {
               <thead>
                 <tr className="text-left text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-white/10">
                   <th className="py-2.5 font-bold">Date</th>
+                  <th className="font-bold">Duration</th>
                   <th className="font-bold">Tech Person (TSE)</th>
                   <th className="font-bold">Task</th>
                   <th className="font-bold">Candidate Name</th>
@@ -924,7 +926,8 @@ export default function Dashboard() {
                       className="border-b border-slate-100 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/5 cursor-pointer transition-colors"
                       onClick={() => navigate('/tasks')}
                     >
-                      <td className="py-2.5 mono text-xs text-slate-600 dark:text-slate-400 whitespace-nowrap">{t.date || t.dueDate}</td>
+                      <td className="py-2.5 text-xs text-slate-700 dark:text-slate-300 whitespace-nowrap font-medium">{formatTaskDate(t)}</td>
+                      <td className="py-2.5 text-xs text-slate-800 dark:text-slate-200 whitespace-nowrap font-semibold">{formatTaskDuration(t)}</td>
                       <td className="text-slate-800 dark:text-slate-200 py-2.5">
                         <div className="flex items-center gap-2">
                           <span className={`h-7 w-7 rounded-full text-[10px] font-bold flex items-center justify-center shrink-0 ${

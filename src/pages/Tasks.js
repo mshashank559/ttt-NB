@@ -111,31 +111,138 @@ export function formatEstTime(timeStr, period) {
   return `${String(displayH).padStart(2, '0')}:${String(m).padStart(2, '0')} ${p}`;
 }
 
-export function formatInterviewTimingDisplay(t) {
-  if (!t) return '—';
-  if (t.taskType === 'Interview') {
-    if (t.timing) return t.timing;
-    if (t.startTime && t.endTime) {
-      const sp = t.startPeriod || '';
-      const ep = t.endPeriod || '';
-      return `${formatEstTime(t.startTime, sp)} - ${formatEstTime(t.endTime, ep)} EST`;
+export function calculateMinutesDiff(startTime, endTime, startPeriod, endPeriod) {
+  if (!startTime || !endTime) return null;
+  const start24 = to24HourTime(startTime, startPeriod || 'AM');
+  const end24 = to24HourTime(endTime, endPeriod || 'AM');
+  const [sh, sm] = start24.split(':').map(Number);
+  const [eh, em] = end24.split(':').map(Number);
+  if (isNaN(sh) || isNaN(sm) || isNaN(eh) || isNaN(em)) return null;
+  let startMins = sh * 60 + sm;
+  let endMins = eh * 60 + em;
+  let diff = endMins - startMins;
+  if (diff < 0) diff += 24 * 60; // overnight
+  return diff > 0 ? diff : null;
+}
+
+export function formatMinutesTo12(totalMinutes) {
+  const norm = ((totalMinutes % (24 * 60)) + (24 * 60)) % (24 * 60);
+  const h24 = Math.floor(norm / 60);
+  const m = norm % 60;
+  const period = h24 >= 12 ? 'PM' : 'AM';
+  const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+  return `${String(h12).padStart(2, '0')}:${String(m).padStart(2, '0')} ${period}`;
+}
+
+export function formatTaskDuration(t) {
+  if (!t) return 'Not scheduled';
+
+  // 1. Direct startTime and endTime
+  if (t.startTime && t.endTime) {
+    const s12 = formatTiming12(t.startTime, t.startPeriod || 'AM');
+    const e12 = formatTiming12(t.endTime, t.endPeriod || 'AM');
+    const diff = calculateMinutesDiff(t.startTime, t.endTime, t.startPeriod, t.endPeriod) || 30;
+    return `${s12} – ${e12} (${diff} min)`;
+  }
+
+  // 2. Parsable timing range string e.g. "10:00 AM - 10:30 AM EST" or "10:00 AM – 11:00 AM"
+  if (t.timing) {
+    const match = t.timing.match(/(\d{1,2}:\d{2}\s*(?:AM|PM|am|pm)?)\s*[-–]\s*(\d{1,2}:\d{2}\s*(?:AM|PM|am|pm)?)/);
+    if (match) {
+      const p1 = to12HourParts(match[1]);
+      const p2 = to12HourParts(match[2]);
+      const s12 = `${p1.time} ${p1.period}`;
+      const e12 = `${p2.time} ${p2.period}`;
+      const diff = calculateMinutesDiff(p1.time, p2.time, p1.period, p2.period) || 30;
+      return `${s12} – ${e12} (${diff} min)`;
     }
-    if (t.interviewDateTime) {
-      const timePart = t.interviewDateTime.includes('T') ? t.interviewDateTime.split('T')[1].slice(0, 5) : '';
-      if (timePart) {
-        return `${formatEstTime(timePart)} EST${t.duration ? ` (${t.duration})` : ''}`;
+  }
+
+  // 3. interviewDateTime with duration
+  if (t.interviewDateTime && (t.taskType === 'Interview' || t.category === 'Interview')) {
+    const timePart = t.interviewDateTime.includes('T') ? t.interviewDateTime.split('T')[1].slice(0, 5) : '';
+    if (timePart) {
+      const p1 = to12HourParts(timePart);
+      const s12 = `${p1.time} ${p1.period}`;
+      let diff = 30;
+      if (t.duration) {
+        const dStr = String(t.duration).toLowerCase();
+        if (dStr.includes('hr')) {
+          const hrs = parseFloat(dStr) || 1;
+          diff = Math.round(hrs * 60);
+        } else {
+          const m = parseInt(dStr, 10);
+          if (!isNaN(m) && m > 0) diff = m;
+        }
       }
+      const [sh, sm] = to24HourTime(p1.time, p1.period).split(':').map(Number);
+      const endTotalMins = sh * 60 + sm + diff;
+      const e12 = formatMinutesTo12(endTotalMins);
+      return `${s12} – ${e12} (${diff} min)`;
     }
-    return t.duration || '30 mins';
+  }
+
+  // 4. Single time provided for interview
+  if (t.time && (t.taskType === 'Interview' || t.category === 'Interview')) {
+    const p1 = to12HourParts(t.time);
+    const s12 = `${p1.time} ${p1.period}`;
+    const diff = 30;
+    const [sh, sm] = to24HourTime(p1.time, p1.period).split(':').map(Number);
+    const e12 = formatMinutesTo12(sh * 60 + sm + diff);
+    return `${s12} – ${e12} (${diff} min)`;
+  }
+
+  return 'Not scheduled';
+}
+
+export function formatDateDisplay(dateStr) {
+  if (!dateStr || dateStr === '—') return '—';
+  const clean = String(dateStr).trim();
+  if (/^[A-Za-z]{3}\s+\d{1,2}/.test(clean)) return clean;
+  const matchIso = clean.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (matchIso) {
+    const year = matchIso[1];
+    const month = parseInt(matchIso[2], 10) - 1;
+    const day = parseInt(matchIso[3], 10);
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    if (month >= 0 && month < 12) {
+      return `${months[month]} ${day}, ${year}`;
+    }
+  }
+  const matchDmy = clean.match(/^(\d{2})-(\d{2})-(\d{4})/);
+  if (matchDmy) {
+    const day = parseInt(matchDmy[1], 10);
+    const month = parseInt(matchDmy[2], 10) - 1;
+    const year = matchDmy[3];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    if (month >= 0 && month < 12) {
+      return `${months[month]} ${day}, ${year}`;
+    }
+  }
+  return clean;
+}
+
+export function formatTaskDate(t) {
+  if (!t) return '—';
+  const isInterview = t.taskType === 'Interview' || t.category === 'Interview';
+  if (isInterview) {
+    const rawDate = t.date || t.dueDate || (t.interviewDateTime ? t.interviewDateTime.slice(0, 10) : '');
+    return formatDateDisplay(rawDate);
   }
 
   // Non-interview tasks: TAC, TQC, JDC, Demo, RUC
   const from = t.fromDate || t.dateFrom || t.date || '';
   const to = t.toDate || t.dateTo || t.dueDate || '';
   if (from && to && from !== to) {
-    return `${from} to ${to}`;
+    const fStr = formatDateDisplay(from);
+    const tStr = formatDateDisplay(to);
+    return `${fStr} – ${tStr}`;
   }
-  return from || to || '—';
+  return formatDateDisplay(from || to || t.date || '—');
+}
+
+export function formatInterviewTimingDisplay(t) {
+  return formatTaskDuration(t);
 }
 
 const COMMON_INTERVIEW_TIMES = [
@@ -3013,11 +3120,11 @@ export default function Tasks() {
             <table className="w-full text-sm">
               <thead className="sticky top-0 bg-slate-50 border-b border-slate-200 z-10">
                 <tr className="text-left text-xs text-slate-600 uppercase tracking-wider">
-                  <th className="py-3 px-4 font-semibold">Date / EST Timing</th>
+                  <th className="py-3 px-4 font-semibold">Date</th>
+                  <th className="py-3 px-4 font-semibold">Duration</th>
                   <th className="py-3 px-4 font-semibold">
                     {isMarketingTl ? 'Pseudo Name' : (roleIsMarketing(currentRole) ? 'Tech ID' : 'Tech Person')}
                   </th>
-                  <th className="py-3 px-3 font-semibold">Timing / Session</th>
                   <th className="py-3 px-3 font-semibold">Task</th>
                   <th className="py-3 px-4 font-semibold">Candidate Name</th>
                   <th className="py-3 px-4 font-semibold">Position</th>
@@ -3087,34 +3194,37 @@ export default function Tasks() {
                           : 'border-slate-100 hover:bg-slate-50'
                       }`}
                     >
-                      {/* Date & EST Timing */}
-                      <td className="py-3 px-4 mono text-xs text-slate-600 whitespace-nowrap">
-                        <div className="flex items-center gap-1.5">
-                          <span>{t.date || t.dueDate}</span>
+                      {/* Date */}
+                      <td className="py-3 px-4 text-xs text-slate-800 whitespace-nowrap">
+                        <div className="flex items-center gap-1.5 font-medium">
+                          <CalIcon size={13} className="text-blue-600 shrink-0" />
+                          <span>{formatTaskDate(t)}</span>
                           {getTaskScheduleMeta(t).tier === 2 && (
                             <span className="px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-700 border border-amber-300 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-700 text-[9px] font-bold">
                               OVERDUE
                             </span>
                           )}
                         </div>
-                        {timing && (
-                          <div className="flex items-center gap-1 mt-0.5">
-                            <Clock size={11} className={timing.isUrgent ? 'text-rose-600 animate-pulse' : 'text-blue-600'} />
-                            <span className={`text-[10px] font-bold ${timing.isUrgent ? 'text-rose-700' : 'text-blue-700'}`}>
-                              {timing.estFormatted}
+                      </td>
+
+                      {/* Duration */}
+                      <td className="py-3 px-4 text-xs whitespace-nowrap">
+                        <div className="flex items-center gap-1.5">
+                          <Clock size={13} className="text-slate-400 shrink-0" />
+                          <span className={`font-semibold ${formatTaskDuration(t) === 'Not scheduled' ? 'text-slate-400 italic font-normal' : 'text-slate-900'}`}>
+                            {formatTaskDuration(t)}
+                          </span>
+                          {timing?.isUrgent && (
+                            <span className="px-1.5 py-0.2 rounded bg-rose-600 text-white text-[9px] font-black animate-pulse">
+                              URGENT
                             </span>
-                            {timing.isUrgent && (
-                              <span className="px-1.5 py-0.2 rounded bg-rose-600 text-white text-[9px] font-black animate-pulse">
-                                URGENT
-                              </span>
-                            )}
-                            {timing.isElevated && (
-                              <span className="px-1 py-0.2 rounded bg-amber-500 text-white text-[9px] font-bold">
-                                ELEVATED
-                              </span>
-                            )}
-                          </div>
-                        )}
+                          )}
+                          {timing?.isElevated && (
+                            <span className="px-1 py-0.2 rounded bg-amber-500 text-white text-[9px] font-bold">
+                              ELEVATED
+                            </span>
+                          )}
+                        </div>
                       </td>
 
                       {/* Tech Person / Pseudo Name */}
@@ -3152,13 +3262,6 @@ export default function Tasks() {
                             </div>
                           </div>
                         )}
-                      </td>
-
-                      {/* Timing / Session */}
-                      <td className="py-3 px-3 text-xs whitespace-nowrap">
-                        <span className="font-semibold text-slate-800">
-                          {formatInterviewTimingDisplay(t)}
-                        </span>
                       </td>
 
                       {/* Task Type */}

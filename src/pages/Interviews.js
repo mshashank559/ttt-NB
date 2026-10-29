@@ -6,6 +6,7 @@ import { PageHeader, StatusBadge, SectionCard, EmptyState, KpiCard, Pagination }
 import { INTERVIEW_STATUSES, roleIsMarketing } from '../data/mockData';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { formatTaskDate, formatTaskDuration } from './Tasks';
 
 const STAGES = [
   'Scheduled',
@@ -574,7 +575,8 @@ export default function Interviews() {
                 <th>Candidate</th>
                 <th>Company</th>
                 <th>Position</th>
-                <th>Date & Time</th>
+                <th>Date</th>
+                <th>Duration</th>
                 <th>Status</th>
                 <th>Outcome</th>
                 <th>Action</th>
@@ -583,7 +585,7 @@ export default function Interviews() {
             <tbody className="divide-y divide-slate-100">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-8 text-center text-xs text-slate-400 italic">No interviews found for this filter.</td>
+                  <td colSpan={9} className="py-8 text-center text-xs text-slate-400 italic">No interviews found for this filter.</td>
                 </tr>
               ) : paginatedTableItems.map(i => (
                 <tr key={i.id} className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer transition-colors" onClick={() => setActive(i)}>
@@ -591,7 +593,8 @@ export default function Interviews() {
                   <td className="text-slate-900 font-medium text-xs">{i.candidateName || i.title?.split('—')?.[0]?.trim() || i.id}</td>
                   <td className="text-slate-700 font-medium text-xs">{i.company || '—'}</td>
                   <td className="text-slate-900 font-medium text-xs">{i.position}</td>
-                  <td className="text-slate-600 text-xs">{i.date} {i.time}</td>
+                  <td className="text-slate-700 text-xs whitespace-nowrap font-medium">{formatTaskDate(i)}</td>
+                  <td className="text-slate-800 text-xs whitespace-nowrap font-semibold">{formatTaskDuration(i)}</td>
                   <td><StatusBadge value={i.status} /></td>
                   <td>
                     {i.interviewOutcome && !['Rejected', 'Hold'].includes(i.status) ? (
