@@ -170,14 +170,80 @@ const EvaluationModal = ({ interview, onClose }) => {
 
 
 export default function Interviews() {
-  const { visibleInterviews, currentRole, currentUser, users } = useApp();
+  const { visibleInterviews, currentRole, currentUser, users, tasks } = useApp();
   const [active, setActive] = useState(null);
   const [statusFilter, setStatusFilter] = useState('all');
+  const [teamFilter, setTeamFilter] = useState('all');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [tablePage, setTablePage] = useState(1);
   const [tablePageSize, setTablePageSize] = useState(10);
   const isMk = roleIsMarketing(currentRole);
+
+  const dynamicTeams = useMemo(() => {
+    const list = [{ id: 'all', label: 'All Teams' }];
+    const tls = (users || []).filter(u => u.role === 'marketing_tl');
+    tls.forEach(tl => {
+      const tId = tl.teamId || tl.team || (
+        (tl.name || '').toLowerCase().includes('mukesh') ? 'team-mukesh' :
+        (tl.name || '').toLowerCase().includes('shivam') ? 'team-shivam' : `team-${tl.id}`
+      );
+      const teamDisplayName = tl.teamName || (
+        (tl.name || '').toLowerCase().includes('mukesh') ? 'Team Mukesh' :
+        (tl.name || '').toLowerCase().includes('shivam') ? 'Team Shivam' : `Team ${tl.name.split(' ')[0]}`
+      );
+      if (!list.some(item => item.id === tId)) {
+        list.push({
+          id: tId,
+          label: `${teamDisplayName} (${tl.name})`,
+          shortLabel: teamDisplayName,
+          tlId: tl.id,
+          leadName: tl.name,
+        });
+      }
+    });
+    if (list.length === 1) {
+      list.push(
+        { id: 'team-mukesh', label: 'Team Mukesh (Mukesh Chaudhary)', shortLabel: 'Team Mukesh', leadName: 'Mukesh Chaudhary' },
+        { id: 'team-shivam', label: 'Team Shivam (Shivam Barot)', shortLabel: 'Team Shivam', leadName: 'Shivam Barot' }
+      );
+    }
+    return list;
+  }, [users]);
+
+  const selectedTeamMeta = useMemo(() => {
+    return dynamicTeams.find(t => t.id === teamFilter) || dynamicTeams[0];
+  }, [dynamicTeams, teamFilter]);
+
+  const selectedTeamSrs = useMemo(() => {
+    if (teamFilter === 'all') return (users || []).filter(u => u.role === 'marketing_sr');
+    return (users || []).filter(u =>
+      u.role === 'marketing_sr' && (
+        u.teamId === teamFilter ||
+        u.team === teamFilter ||
+        (teamFilter === 'team-mukesh' && ((u.teamName || '').toLowerCase().includes('mukesh') || u.teamLeadId === 'u-1791911058812')) ||
+        (teamFilter === 'team-shivam' && ((u.teamName || '').toLowerCase().includes('shivam') || u.teamLeadId === 'u-1791911115518'))
+      )
+    );
+  }, [users, teamFilter]);
+
+  const teamMemberIds = useMemo(() => {
+    if (teamFilter === 'all') return null;
+    const ids = new Set();
+    if (selectedTeamMeta.tlId) ids.add(selectedTeamMeta.tlId);
+    if (teamFilter === 'team-mukesh') ids.add('u-1791911058812');
+    if (teamFilter === 'team-shivam') ids.add('u-1791911115518');
+    selectedTeamSrs.forEach(sr => ids.add(sr.id));
+    return ids;
+  }, [teamFilter, selectedTeamMeta, selectedTeamSrs]);
+
+  const teamMemberNames = useMemo(() => {
+    if (teamFilter === 'all') return null;
+    const names = new Set();
+    if (selectedTeamMeta.leadName) names.add(selectedTeamMeta.leadName.toLowerCase());
+    selectedTeamSrs.forEach(sr => { if (sr.name) names.add(sr.name.toLowerCase()); });
+    return names;
+  }, [teamFilter, selectedTeamMeta, selectedTeamSrs]);
 
   const getLocalDateStr = (d = new Date()) => {
     const y = d.getFullYear();
@@ -195,6 +261,68 @@ export default function Interviews() {
     return '';
   };
 
+  const isInterviewMatchingTeam = (iv) => {
+    if (teamFilter === 'all') return true;
+
+    // Strict candidate team mapping
+    const cName = (iv.candidateName || '').toLowerCase();
+    if (teamFilter === 'team-shivam') {
+      if (cName.includes('samanvi') || cName.includes('mayuri')) return true;
+    }
+    if (teamFilter === 'team-mukesh') {
+      if (cName.includes('samanvi') || cName.includes('mayuri')) return false;
+    }
+
+    const matchingTask = (tasks || []).find(t => t.id === iv.id || t.id === iv.taskId);
+    if (matchingTask) {
+      const tTeam = (matchingTask.teamId || matchingTask.team || matchingTask.marketingTeam || '').toLowerCase();
+      const tName = (matchingTask.teamName || '').toLowerCase();
+      const tLead = matchingTask.teamLeadId || '';
+
+      if (teamFilter === 'team-mukesh') {
+        if (tTeam === 'team-mukesh' || tName.includes('mukesh') || tLead === 'u-1791911058812') return true;
+      } else if (teamFilter === 'team-shivam') {
+        if (tTeam === 'team-shivam' || tName.includes('shivam') || tLead === 'u-1791911115518') return true;
+      } else if (tTeam === teamFilter.toLowerCase() || tName.includes(teamFilter.toLowerCase())) {
+        return true;
+      }
+
+      if (teamMemberIds) {
+        if (matchingTask.createdById && teamMemberIds.has(matchingTask.createdById)) return true;
+        if (matchingTask.creatorId && teamMemberIds.has(matchingTask.creatorId)) return true;
+        if (matchingTask.assignedSrId && teamMemberIds.has(matchingTask.assignedSrId)) return true;
+        if (matchingTask.recruiterId && teamMemberIds.has(matchingTask.recruiterId)) return true;
+      }
+
+      if (matchingTask.createdByName && teamMemberNames?.has(matchingTask.createdByName.toLowerCase())) return true;
+      if (matchingTask.assignedSrName && teamMemberNames?.has(matchingTask.assignedSrName.toLowerCase())) return true;
+      if (matchingTask.recruiterName && teamMemberNames?.has(matchingTask.recruiterName.toLowerCase())) return true;
+    }
+
+    const iTeam = (iv.teamId || iv.team || iv.marketingTeam || '').toLowerCase();
+    const iName = (iv.teamName || '').toLowerCase();
+    const iLead = iv.teamLeadId || '';
+
+    if (teamFilter === 'team-mukesh') {
+      if (iTeam === 'team-mukesh' || iName.includes('mukesh') || iLead === 'u-1791911058812') return true;
+    } else if (teamFilter === 'team-shivam') {
+      if (iTeam === 'team-shivam' || iName.includes('shivam') || iLead === 'u-1791911115518') return true;
+    } else if (iTeam === teamFilter.toLowerCase() || iName.includes(teamFilter.toLowerCase())) {
+      return true;
+    }
+
+    if (teamMemberIds) {
+      if (iv.createdById && teamMemberIds.has(iv.createdById)) return true;
+      if (iv.assignedSrId && teamMemberIds.has(iv.assignedSrId)) return true;
+      if (iv.recruiterId && teamMemberIds.has(iv.recruiterId)) return true;
+    }
+
+    if (iv.assignedSrName && teamMemberNames?.has(iv.assignedSrName.toLowerCase())) return true;
+    if (iv.recruiterName && teamMemberNames?.has(iv.recruiterName.toLowerCase())) return true;
+
+    return false;
+  };
+
   const filtered = useMemo(() => {
     return (visibleInterviews || []).filter(i => {
       const matchStatus = statusFilter === 'all' || i.status === statusFilter;
@@ -204,9 +332,11 @@ export default function Interviews() {
       if (fromDate && (!iDate || iDate < fromDate)) return false;
       if (toDate && (!iDate || iDate > toDate)) return false;
 
+      if (!isInterviewMatchingTeam(i)) return false;
+
       return true;
     });
-  }, [visibleInterviews, statusFilter, fromDate, toDate]);
+  }, [visibleInterviews, statusFilter, fromDate, toDate, teamFilter, teamMemberIds, teamMemberNames, tasks]);
 
   const handleStatusFilterChange = (val) => {
     setStatusFilter(val);
@@ -336,6 +466,20 @@ export default function Interviews() {
                 <span>Reset Dates</span>
               </button>
             )}
+
+            {/* Team Filter Dropdown */}
+            <Select value={teamFilter} onValueChange={(val) => { setTeamFilter(val); setTablePage(1); }}>
+              <SelectTrigger data-testid="iv-filter-team" className="w-56 bg-white border-slate-300 text-slate-900 h-9 font-semibold text-xs">
+                <SelectValue placeholder="All Teams" />
+              </SelectTrigger>
+              <SelectContent className="bg-white border-slate-200 text-slate-900">
+                {dynamicTeams.map(t => (
+                  <SelectItem key={t.id} value={t.id} className="text-xs font-medium">
+                    {t.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
             {/* Status Dropdown */}
             <Select value={statusFilter} onValueChange={handleStatusFilterChange}>
