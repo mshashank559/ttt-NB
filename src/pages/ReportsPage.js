@@ -12,7 +12,7 @@ import autoTable from 'jspdf-autotable';
 
 import { useApp } from '../context/AppContext';
 import { PageHeader, SectionCard, StatusBadge, Pagination } from '../components/common';
-import { calculateOverallRating, TECH_SUPPORT_TEAM, roleIsMarketing } from '../data/mockData';
+import { calculateOverallRating, TECH_SUPPORT_TEAM, roleIsMarketing, TSE_IDS, getTseId, getTseRealName } from '../data/mockData';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 
 // Performance Classification Utility (Configurable thresholds)
@@ -163,7 +163,7 @@ const sessionTypeBadge = {
 };
 
 export default function ReportsPage() {
-  const { feedbacks, currentRole } = useApp();
+  const { feedbacks, tasks, users, currentRole } = useApp();
   const canViewRealName = ['upper_management', 'management'].includes(currentRole);
 
   // Search & Filters State
@@ -192,27 +192,115 @@ export default function ReportsPage() {
   const [pdfGenerating, setPdfGenerating] = useState(false);
   const [excelExporting, setExcelExporting] = useState(false);
 
-  // Normalize sessions: "Code Name Unassigned" or Harit Verma records belong to Abhishek (TSE-NB-001)
-  const normalizedFeedbacks = useMemo(() => {
-    return (feedbacks || []).map(f => {
-      const isHaritOrAbhishek =
-        f.techSupport === 'Code Name Unassigned' ||
-        f.techSupport === 'Abhishek' ||
-        f.techSupportId === 'TSE-NB-001' ||
-        (f.employeeName && f.employeeName.toLowerCase().includes('harit'));
-
-      if (isHaritOrAbhishek) {
-        return {
-          ...f,
-          techSupport: 'Abhishek',
-          employeeName: 'Harit verma',
-          techSupportId: 'TSE-NB-001',
-          techSupportEmail: 'nbtech1@netbounceplacement.com',
-        };
+  // Unified Authoritative Dataset: Left Join tasks and feedbacks matching Candidate Feedback Panel
+  const unifiedFeedbacks = useMemo(() => {
+    const feedbackByTaskId = new Map();
+    (feedbacks || []).forEach(f => {
+      if (f.taskId) feedbackByTaskId.set(String(f.taskId), f);
+      if (f.id && String(f.id).startsWith('fb-task-')) {
+        feedbackByTaskId.set(String(f.id).replace('fb-task-', ''), f);
       }
-      return f;
     });
-  }, [feedbacks]);
+
+    const taskIdsSeen = new Set();
+
+    const taskRows = (tasks || []).map(t => {
+      taskIdsSeen.add(String(t.id));
+      const fb = feedbackByTaskId.get(String(t.id));
+
+      // Resolve assigned TSE accurately from task & users across all TSEs
+      const assignedUserId = t.assigneeId;
+      const assignedUser = (users || []).find(u =>
+        u.id === assignedUserId ||
+        u.empId === assignedUserId ||
+        u.tttNbId === assignedUserId ||
+        (t.codeName && u.codeName?.toLowerCase() === t.codeName.toLowerCase()) ||
+        (t.techPerson && u.name?.toLowerCase() === t.techPerson.toLowerCase())
+      );
+
+      const candidateCodeName = t.codeName || assignedUser?.codeName || (t.techPerson && !t.techPerson.includes(' ') && t.techPerson !== 'Unassigned' ? t.techPerson : '');
+      const candidateRealName = (t.techPerson && t.techPerson !== 'Unassigned') ? t.techPerson : (assignedUser?.name || '');
+
+      const matchingTse = TECH_SUPPORT_TEAM.find(item =>
+        (assignedUserId && (item.id === assignedUserId || TSE_IDS[assignedUserId] === item.id)) ||
+        (candidateCodeName && item.supportName.toLowerCase() === candidateCodeName.toLowerCase()) ||
+        (candidateRealName && (item.employeeName.toLowerCase().includes(candidateRealName.toLowerCase()) || candidateRealName.toLowerCase().includes(item.employeeName.toLowerCase()))) ||
+        (t.techPersonId && item.id === t.techPersonId) ||
+        (fb?.techSupportId && item.id === fb.techSupportId) ||
+        (fb?.techSupport && item.supportName.toLowerCase() === fb.techSupport.toLowerCase())
+      );
+
+      const resolvedCodeName = matchingTse?.supportName || candidateCodeName || (assignedUser?.codeName) || (t.techPerson && t.techPerson !== 'Unassigned' ? t.techPerson : (fb?.techSupport || 'Unassigned'));
+      const resolvedRealName = matchingTse?.employeeName || getTseRealName(resolvedCodeName) || candidateRealName || (assignedUser?.name) || (fb?.employeeName || '');
+      const resolvedOfficialId = matchingTse?.id || TSE_IDS[resolvedCodeName] || (assignedUser?.empId?.startsWith('TSE-NB') ? assignedUser.empId : '') || (t.techPersonId?.startsWith('TSE-NB') ? t.techPersonId : '') || (resolvedCodeName !== 'Unassigned' ? (TSE_IDS[resolvedCodeName] || '') : (fb?.techSupportId || ''));
+      const resolvedEmail = matchingTse?.email || assignedUser?.email || fb?.techSupportEmail || '';
+
+      const taskDate = t.date || (t.interviewDateTime ? t.interviewDateTime.slice(0, 10) : new Date().toISOString().slice(0, 10));
+
+      return {
+        id: fb?.id || `fb-task-${t.id}`,
+        taskId: t.id,
+        date: fb?.date || taskDate,
+        techSupport: resolvedCodeName,
+        techSupportId: resolvedOfficialId,
+        techSupportEmail: resolvedEmail,
+        employeeName: resolvedRealName,
+        codeName: resolvedCodeName,
+        candidateName: t.candidateName || fb?.candidateName || 'Candidate',
+        candidateEmail: t.candidateEmail || fb?.candidateEmail || '',
+        recruiterName: t.assignedSrName || t.recruiterName || fb?.recruiterName || 'Senior Recruiter',
+        pocId: t.assignedSrId || t.pocId || fb?.pocId || '',
+        teamId: t.teamId || fb?.teamId || 'team-mukesh',
+        teamLeadId: t.teamLeadId || fb?.teamLeadId || '',
+        teamName: t.teamName || fb?.teamName || 'Team Mukesh',
+        jobRole: t.position || fb?.jobRole || 'Software Engineer',
+        company: t.companyName || t.company || fb?.company || '',
+        round: t.taskType || fb?.round || 'Interview',
+        techSupportType: t.taskType || fb?.techSupportType || 'Interview',
+        taskStatus: t.status,
+        candidateFeedback: fb?.candidateFeedback || t.candidateFeedback || {
+          submitted: false,
+          performanceRating: null,
+          experienceRating: null,
+          comments: '',
+          timestamp: null,
+        },
+        marketingReview: fb?.marketingReview || t.marketingReview || null,
+      };
+    });
+
+    // Standalone historical feedbacks that don't match any task
+    const standaloneFeedbacks = (feedbacks || []).filter(f => {
+      const rawTaskId = f.taskId || (f.id && String(f.id).startsWith('fb-task-') ? String(f.id).replace('fb-task-', '') : null);
+      return !rawTaskId || !taskIdsSeen.has(String(rawTaskId));
+    }).map(f => {
+      const matchingTse = TECH_SUPPORT_TEAM.find(item =>
+        item.id === f.techSupportId ||
+        (f.techSupport && item.supportName.toLowerCase() === f.techSupport.toLowerCase()) ||
+        (f.employeeName && item.employeeName.toLowerCase().includes(f.employeeName.toLowerCase())) ||
+        (f.codeName && item.supportName.toLowerCase() === f.codeName.toLowerCase()) ||
+        (f.techSupport && TSE_IDS[f.techSupport] === item.id)
+      );
+
+      const resolvedCodeName = matchingTse?.supportName || f.techSupport || f.codeName || 'Unassigned';
+      const resolvedRealName = matchingTse?.employeeName || f.employeeName || getTseRealName(resolvedCodeName) || '';
+      const resolvedOfficialId = matchingTse?.id || f.techSupportId || TSE_IDS[resolvedCodeName] || '';
+      const resolvedEmail = matchingTse?.email || f.techSupportEmail || '';
+
+      return {
+        ...f,
+        techSupport: resolvedCodeName,
+        codeName: resolvedCodeName,
+        employeeName: resolvedRealName,
+        techSupportId: resolvedOfficialId,
+        techSupportEmail: resolvedEmail,
+      };
+    });
+
+    return [...taskRows, ...standaloneFeedbacks];
+  }, [tasks, feedbacks, users]);
+
+  const normalizedFeedbacks = unifiedFeedbacks;
 
   // Available Filter Options derived dynamically from actual data
   const filterOptions = useMemo(() => {
@@ -259,7 +347,8 @@ export default function ReportsPage() {
         const now = new Date();
         if (dateRange === 'today') {
           const todayStr = now.toISOString().slice(0, 10);
-          if (item.date !== todayStr && item.date !== '2026-10-08') return false;
+          const itemDateStr = typeof item.date === 'string' ? item.date.slice(0, 10) : '';
+          if (itemDateStr !== todayStr && itemDateStr !== '2026-10-08') return false;
         } else if (dateRange === 'week') {
           const diffDays = (now - itemDate) / (1000 * 60 * 60 * 24);
           if (diffDays > 7 || diffDays < -7) return false;
@@ -272,8 +361,14 @@ export default function ReportsPage() {
       }
 
       // 3. TSE Filter
-      if (selectedTseFilter !== 'all' && item.techSupport !== selectedTseFilter) {
-        return false;
+      if (selectedTseFilter !== 'all') {
+        const matchesTse =
+          item.techSupport === selectedTseFilter ||
+          item.codeName === selectedTseFilter ||
+          item.techSupportId === selectedTseFilter ||
+          (selectedTseFilter && TSE_IDS[selectedTseFilter] === item.techSupportId) ||
+          (item.employeeName && item.employeeName.toLowerCase().includes(selectedTseFilter.toLowerCase()));
+        if (!matchesTse) return false;
       }
 
       // 4. Technology / Job Role Filter
@@ -315,7 +410,7 @@ export default function ReportsPage() {
       return true;
     });
   }, [
-    feedbacks, search, dateRange, selectedTseFilter, techFilter,
+    normalizedFeedbacks, search, dateRange, selectedTseFilter, techFilter,
     companyFilter, roundFilter, typeFilter, feedbackStatusFilter, marketingFilter
   ]);
 
@@ -324,9 +419,10 @@ export default function ReportsPage() {
     const tseMap = new Map();
 
     TECH_SUPPORT_TEAM.forEach(t => {
-      tseMap.set(t.supportName, {
+      tseMap.set(t.id, {
         id: t.id,
         name: t.supportName,
+        codeName: t.supportName,
         employeeName: t.employeeName,
         email: t.email,
         candidatesHandled: 0,
@@ -337,54 +433,76 @@ export default function ReportsPage() {
       });
     });
 
-    // Populate with filtered sessions
+    // Populate with filtered sessions across all TSEs
     filteredSessions.forEach(session => {
-      let name = session.techSupport;
-      if (!name) return;
+      let targetTse = null;
 
-      if (name === 'Code Name Unassigned' || session.techSupportId === 'TSE-NB-001' || (session.employeeName && session.employeeName.toLowerCase().includes('harit'))) {
-        name = 'Abhishek';
+      // 1. Match by official techSupportId (e.g. TSE-NB-001 ... TSE-NB-008)
+      if (session.techSupportId && tseMap.has(session.techSupportId)) {
+        targetTse = tseMap.get(session.techSupportId);
       }
 
-      if (!tseMap.has(name)) {
-        tseMap.set(name, {
-          id: session.techSupportId || 'TSE-NB-999',
-          name,
-          employeeName: session.employeeName || name,
-          email: session.techSupportEmail || `${name.toLowerCase()}@netbounceplacement.com`,
-          candidatesHandled: 0,
-          sessions: [],
-          candidateRatings: [],
-          marketingRatings: [],
-          combinedScores: [],
-        });
+      // 2. Match by TSE_IDS lookup
+      if (!targetTse) {
+        const mappedId = TSE_IDS[session.techSupport] || TSE_IDS[session.employeeName] || TSE_IDS[session.codeName];
+        if (mappedId && tseMap.has(mappedId)) {
+          targetTse = tseMap.get(mappedId);
+        }
       }
 
-      const tse = tseMap.get(name);
-      tse.candidatesHandled += 1;
-      tse.sessions.push(session);
+      // 3. Match by name or codeName or employeeName
+      if (!targetTse) {
+        for (const t of tseMap.values()) {
+          if (
+            (session.techSupport && t.name.toLowerCase() === session.techSupport.toLowerCase()) ||
+            (session.codeName && t.codeName.toLowerCase() === session.codeName.toLowerCase()) ||
+            (session.employeeName && t.employeeName.toLowerCase().includes(session.employeeName.toLowerCase())) ||
+            (session.employeeName && session.employeeName.toLowerCase().includes(t.employeeName.toLowerCase()))
+          ) {
+            targetTse = t;
+            break;
+          }
+        }
+      }
+
+      // 4. Fallback if Abhishek / Harit unassigned
+      if (!targetTse) {
+        const isHaritOrAbhishek =
+          session.techSupport === 'Code Name Unassigned' ||
+          session.techSupport === 'Abhishek' ||
+          session.techSupportId === 'TSE-NB-001' ||
+          (session.employeeName && session.employeeName.toLowerCase().includes('harit'));
+        if (isHaritOrAbhishek) {
+          targetTse = tseMap.get('TSE-NB-001');
+        }
+      }
+
+      if (!targetTse) return;
+
+      targetTse.candidatesHandled += 1;
+      targetTse.sessions.push(session);
 
       // Candidate rating
       if (session.candidateFeedback?.submitted) {
         const cScore = Number(session.candidateFeedback.performanceRating || session.candidateFeedback.experienceRating || 0);
-        if (cScore > 0) tse.candidateRatings.push(cScore);
+        if (cScore > 0) targetTse.candidateRatings.push(cScore);
       }
 
       // Marketing rating
       if (session.marketingReview?.reviewed) {
         const mScore = Number(session.marketingReview.overallRating || session.marketingReview.performance || 0);
-        if (mScore > 0) tse.marketingRatings.push(mScore);
+        if (mScore > 0) targetTse.marketingRatings.push(mScore);
       }
 
       // Combined session rating
       const rating = calculateOverallRating(session.candidateFeedback, session.marketingReview);
       if (rating.score !== null) {
-        tse.combinedScores.push(rating.score);
+        targetTse.combinedScores.push(rating.score);
       }
     });
 
     // Compute final aggregated metrics per TSE
-    const result = Array.from(tseMap.values()).map(tse => {
+    let result = Array.from(tseMap.values()).map(tse => {
       const candidateAvg = tse.candidateRatings.length > 0
         ? tse.candidateRatings.reduce((a, b) => a + b, 0) / tse.candidateRatings.length
         : null;
@@ -412,13 +530,22 @@ export default function ReportsPage() {
       };
     });
 
+    // If specific TSE selected in filter dropdown, restrict result to that TSE
+    if (selectedTseFilter !== 'all') {
+      result = result.filter(t =>
+        t.name === selectedTseFilter ||
+        t.id === selectedTseFilter ||
+        t.id === TSE_IDS[selectedTseFilter]
+      );
+    }
+
     // Filter by performance tier if selected
     if (perfFilter !== 'all') {
       return result.filter(t => t.performance.label === perfFilter);
     }
 
     return result;
-  }, [filteredSessions, perfFilter]);
+  }, [filteredSessions, selectedTseFilter, perfFilter]);
 
   // Sorted TSE Table Data
   const sortedTseList = useMemo(() => {
@@ -1649,6 +1776,11 @@ export default function ReportsPage() {
                             <td className="py-3 px-3">
                               <div className="font-semibold text-slate-900">{s.candidateName}</div>
                               <div className="text-[10px] text-slate-500 truncate">{s.candidateEmail || 'Candidate'}</div>
+                              {s.candidateFeedback?.comments && (
+                                <div className="text-[10px] text-slate-600 italic bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200 mt-1 max-w-xs">
+                                  "{s.candidateFeedback.comments}"
+                                </div>
+                              )}
                             </td>
                             <td className="py-3 px-3 text-slate-800 font-medium">{s.jobRole || 'Engineer'}</td>
                             <td className="py-3 px-3">

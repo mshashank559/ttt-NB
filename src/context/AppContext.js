@@ -957,10 +957,13 @@ export const AppProvider = ({ children }) => {
   }, [currentRole, currentUser, tasks]);
 
   const submitCandidateFeedback = useCallback((feedbackId, feedbackData) => {
-    updateFeedbacksWithStorage(prev => prev.map(item => {
-      if (item.id !== feedbackId) return item;
+    const rawTaskId = String(feedbackId).replace('fb-task-', '');
+
+    // Sync candidate feedback to tasks state
+    setTasks(prev => prev.map(t => {
+      if (String(t.id) !== rawTaskId) return t;
       return {
-        ...item,
+        ...t,
         candidateFeedback: {
           submitted: true,
           ...feedbackData,
@@ -968,6 +971,60 @@ export const AppProvider = ({ children }) => {
         },
       };
     }));
+
+    // Sync candidate feedback to feedbacks state
+    updateFeedbacksWithStorage(prev => {
+      const exists = prev.some(item => item.id === feedbackId || (item.taskId && String(item.taskId) === rawTaskId));
+      if (exists) {
+        return prev.map(item => {
+          if (item.id !== feedbackId && (!item.taskId || String(item.taskId) !== rawTaskId)) return item;
+          return {
+            ...item,
+            candidateFeedback: {
+              submitted: true,
+              ...feedbackData,
+              timestamp: feedbackData.timestamp || new Date().toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+            },
+          };
+        });
+      }
+
+      // If feedback record wasn't pre-created in feedbacks list, synthesize and append it
+      const linkedTask = (tasks || []).find(t => String(t.id) === rawTaskId);
+      const assignedUserId = linkedTask?.assigneeId;
+      const matchingTse = TECH_SUPPORT_TEAM.find(item =>
+        item.id === assignedUserId ||
+        TSE_IDS[assignedUserId] === item.id ||
+        (linkedTask?.codeName && item.supportName.toLowerCase() === linkedTask.codeName.toLowerCase()) ||
+        (linkedTask?.techPerson && item.employeeName.toLowerCase().includes(linkedTask.techPerson.toLowerCase()))
+      );
+
+      const newRecord = {
+        id: feedbackId,
+        taskId: rawTaskId,
+        date: linkedTask?.date || new Date().toISOString().slice(0, 10),
+        techSupport: matchingTse?.supportName || linkedTask?.codeName || 'Abhishek',
+        techSupportId: matchingTse?.id || 'TSE-NB-001',
+        techSupportEmail: matchingTse?.email || 'nbtech1@netbounceplacement.com',
+        employeeName: matchingTse?.employeeName || 'Harit verma',
+        candidateName: linkedTask?.candidateName || feedbackData.candidateName || 'Candidate',
+        candidateEmail: linkedTask?.candidateEmail || feedbackData.candidateEmail || '',
+        recruiterName: linkedTask?.assignedSrName || 'Senior Recruiter',
+        teamName: linkedTask?.teamName || 'Team Mukesh',
+        jobRole: linkedTask?.position || 'Software Engineer',
+        company: linkedTask?.companyName || linkedTask?.company || '',
+        round: linkedTask?.taskType || 'Interview',
+        techSupportType: linkedTask?.taskType || 'Interview',
+        candidateFeedback: {
+          submitted: true,
+          ...feedbackData,
+          timestamp: feedbackData.timestamp || new Date().toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+        },
+        marketingReview: null,
+      };
+
+      return [newRecord, ...prev];
+    });
 
     // Auto-escalate if rating <= 3 stars with strict 24-hour SLA
     const rating = Number(feedbackData.performanceRating) || Number(feedbackData.experienceRating) || 5;
@@ -1016,7 +1073,7 @@ export const AppProvider = ({ children }) => {
     }).catch(() => { });
 
     toast.success('Candidate feedback updated successfully.');
-  }, [updateFeedbacksWithStorage, feedbacks, users, addSlaTicket]);
+  }, [updateFeedbacksWithStorage, feedbacks, tasks, users, addSlaTicket]);
 
   const addSagaFeedback = useCallback((newRecord) => {
     updateFeedbacksWithStorage(prev => [newRecord, ...prev]);
