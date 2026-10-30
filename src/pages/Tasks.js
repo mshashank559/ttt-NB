@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Plus, Search, UserRound, Calendar as CalIcon, Clock, Building2, Briefcase, FileText, StickyNote, MessageSquare, ShieldAlert, CheckCircle2, Sparkles, Lock, Paperclip, UploadCloud, X, File, Download, Eye, Trash2, UserMinus, AlertTriangle, Pencil, Globe } from 'lucide-react';
@@ -334,6 +334,7 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
   const [attachments, setAttachments] = useState([]);
   const [isUploading, setIsUploading] = useState(false);
   const [allowTseOverride, setAllowTseOverride] = useState(false);
+  const prevOpenRef = useRef(false);
 
   const [form, setForm] = useState({
     date: todayStr,
@@ -510,27 +511,42 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
     return tseAvailabilityMap[form.assigneeId] || { available: true, conflicts: [] };
   }, [form.assigneeId, form.taskType, form.interviewDateTime, tseAvailabilityMap]);
 
-  // Sync team & clear inputs whenever modal opens
+  // Sync team & clear inputs ONLY when modal transitions from closed to open
   useEffect(() => {
-    if (open) {
+    if (open && !prevOpenRef.current) {
       setAttachments([]);
       setAllowTseOverride(false);
-      setForm(prev => ({
-        ...prev,
+      setForm({
+        date: todayStr,
+        fromDate: todayStr,
+        toDate: todayStr,
+        startTime: '10:00',
+        startPeriod: 'AM',
+        endTime: '10:30',
+        endPeriod: 'AM',
+        timing: '10:00 AM - 10:30 AM EST',
+        assigneeId: (isMarketingUser || isExternalUser) ? '' : (tseUsers[0]?.id || ''),
+        duration: '30 mins',
+        taskType: 'Interview',
+        interviewDateTime: `${todayStr}T10:00`,
+        candidateName: '',
         position: '',
         companyName: '',
-        candidateName: '',
-        teamId: isExternalUser ? 'external' : (isMarketingUser ? initialTeam.id : prev.teamId || initialTeam.id),
-        teamName: isExternalUser ? 'External' : (isMarketingUser ? initialTeam.name : prev.teamName || initialTeam.name),
-        teamLeadId: isExternalUser ? (currentUser?.id || 'u-manpatel-01') : (isMarketingUser ? initialTeam.leadId : prev.teamLeadId || initialTeam.leadId),
+        status: 'Pending',
+        teamId: isExternalUser ? 'external' : initialTeam.id,
+        teamName: isExternalUser ? 'External' : initialTeam.name,
+        teamLeadId: isExternalUser ? (currentUser?.id || 'u-manpatel-01') : initialTeam.leadId,
         assignedSrId: isExternalUser ? (currentUser?.id || 'u-manpatel-01') : '',
         assignedSrName: isExternalUser ? (currentUser?.name || 'Manpatel') : '',
         assignedSrEmail: isExternalUser ? (currentUser?.email || 'manpatel@external.com') : '',
         recruiterName: isExternalUser ? (currentUser?.name || 'Manpatel') : '',
-        assigneeId: (isMarketingUser || isExternalUser) ? '' : (prev.assigneeId || tseUsers[0]?.id || ''),
-      }));
+        remark: '',
+        description: '',
+        notes: '',
+      });
     }
-  }, [open, isMarketingUser, isExternalUser, initialTeam, currentUser]);
+    prevOpenRef.current = open;
+  }, [open, isMarketingUser, isExternalUser, initialTeam, currentUser, todayStr, tseUsers]);
 
   // Multi-format File Upload Handler (Feature 2)
   const handleFileUpload = async (e) => {
@@ -641,7 +657,7 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
       endTime: '10:30',
       endPeriod: 'AM',
       timing: '10:00 AM - 10:30 AM EST',
-      assigneeId: isMarketingUser ? '' : (tseUsers[0]?.id || ''),
+      assigneeId: (isMarketingUser || isExternalUser) ? '' : (tseUsers[0]?.id || ''),
       duration: '30 mins',
       taskType: 'Interview',
       interviewDateTime: `${todayStr}T10:00`,
@@ -649,12 +665,13 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
       position: '',
       companyName: '',
       status: 'Pending',
-      teamId: initialTeam.id,
-      teamName: initialTeam.name,
-      teamLeadId: initialTeam.leadId,
-      assignedSrId: '',
-      assignedSrName: '',
-      assignedSrEmail: '',
+      teamId: isExternalUser ? 'external' : initialTeam.id,
+      teamName: isExternalUser ? 'External' : initialTeam.name,
+      teamLeadId: isExternalUser ? (currentUser?.id || 'u-manpatel-01') : initialTeam.leadId,
+      assignedSrId: isExternalUser ? (currentUser?.id || 'u-manpatel-01') : '',
+      assignedSrName: isExternalUser ? (currentUser?.name || 'Manpatel') : '',
+      assignedSrEmail: isExternalUser ? (currentUser?.email || 'manpatel@external.com') : '',
+      recruiterName: isExternalUser ? (currentUser?.name || 'Manpatel') : '',
       remark: '',
       description: '',
       notes: '',
@@ -970,7 +987,7 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
                   </span>
                 )}
               </div>
-              <Select value={form.assigneeId} onValueChange={v => setForm({ ...form, assigneeId: v })}>
+              <Select value={form.assigneeId} onValueChange={v => setForm(prev => ({ ...prev, assigneeId: v }))}>
                 <SelectTrigger data-testid="task-form-assignee" className="bg-slate-50 border-slate-300 text-slate-900 focus:bg-white">
                   <SelectValue placeholder="Select TSE" />
                 </SelectTrigger>
@@ -1034,7 +1051,7 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
             <Input
               data-testid="task-form-candidate"
               value={form.candidateName}
-              onChange={e => setForm({ ...form, candidateName: e.target.value })}
+              onChange={e => setForm(prev => ({ ...prev, candidateName: e.target.value }))}
               placeholder="e.g. Shubhangi Mishra"
               className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white"
             />
@@ -1173,7 +1190,7 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
             <Input
               data-testid="task-form-position"
               value={form.position}
-              onChange={e => setForm({ ...form, position: e.target.value })}
+              onChange={e => setForm(prev => ({ ...prev, position: e.target.value }))}
               placeholder="e.g. Data Scientist, SWE, Data Analyst"
               className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white"
             />
@@ -1185,7 +1202,7 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
             <Input
               data-testid="task-form-company"
               value={form.companyName}
-              onChange={e => setForm({ ...form, companyName: e.target.value })}
+              onChange={e => setForm(prev => ({ ...prev, companyName: e.target.value }))}
               placeholder="e.g. Google, Apple, Amazon"
               className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white"
             />
@@ -1194,7 +1211,7 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
           {/* Status */}
           <div>
             <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Status</label>
-            <Select value={form.status} onValueChange={v => setForm({ ...form, status: v })}>
+            <Select value={form.status} onValueChange={v => setForm(prev => ({ ...prev, status: v }))}>
               <SelectTrigger data-testid="task-form-status" className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white">
                 <SelectValue placeholder="Select status" />
               </SelectTrigger>
@@ -1212,7 +1229,7 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
             <Input
               data-testid="task-form-remark"
               value={form.remark}
-              onChange={e => setForm({ ...form, remark: e.target.value })}
+              onChange={e => setForm(prev => ({ ...prev, remark: e.target.value }))}
               placeholder="e.g. Candidate has started by himself, Available after 4 pm"
               className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white"
             />
@@ -1224,7 +1241,7 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
             <Textarea
               data-testid="task-form-desc"
               value={form.description}
-              onChange={e => setForm({ ...form, description: e.target.value })}
+              onChange={e => setForm(prev => ({ ...prev, description: e.target.value }))}
               rows={3}
               className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white resize-none"
               placeholder="Add candidate assessment details, questions or runbook steps..."
@@ -1237,7 +1254,7 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
             <Textarea
               data-testid="task-form-notes"
               value={form.notes}
-              onChange={e => setForm({ ...form, notes: e.target.value })}
+              onChange={e => setForm(prev => ({ ...prev, notes: e.target.value }))}
               rows={2}
               className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white resize-none"
               placeholder="Add internal handover notes, additional instructions..."
@@ -1380,8 +1397,12 @@ const EditTaskModal = ({ task, open, onOpenChange }) => {
     );
   }, [users, form.teamId]);
 
+  const prevTaskIdRef = useRef(null);
+  const prevEditOpenRef = useRef(false);
+
   useEffect(() => {
-    if (task && open) {
+    if (task && open && (!prevEditOpenRef.current || prevTaskIdRef.current !== task.id)) {
+      prevTaskIdRef.current = task.id;
       setAttachments(Array.isArray(task.attachments) ? task.attachments : []);
       const taskDate = task.date || task.dueDate || (task.interviewDateTime ? task.interviewDateTime.slice(0, 10) : '');
       const rawStart = task.startTime || (task.interviewDateTime && task.interviewDateTime.includes('T') ? task.interviewDateTime.split('T')[1].slice(0, 5) : '10:00');
@@ -1418,7 +1439,11 @@ const EditTaskModal = ({ task, open, onOpenChange }) => {
         status: task.status || 'Pending',
       });
     }
-  }, [task, open]);
+    prevEditOpenRef.current = open;
+    if (!open) {
+      prevTaskIdRef.current = null;
+    }
+  }, [task?.id, open]);
 
   const handleStartTimeChange = (newStartTime) => {
     let cleanVal = newStartTime;
@@ -1870,7 +1895,7 @@ const EditTaskModal = ({ task, open, onOpenChange }) => {
           {/* Status */}
           <div>
             <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Status</label>
-            <Select value={form.status} onValueChange={v => setForm({ ...form, status: v })}>
+            <Select value={form.status} onValueChange={v => setForm(prev => ({ ...prev, status: v }))}>
               <SelectTrigger data-testid="edit-task-form-status" className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white text-xs">
                 <SelectValue placeholder="Select status" />
               </SelectTrigger>
@@ -1891,7 +1916,7 @@ const EditTaskModal = ({ task, open, onOpenChange }) => {
             <Input
               data-testid="edit-task-form-candidate"
               value={form.candidateName}
-              onChange={e => setForm({ ...form, candidateName: e.target.value })}
+              onChange={e => setForm(prev => ({ ...prev, candidateName: e.target.value }))}
               placeholder="e.g. Navya Sadineni, Rohit Adike"
               className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white text-sm"
             />
@@ -1903,7 +1928,7 @@ const EditTaskModal = ({ task, open, onOpenChange }) => {
             <Input
               data-testid="edit-task-form-position"
               value={form.position}
-              onChange={e => setForm({ ...form, position: e.target.value })}
+              onChange={e => setForm(prev => ({ ...prev, position: e.target.value }))}
               placeholder="e.g. Clinical Data Analyst, SWE"
               className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white text-xs"
             />
@@ -1915,7 +1940,7 @@ const EditTaskModal = ({ task, open, onOpenChange }) => {
             <Input
               data-testid="edit-task-form-company"
               value={form.companyName}
-              onChange={e => setForm({ ...form, companyName: e.target.value })}
+              onChange={e => setForm(prev => ({ ...prev, companyName: e.target.value }))}
               placeholder="e.g. Google, Unlearn, Morning star"
               className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white text-xs"
             />
@@ -1925,7 +1950,7 @@ const EditTaskModal = ({ task, open, onOpenChange }) => {
           {canAssignTse && (
             <div className="md:col-span-2 space-y-1.5">
               <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Tech Person (TSE)</label>
-              <Select value={form.assigneeId} onValueChange={v => setForm({ ...form, assigneeId: v })}>
+              <Select value={form.assigneeId} onValueChange={v => setForm(prev => ({ ...prev, assigneeId: v }))}>
                 <SelectTrigger data-testid="edit-task-form-assignee" className="bg-slate-50 border-slate-300 text-slate-900 focus:bg-white text-xs">
                   <SelectValue placeholder="Select TSE" />
                 </SelectTrigger>
@@ -1954,7 +1979,7 @@ const EditTaskModal = ({ task, open, onOpenChange }) => {
             <Input
               data-testid="edit-task-form-remark"
               value={form.remark}
-              onChange={e => setForm({ ...form, remark: e.target.value })}
+              onChange={e => setForm(prev => ({ ...prev, remark: e.target.value }))}
               placeholder="e.g. Candidate available after 4 pm"
               className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white text-xs"
             />
@@ -1966,7 +1991,7 @@ const EditTaskModal = ({ task, open, onOpenChange }) => {
             <Textarea
               data-testid="edit-task-form-desc"
               value={form.description}
-              onChange={e => setForm({ ...form, description: e.target.value })}
+              onChange={e => setForm(prev => ({ ...prev, description: e.target.value }))}
               rows={2}
               className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white resize-none text-xs"
               placeholder="Add candidate assessment details or runbook steps..."
