@@ -218,22 +218,30 @@ export default function ReportsPage() {
         (t.techPerson && u.name?.toLowerCase() === t.techPerson.toLowerCase())
       );
 
-      const candidateCodeName = t.codeName || assignedUser?.codeName || (t.techPerson && !t.techPerson.includes(' ') && t.techPerson !== 'Unassigned' ? t.techPerson : '');
+      const candidateCodeName = (t.codeName && t.codeName !== 'Code Name Unassigned' && t.codeName !== 'Unassigned') ? t.codeName : (assignedUser?.codeName || '');
       const candidateRealName = (t.techPerson && t.techPerson !== 'Unassigned') ? t.techPerson : (assignedUser?.name || '');
 
-      const matchingTse = TECH_SUPPORT_TEAM.find(item =>
+      // 1. Authoritative match from Task assignment
+      let matchingTse = TECH_SUPPORT_TEAM.find(item =>
         (assignedUserId && (item.id === assignedUserId || TSE_IDS[assignedUserId] === item.id)) ||
         (candidateCodeName && item.supportName.toLowerCase() === candidateCodeName.toLowerCase()) ||
         (candidateRealName && (item.employeeName.toLowerCase().includes(candidateRealName.toLowerCase()) || candidateRealName.toLowerCase().includes(item.employeeName.toLowerCase()))) ||
-        (t.techPersonId && item.id === t.techPersonId) ||
-        (fb?.techSupportId && item.id === fb.techSupportId) ||
-        (fb?.techSupport && item.supportName.toLowerCase() === fb.techSupport.toLowerCase())
+        (t.techPersonId && item.id === t.techPersonId)
       );
 
-      const resolvedCodeName = matchingTse?.supportName || candidateCodeName || (assignedUser?.codeName) || (t.techPerson && t.techPerson !== 'Unassigned' ? t.techPerson : (fb?.techSupport || 'Unassigned'));
+      // 2. Only if task has no assigned TSE, fallback to feedback (if fb is genuinely assigned)
+      if (!matchingTse && fb && fb.techSupport && fb.techSupport !== 'Code Name Unassigned' && fb.techSupport !== 'Unassigned') {
+        matchingTse = TECH_SUPPORT_TEAM.find(item =>
+          item.id === fb.techSupportId ||
+          item.supportName.toLowerCase() === fb.techSupport.toLowerCase() ||
+          (fb.employeeName && item.employeeName.toLowerCase().includes(fb.employeeName.toLowerCase()))
+        );
+      }
+
+      const resolvedCodeName = matchingTse?.supportName || candidateCodeName || (assignedUser?.codeName) || (t.techPerson && t.techPerson !== 'Unassigned' ? t.techPerson : (fb?.techSupport && fb.techSupport !== 'Code Name Unassigned' ? fb.techSupport : 'Unassigned'));
       const resolvedRealName = matchingTse?.employeeName || getTseRealName(resolvedCodeName) || candidateRealName || (assignedUser?.name) || (fb?.employeeName || '');
-      const resolvedOfficialId = matchingTse?.id || TSE_IDS[resolvedCodeName] || (assignedUser?.empId?.startsWith('TSE-NB') ? assignedUser.empId : '') || (t.techPersonId?.startsWith('TSE-NB') ? t.techPersonId : '') || (resolvedCodeName !== 'Unassigned' ? (TSE_IDS[resolvedCodeName] || '') : (fb?.techSupportId || ''));
-      const resolvedEmail = matchingTse?.email || assignedUser?.email || fb?.techSupportEmail || '';
+      const resolvedOfficialId = matchingTse?.id || TSE_IDS[resolvedCodeName] || (assignedUser?.empId?.startsWith('TSE-NB') ? assignedUser.empId : '') || (t.techPersonId?.startsWith('TSE-NB') ? t.techPersonId : '') || (resolvedCodeName !== 'Unassigned' ? (TSE_IDS[resolvedCodeName] || '') : '');
+      const resolvedEmail = matchingTse?.email || assignedUser?.email || (matchingTse ? fb?.techSupportEmail : '') || '';
 
       const taskDate = t.date || (t.interviewDateTime ? t.interviewDateTime.slice(0, 10) : new Date().toISOString().slice(0, 10));
 
@@ -465,12 +473,11 @@ export default function ReportsPage() {
         }
       }
 
-      // 4. Fallback if Abhishek / Harit unassigned
+      // 4. Fallback if Abhishek / Harit
       if (!targetTse) {
         const isHaritOrAbhishek =
-          session.techSupport === 'Code Name Unassigned' ||
-          session.techSupport === 'Abhishek' ||
-          session.techSupportId === 'TSE-NB-001' ||
+          (session.techSupport === 'Abhishek') ||
+          (session.techSupportId === 'TSE-NB-001' && session.techSupport !== 'Unassigned' && session.techSupport !== 'Code Name Unassigned') ||
           (session.employeeName && session.employeeName.toLowerCase().includes('harit'));
         if (isHaritOrAbhishek) {
           targetTse = tseMap.get('TSE-NB-001');

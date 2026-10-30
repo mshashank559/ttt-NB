@@ -229,20 +229,28 @@ export default function FeedbackPage() {
         (t.techPerson && u.name?.toLowerCase() === t.techPerson.toLowerCase())
       );
 
-      const candidateCodeName = t.codeName || assignedUser?.codeName || (t.techPerson && !t.techPerson.includes(' ') && t.techPerson !== 'Unassigned' ? t.techPerson : '');
+      const candidateCodeName = (t.codeName && t.codeName !== 'Code Name Unassigned' && t.codeName !== 'Unassigned') ? t.codeName : (assignedUser?.codeName || '');
       const candidateRealName = (t.techPerson && t.techPerson !== 'Unassigned') ? t.techPerson : (assignedUser?.name || '');
 
-      const matchingTse = TECH_SUPPORT_TEAM.find(item =>
+      let matchingTse = TECH_SUPPORT_TEAM.find(item =>
         (assignedUserId && (item.id === assignedUserId || TSE_IDS[assignedUserId] === item.id)) ||
         (candidateCodeName && item.supportName.toLowerCase() === candidateCodeName.toLowerCase()) ||
         (candidateRealName && (item.employeeName.toLowerCase().includes(candidateRealName.toLowerCase()) || candidateRealName.toLowerCase().includes(item.employeeName.toLowerCase()))) ||
         (t.techPersonId && item.id === t.techPersonId)
       );
 
-      const resolvedCodeName = matchingTse?.supportName || candidateCodeName || (assignedUser?.codeName) || (t.techPerson && t.techPerson !== 'Unassigned' ? t.techPerson : 'Unassigned');
-      const resolvedRealName = matchingTse?.employeeName || getTseRealName(resolvedCodeName) || candidateRealName || (assignedUser?.name) || '';
+      if (!matchingTse && fb && fb.techSupport && fb.techSupport !== 'Code Name Unassigned' && fb.techSupport !== 'Unassigned') {
+        matchingTse = TECH_SUPPORT_TEAM.find(item =>
+          item.id === fb.techSupportId ||
+          item.supportName.toLowerCase() === fb.techSupport.toLowerCase() ||
+          (fb.employeeName && item.employeeName.toLowerCase().includes(fb.employeeName.toLowerCase()))
+        );
+      }
+
+      const resolvedCodeName = matchingTse?.supportName || candidateCodeName || (assignedUser?.codeName) || (t.techPerson && t.techPerson !== 'Unassigned' ? t.techPerson : (fb?.techSupport && fb.techSupport !== 'Code Name Unassigned' ? fb.techSupport : 'Unassigned'));
+      const resolvedRealName = matchingTse?.employeeName || getTseRealName(resolvedCodeName) || candidateRealName || (assignedUser?.name) || (fb?.employeeName || '');
       const resolvedOfficialId = matchingTse?.id || TSE_IDS[resolvedCodeName] || (assignedUser?.empId?.startsWith('TSE-NB') ? assignedUser.empId : '') || (t.techPersonId?.startsWith('TSE-NB') ? t.techPersonId : '') || (resolvedCodeName !== 'Unassigned' ? (TSE_IDS[resolvedCodeName] || '') : '');
-      const resolvedEmail = matchingTse?.email || assignedUser?.email || '';
+      const resolvedEmail = matchingTse?.email || assignedUser?.email || (matchingTse ? fb?.techSupportEmail : '') || '';
 
       const taskDate = t.date || (t.interviewDateTime ? t.interviewDateTime.slice(0, 10) : new Date().toISOString().slice(0, 10));
 

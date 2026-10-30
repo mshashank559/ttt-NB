@@ -89,7 +89,7 @@ export const AppProvider = ({ children }) => {
           }
             const cleaned = parsed.map(f => {
               let item = { ...f };
-              if (item.techSupport === 'Code Name Unassigned' || item.techSupportId === 'TSE-NB-001' || (item.employeeName && item.employeeName.toLowerCase().includes('harit'))) {
+              if (item.techSupport === 'Abhishek' || (item.employeeName && item.employeeName.toLowerCase().includes('harit'))) {
                 item = {
                   ...item,
                   techSupport: 'Abhishek',
