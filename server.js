@@ -135,10 +135,19 @@ const TaskSchema = new mongoose.Schema({
   isElevated: Boolean,
   timeline: Array,
   attachments: { type: Array, default: [] },
+  isExternal: { type: Boolean, default: false },
+  taskSource: { type: String, default: 'internal' },
+  taskClassification: { type: String, default: 'Internal' },
+  externalCreator: { type: String, default: '' },
+  externalCreatorId: { type: String, default: '' },
+  creatorName: { type: String, default: '' },
+  feedbackLinkGenerated: { type: Boolean, default: false },
+  feedbackLinkUrl: { type: String, default: '' },
 }, { timestamps: true });
 
 const FeedbackSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
+  taskId: String,
   date: String,
   techSupport: String,
   techSupportId: String,
@@ -157,6 +166,10 @@ const FeedbackSchema = new mongoose.Schema({
   round: String,
   techSupportType: String,
   timestamp: String,
+  isExternal: { type: Boolean, default: false },
+  taskSource: { type: String, default: 'internal' },
+  externalCreator: { type: String, default: '' },
+  externalCreatorId: { type: String, default: '' },
   candidateFeedback: {
     submitted: { type: Boolean, default: false },
     performanceRating: Number,
@@ -456,6 +469,16 @@ app.get('/api/tasks', async (req, res) => {
       } else {
         filter = { teamId: teamId || 'team-mukesh' };
       }
+    } else if (role === 'external_user') {
+      filter = {
+        $or: [
+          { createdById: userId },
+          { externalCreatorId: userId },
+          { externalCreator: 'Manpatel' },
+          { creatorName: 'Manpatel' },
+          { isExternal: true },
+        ],
+      };
     }
 
     let rawTasks = await Task.find(filter).sort({ createdAt: -1 });
@@ -497,6 +520,28 @@ app.post('/api/tasks', async (req, res) => {
     }
 
     delete taskData._id;
+
+    // Auto-classify External Tasks if created by Manpatel or external_user
+    const isExternalReq = 
+      taskData.isExternal === true ||
+      taskData.taskSource === 'external' ||
+      taskData.taskClassification === 'External' ||
+      taskData.externalCreator === 'Manpatel' ||
+      taskData.creatorName === 'Manpatel' ||
+      taskData.createdById === 'u-manpatel-01' ||
+      req.headers['x-user-role'] === 'external_user' ||
+      req.query.role === 'external_user';
+
+    if (isExternalReq) {
+      taskData.isExternal = true;
+      taskData.taskSource = 'external';
+      taskData.taskClassification = 'External';
+      taskData.externalCreator = taskData.externalCreator || 'Manpatel';
+      taskData.creatorName = taskData.creatorName || 'Manpatel';
+      if (!taskData.createdById) taskData.createdById = 'u-manpatel-01';
+      taskData.recruiterName = taskData.recruiterName || 'Manpatel';
+      if (!taskData.teamName) taskData.teamName = 'External';
+    }
 
     // Helper to calculate next available ID
     const getNextTaskId = async () => {
@@ -554,7 +599,7 @@ app.post('/api/tasks', async (req, res) => {
 
         const isShivam = task.teamId === 'team-shivam' || (task.teamName && task.teamName.includes('Shivam'));
         const fallbackLeadId = isShivam ? 'u-1791911115518' : 'u-1791911058812';
-        const fallbackTeamName = isShivam ? 'Team Shivam' : 'Team Mukesh';
+        const fallbackTeamName = isShivam ? 'Team Shivam' : (task.isExternal ? 'External' : 'Team Mukesh');
 
         const linkedFeedback = new Feedback({
           id: feedbackId,
@@ -566,16 +611,20 @@ app.post('/api/tasks', async (req, res) => {
           employeeName: resolvedRealName,
           candidateName: task.candidateName || 'Candidate',
           candidateEmail: task.candidateEmail || '',
-          recruiterName: task.assignedSrName || task.recruiterName || 'Marketing Team',
-          pocId: task.assignedSrId || task.pocId || '',
-          teamId: task.teamId || (isShivam ? 'team-shivam' : 'team-mukesh'),
-          teamLeadId: task.teamLeadId || fallbackLeadId,
+          recruiterName: task.assignedSrName || task.recruiterName || (task.isExternal ? 'Manpatel' : 'Marketing Team'),
+          pocId: task.assignedSrId || task.pocId || (task.isExternal ? 'u-manpatel-01' : ''),
+          teamId: task.teamId || (task.isExternal ? 'external' : (isShivam ? 'team-shivam' : 'team-mukesh')),
+          teamLeadId: task.teamLeadId || (task.isExternal ? 'u-manpatel-01' : fallbackLeadId),
           teamName: task.teamName || fallbackTeamName,
           jobRole: task.position || '',
           company: task.companyName || '',
           round: task.taskType || 'Interview',
           techSupportType: task.taskType || 'Interview',
           timestamp: new Date().toLocaleString('en-GB'),
+          isExternal: Boolean(task.isExternal || task.taskSource === 'external'),
+          taskSource: task.taskSource || (task.isExternal ? 'external' : 'internal'),
+          externalCreator: task.externalCreator || (task.isExternal ? 'Manpatel' : ''),
+          externalCreatorId: task.externalCreatorId || (task.isExternal ? 'u-manpatel-01' : ''),
           candidateFeedback: { submitted: false },
           marketingReview: null,
         });
@@ -808,6 +857,15 @@ app.get('/api/feedbacks', async (req, res) => {
     } else if (role === 'marketing_sr') {
       const defaultTeam = (req.query.teamName && req.query.teamName.includes('Shivam')) ? 'team-shivam' : 'team-mukesh';
       filter = { teamId: teamId || defaultTeam };
+    } else if (role === 'external_user') {
+      filter = {
+        $or: [
+          { externalCreatorId: userId },
+          { externalCreator: 'Manpatel' },
+          { recruiterName: 'Manpatel' },
+          { isExternal: true },
+        ],
+      };
     }
 
     let feedbacks = await Feedback.find(filter).sort({ createdAt: -1 });
@@ -1003,11 +1061,36 @@ app.put('/api/feedbacks/:id/candidate', async (req, res) => {
       'candidateFeedback.timestamp': nowFormatted,
     };
 
+    if (req.body.isExternal !== undefined) {
+      updateData.isExternal = Boolean(req.body.isExternal);
+      updateData.taskSource = req.body.taskSource || 'external';
+      updateData.taskClassification = 'External';
+      if (req.body.externalCreator) updateData.externalCreator = req.body.externalCreator;
+      if (req.body.externalCreatorId) updateData.externalCreatorId = req.body.externalCreatorId;
+    }
+
     const updated = await Feedback.findOneAndUpdate(
       { id: req.params.id },
       { $set: updateData },
       { new: true, upsert: true }
     );
+
+    // Sync candidate feedback to linked Task document if applicable
+    const rawTaskId = updated.taskId || (req.params.id.startsWith('fb-task-') ? req.params.id.replace('fb-task-', '') : null);
+    if (rawTaskId) {
+      await Task.findOneAndUpdate(
+        { id: rawTaskId },
+        {
+          $set: {
+            'candidateFeedback.submitted': true,
+            'candidateFeedback.performanceRating': ratingNum,
+            'candidateFeedback.experienceRating': Number(experienceRating) || ratingNum,
+            'candidateFeedback.comments': comments || 'Support session completed.',
+            'candidateFeedback.timestamp': nowFormatted,
+          }
+        }
+      ).catch(() => {});
+    }
 
     // Strict 24-Hour SLA Ticket creation if rating <= 3 stars
     if (ratingNum <= 3) {

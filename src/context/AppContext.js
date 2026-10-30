@@ -999,6 +999,7 @@ export const AppProvider = ({ children }) => {
         (linkedTask?.techPerson && item.employeeName.toLowerCase().includes(linkedTask.techPerson.toLowerCase()))
       );
 
+      const isExt = Boolean(linkedTask?.isExternal || feedbackData.isExternal);
       const newRecord = {
         id: feedbackId,
         taskId: rawTaskId,
@@ -1009,12 +1010,17 @@ export const AppProvider = ({ children }) => {
         employeeName: matchingTse?.employeeName || 'Harit verma',
         candidateName: linkedTask?.candidateName || feedbackData.candidateName || 'Candidate',
         candidateEmail: linkedTask?.candidateEmail || feedbackData.candidateEmail || '',
-        recruiterName: linkedTask?.assignedSrName || 'Senior Recruiter',
-        teamName: linkedTask?.teamName || 'Team Mukesh',
+        recruiterName: linkedTask?.assignedSrName || (isExt ? (feedbackData.externalCreator || linkedTask?.externalCreator || 'Manpatel') : 'Senior Recruiter'),
+        teamName: linkedTask?.teamName || (isExt ? 'External' : 'Team Mukesh'),
         jobRole: linkedTask?.position || 'Software Engineer',
         company: linkedTask?.companyName || linkedTask?.company || '',
         round: linkedTask?.taskType || 'Interview',
         techSupportType: linkedTask?.taskType || 'Interview',
+        isExternal: isExt,
+        taskSource: isExt ? 'external' : 'internal',
+        taskClassification: isExt ? 'External' : 'Internal',
+        externalCreator: isExt ? (feedbackData.externalCreator || linkedTask?.externalCreator || 'Manpatel') : '',
+        externalCreatorId: isExt ? (feedbackData.externalCreatorId || linkedTask?.externalCreatorId || 'u-manpatel-01') : '',
         candidateFeedback: {
           submitted: true,
           ...feedbackData,

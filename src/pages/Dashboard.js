@@ -4,7 +4,7 @@ import {
   ListChecks, CheckCircle2, Clock3, AlertTriangle, UserRoundCheck, Users as UsersIcon,
   Target, PieChart as PieIcon, Plus, ArrowUpRight, UserPlus, Star, AlertOctagon,
   Calendar, CheckSquare, Sparkles, ShieldAlert, ArrowRight, ShieldCheck, Search,
-  Copy, ExternalLink, Lock, Check, UserCheck, ClipboardList, ChevronLeft, ChevronRight, Filter
+  Copy, ExternalLink, Lock, Check, UserCheck, ClipboardList, ChevronLeft, ChevronRight, Filter, Globe
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip as RTooltip, CartesianGrid, BarChart, Bar, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
@@ -180,6 +180,195 @@ export default function Dashboard() {
   const interviewClearRate = totalRoundsConducted > 0
     ? Math.round((ivTotals.cleared / totalRoundsConducted) * 100)
     : (ivTotals.total > 0 ? Math.round((ivTotals.cleared / ivTotals.total) * 100) : 0);
+
+  // ---------- EXTERNAL USER (MANPATEL) ----------
+  if (currentRole === 'external_user') {
+    const myTasks = tasks.filter(t => 
+      t.createdById === currentUser?.id || 
+      t.externalCreatorId === currentUser?.id || 
+      t.externalCreator === 'Manpatel' || 
+      (currentUser?.name && t.externalCreator?.toLowerCase() === currentUser?.name?.toLowerCase()) ||
+      t.isExternal
+    );
+
+    const extTotals = {
+      total: myTasks.length,
+      awaitingAssignment: myTasks.filter(t => !t.assigneeId || t.status === 'Pending').length,
+      inProgress: myTasks.filter(t => t.status === 'In Progress' || t.status === 'Scheduled').length,
+      completed: myTasks.filter(t => t.status === 'Completed' || t.status === 'Done').length,
+    };
+
+    const myFeedbacks = feedbacks.filter(f => 
+      f.createdById === currentUser?.id || 
+      f.externalCreatorId === currentUser?.id || 
+      f.externalCreator === 'Manpatel' || 
+      f.isExternal ||
+      myTasks.some(t => String(t.id) === String(f.taskId) || f.id === `fb-task-${t.id}`)
+    );
+
+    const feedbackCount = myFeedbacks.filter(f => f.candidateFeedback?.submitted).length;
+
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          title="External Portal Dashboard"
+          subtitle={`Welcome, ${currentUser?.name || 'Manpatel'}. Track your external recruitment & interview support requests.`}
+          actions={
+            <button
+              data-testid="create-ext-task-btn"
+              onClick={() => navigate('/tasks?create=1')}
+              className="btn-primary h-9 px-4 rounded-lg text-sm font-medium flex items-center gap-2 shadow-xs cursor-pointer"
+            >
+              <Plus size={15} /> Create External Task
+            </button>
+          }
+        />
+
+        {/* External Workflow Banner */}
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-teal-500/10 via-emerald-500/10 to-teal-500/5 border border-teal-500/30 flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl bg-teal-500/20 border border-teal-500/40 text-teal-700 flex items-center justify-center font-bold">
+              <Globe size={20} />
+            </div>
+            <div>
+              <div className="text-sm font-bold text-slate-900">External Task Pipeline Active</div>
+              <div className="text-xs text-slate-500">
+                Tasks created here route directly to TSM queue with external tag. Once completed, unbranded feedback links can be copied &amp; shared.
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={() => navigate('/tasks')}
+            className="text-xs font-bold text-teal-700 bg-white hover:bg-teal-50 px-3 py-1.5 rounded-lg border border-teal-300 transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
+          >
+            <span>View All External Tasks</span>
+            <ArrowRight size={13} />
+          </button>
+        </div>
+
+        {/* Metric KPI Cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <NeumorphicMetricCard
+            testid="kpi-ext-total"
+            label="Total External Tasks"
+            value={extTotals.total}
+            subValue="All Submitted"
+            percentage={extTotals.total > 0 ? 100 : 0}
+            ringColor="#0d9488"
+          />
+          <NeumorphicMetricCard
+            testid="kpi-ext-awaiting"
+            label="Awaiting TSM Assignment"
+            value={extTotals.awaitingAssignment}
+            subValue="Pending Queue"
+            percentage={extTotals.total > 0 ? Math.round((extTotals.awaitingAssignment / extTotals.total) * 100) : 0}
+            ringColor="#f59e0b"
+          />
+          <NeumorphicMetricCard
+            testid="kpi-ext-progress"
+            label="In Progress / Scheduled"
+            value={extTotals.inProgress}
+            subValue="Under TSE Support"
+            percentage={extTotals.total > 0 ? Math.round((extTotals.inProgress / extTotals.total) * 100) : 0}
+            ringColor="#3b82f6"
+          />
+          <NeumorphicMetricCard
+            testid="kpi-ext-completed"
+            label="Completed & Feedback"
+            value={extTotals.completed}
+            subValue={`${feedbackCount} Submitted`}
+            percentage={extTotals.total > 0 ? Math.round((extTotals.completed / extTotals.total) * 100) : 0}
+            ringColor="#10b981"
+          />
+        </div>
+
+        {/* My External Tasks Queue */}
+        <SectionCard
+          title="Recent External Tasks"
+          subtitle="Real-time status of candidate interview assistance"
+          actions={
+            <button
+              onClick={() => navigate('/tasks')}
+              className="text-xs text-blue-600 font-semibold hover:underline flex items-center gap-1 cursor-pointer"
+            >
+              <span>Task Management</span> <ArrowRight size={12} />
+            </button>
+          }
+        >
+          {myTasks.length === 0 ? (
+            <EmptyState
+              title="No external tasks created yet"
+              description="Click 'Create External Task' to submit your first candidate for technical evaluation."
+            />
+          ) : (
+            <div className="overflow-x-auto -mx-5 md:-mx-6">
+              <table className="w-full text-sm text-left">
+                <thead className="bg-slate-50 border-y border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  <tr>
+                    <th className="py-3 px-4">Candidate &amp; ID</th>
+                    <th className="py-3 px-4">Company &amp; Role</th>
+                    <th className="py-3 px-4">Type</th>
+                    <th className="py-3 px-4">Assigned TSE</th>
+                    <th className="py-3 px-4">Status</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {myTasks.slice(0, 5).map((t) => {
+                    const isDone = t.status === 'Done' || t.status === 'Completed';
+                    const tseDisplay = t.codeName || t.techPerson || (t.assigneeId ? 'Assigned' : 'Awaiting TSM');
+                    return (
+                      <tr key={t.id} className="hover:bg-slate-50/70 transition-colors">
+                        <td className="py-3 px-4">
+                          <div className="font-bold text-slate-900">{t.candidateName || t.title}</div>
+                          <div className="mono text-[10px] text-blue-600">{t.id}</div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="text-xs font-medium text-slate-900">{t.companyName || t.company || '—'}</div>
+                          <div className="text-[11px] text-slate-500">{t.position || 'Technical Support'}</div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                            {t.taskType || 'Interview'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className={`text-xs font-semibold ${t.assigneeId ? 'text-blue-600' : 'text-amber-600 italic'}`}>
+                            {tseDisplay}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <StatusBadge status={t.status} />
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          {isDone ? (
+                            <button
+                              onClick={() => {
+                                const origin = window.location.origin;
+                                const pathname = window.location.pathname;
+                                const link = `${origin}${pathname}#/candidate-saga?id=fb-task-${t.id}&external=true&recruiter=${encodeURIComponent(t.externalCreator || 'Manpatel')}&candidate=${encodeURIComponent(t.candidateName || '')}&company=${encodeURIComponent(t.companyName || '')}&role=${encodeURIComponent(t.position || '')}`;
+                                if (navigator.clipboard) navigator.clipboard.writeText(link);
+                                toast.success('External unbranded feedback link copied!');
+                              }}
+                              className="px-2.5 py-1 rounded-lg text-xs font-bold bg-teal-50 text-teal-700 border border-teal-300 hover:bg-teal-100 transition-colors cursor-pointer"
+                            >
+                              Copy Feedback Link
+                            </button>
+                          ) : (
+                            <span className="text-[11px] text-slate-400">Available after Done</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </SectionCard>
+      </div>
+    );
+  }
 
   // ---------- UPPER MANAGEMENT ----------
   if (currentRole === 'upper_management') {

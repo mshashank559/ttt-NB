@@ -63,12 +63,13 @@ export default function CandidateSaga() {
   const paramCompany = searchParams.get('company');
   const paramType = searchParams.get('type');
   const paramTechnology = searchParams.get('technology') || searchParams.get('position') || searchParams.get('role') || '';
+  const paramExternal = searchParams.get('external') === 'true' || searchParams.get('source') === 'external' || searchParams.get('isExternal') === 'true';
 
   const isFromDirectLink = Boolean(paramId || paramTseName);
 
-  // INTRO SEQUENCE CONTROLLER (Cinematic 3.0s NetBounce Logo load plays first)
-  const [introActive, setIntroActive] = useState(true);
-  const [introStage, setIntroStage] = useState('active');
+  // INTRO SEQUENCE CONTROLLER (Cinematic 3.0s NetBounce Logo load plays first for internal; skipped completely for external)
+  const [introActive, setIntroActive] = useState(!paramExternal);
+  const [introStage, setIntroStage] = useState(paramExternal ? 'done' : 'active');
 
   // Main UI State: 'landing' | 'form' | 'success' - Landing hero slab renders after intro
   const [viewState, setViewState] = useState('landing');
@@ -106,6 +107,16 @@ export default function CandidateSaga() {
   const matchingTask = (tasks || []).find(t => String(t.id) === String(rawTaskId) || String(t.id) === String(paramId));
   const matchingFeedback = (feedbacks || []).find(f => f.id === paramId || f.taskId === rawTaskId);
   const initialJobRole = paramTechnology || matchingFeedback?.jobRole || matchingTask?.position || '';
+
+  const isExternal = paramExternal || Boolean(matchingTask?.isExternal || matchingFeedback?.isExternal || matchingTask?.taskSource === 'external' || matchingFeedback?.taskSource === 'external');
+
+  // If detected external after task loads, ensure intro is closed
+  useEffect(() => {
+    if (isExternal && introActive) {
+      setIntroActive(false);
+      setIntroStage('done');
+    }
+  }, [isExternal, introActive]);
 
   // FORM DATA STATE (Pre-populated from NetBounce link params or task, empty if none)
   const [formData, setFormData] = useState({
@@ -201,6 +212,7 @@ export default function CandidateSaga() {
         minute: '2-digit',
       });
 
+      const isExt = Boolean(isExternal || matchingTask?.isExternal || matchingFeedback?.isExternal);
       const newFeedbackRecord = {
         id: `fb-saga-${Date.now()}`,
         date: formData.interviewDate || new Date().toISOString().slice(0, 10),
@@ -210,12 +222,16 @@ export default function CandidateSaga() {
         employeeName: selectedTse.employeeName,
         candidateName: formData.candidateName,
         candidateEmail: formData.candidateEmail,
-        recruiterName: formData.recruiterName,
+        recruiterName: formData.recruiterName || (isExt ? 'Manpatel' : RECRUITERS[0]),
         jobRole: formData.jobRole,
         company: formData.companyName,
         round: formData.interviewType || 'Technical Round',
         techSupportType: formData.sessionType || 'TQC',
         timestamp: nowFormatted,
+        isExternal: isExt,
+        taskSource: isExt ? 'external' : 'internal',
+        taskClassification: isExt ? 'External' : 'Internal',
+        externalCreator: isExt ? (paramRecruiter || matchingTask?.externalCreator || 'Manpatel') : '',
         candidateFeedback: {
           submitted: true,
           performanceRating: perfScore,
@@ -234,6 +250,10 @@ export default function CandidateSaga() {
           candidateName: formData.candidateName,
           candidateEmail: formData.candidateEmail,
           timestamp: nowFormatted,
+          isExternal: isExt,
+          taskSource: isExt ? 'external' : 'internal',
+          taskClassification: isExt ? 'External' : 'Internal',
+          externalCreator: isExt ? (paramRecruiter || matchingTask?.externalCreator || 'Manpatel') : '',
         });
       } else if (addSagaFeedback) {
         addSagaFeedback(newFeedbackRecord);
@@ -275,7 +295,7 @@ export default function CandidateSaga() {
       {/* 1. CINEMATIC PURE MOTION NB BRAND INTRO (OFFICIAL SKY BACKDROP) */}
       {/* ========================================================================= */}
       <AnimatePresence>
-        {introActive && (
+        {!isExternal && introActive && (
           <motion.div
             key="brand-intro-cinematic"
             initial={{ opacity: 1 }}
@@ -394,134 +414,161 @@ export default function CandidateSaga() {
       </AnimatePresence>
 
       {/* ========================================================================= */}
-      {/* 2. AUTHENTIC NETBOUNCE SKY & MOTION CLOUDS ENVIRONMENT (EXACT LIKE SITE) */}
+      {/* 2. ENVIRONMENT BACKGROUND (BRANDED CLOUDS FOR INTERNAL, CLEAN GRADIENT FOR EXTERNAL) */}
       {/* ========================================================================= */}
-      <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none select-none">
-        {/* Sky Base Image (Same as netbounceplacement.com Frame Hero) */}
-        <img
-          src="/intro-assets/frame_hero.webp"
-          alt="NetBounce Sky"
-          className="absolute inset-0 w-full h-full object-cover"
-        />
+      {isExternal ? (
+        <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none select-none bg-gradient-to-b from-[#0a1128] via-[#0f172a] to-[#030712]">
+          <div
+            className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[450px] rounded-full pointer-events-none"
+            style={{
+              background: 'radial-gradient(ellipse at center, rgba(13, 148, 136, 0.15) 0%, rgba(2, 6, 23, 0) 70%)',
+              filter: 'blur(70px)',
+            }}
+          />
+        </div>
+      ) : (
+        <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none select-none">
+          {/* Sky Base Image (Same as netbounceplacement.com Frame Hero) */}
+          <img
+            src="/intro-assets/frame_hero.webp"
+            alt="NetBounce Sky"
+            className="absolute inset-0 w-full h-full object-cover"
+          />
 
-        {/* Soft Contrast Gradient to balance bright sky and readability */}
-        <div
-          className="absolute inset-0"
-          style={{
-            background: 'linear-gradient(180deg, rgba(8, 20, 60, 0.42) 0%, rgba(6, 14, 45, 0.28) 40%, rgba(4, 9, 32, 0.68) 100%)',
-          }}
-        />
+          {/* Soft Contrast Gradient to balance bright sky and readability */}
+          <div
+            className="absolute inset-0"
+            style={{
+              background: 'linear-gradient(180deg, rgba(8, 20, 60, 0.42) 0%, rgba(6, 14, 45, 0.28) 40%, rgba(4, 9, 32, 0.68) 100%)',
+            }}
+          />
 
-        {/* CLOUD 1 (Top / Right Drift & Mouse Parallax - Exact NetBounce Cloud-1) */}
-        <motion.img
-          src="/intro-assets/cloud_1.webp"
-          alt="Cloud 1"
-          className="absolute pointer-events-none select-none"
-          style={{
-            width: '64%',
-            maxWidth: '1350px',
-            top: '-6%',
-            right: '-18%',
-            filter: 'drop-shadow(0 25px 45px rgba(8, 25, 75, 0.3))',
-          }}
-          animate={{
-            x: mousePos.x * 24,
-            y: [0, -18, 0, 14, 0],
-            rotate: [-0.6, 0.6, -0.6],
-          }}
-          transition={{
-            x: { type: 'spring', stiffness: 45, damping: 25 },
-            y: { repeat: Infinity, duration: 14, ease: 'easeInOut' },
-            rotate: { repeat: Infinity, duration: 16, ease: 'easeInOut' },
-          }}
-        />
+          {/* CLOUD 1 (Top / Right Drift & Mouse Parallax - Exact NetBounce Cloud-1) */}
+          <motion.img
+            src="/intro-assets/cloud_1.webp"
+            alt="Cloud 1"
+            className="absolute pointer-events-none select-none"
+            style={{
+              width: '64%',
+              maxWidth: '1350px',
+              top: '-6%',
+              right: '-18%',
+              filter: 'drop-shadow(0 25px 45px rgba(8, 25, 75, 0.3))',
+            }}
+            animate={{
+              x: mousePos.x * 24,
+              y: [0, -18, 0, 14, 0],
+              rotate: [-0.6, 0.6, -0.6],
+            }}
+            transition={{
+              x: { type: 'spring', stiffness: 45, damping: 25 },
+              y: { repeat: Infinity, duration: 14, ease: 'easeInOut' },
+              rotate: { repeat: Infinity, duration: 16, ease: 'easeInOut' },
+            }}
+          />
 
-        {/* CLOUD 2 (Bottom / Left Drift & Mouse Parallax - Exact NetBounce Cloud-2) */}
-        <motion.img
-          src="/intro-assets/cloud_2.webp"
-          alt="Cloud 2"
-          className="absolute pointer-events-none select-none"
-          style={{
-            width: '56%',
-            maxWidth: '1200px',
-            bottom: '-10%',
-            left: '-14%',
-            filter: 'drop-shadow(0 25px 45px rgba(8, 25, 75, 0.3))',
-          }}
-          animate={{
-            x: -mousePos.x * 30,
-            y: [0, 18, 0, -14, 0],
-            rotate: [0.6, -0.6, 0.6],
-          }}
-          transition={{
-            x: { type: 'spring', stiffness: 45, damping: 25 },
-            y: { repeat: Infinity, duration: 15, ease: 'easeInOut' },
-            rotate: { repeat: Infinity, duration: 17, ease: 'easeInOut' },
-          }}
-        />
+          {/* CLOUD 2 (Bottom / Left Drift & Mouse Parallax - Exact NetBounce Cloud-2) */}
+          <motion.img
+            src="/intro-assets/cloud_2.webp"
+            alt="Cloud 2"
+            className="absolute pointer-events-none select-none"
+            style={{
+              width: '56%',
+              maxWidth: '1200px',
+              bottom: '-10%',
+              left: '-14%',
+              filter: 'drop-shadow(0 25px 45px rgba(8, 25, 75, 0.3))',
+            }}
+            animate={{
+              x: -mousePos.x * 30,
+              y: [0, 18, 0, -14, 0],
+              rotate: [0.6, -0.6, 0.6],
+            }}
+            transition={{
+              x: { type: 'spring', stiffness: 45, damping: 25 },
+              y: { repeat: Infinity, duration: 15, ease: 'easeInOut' },
+              rotate: { repeat: Infinity, duration: 17, ease: 'easeInOut' },
+            }}
+          />
 
-        {/* Ambient Center Glow */}
-        <div
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[850px] h-[550px] rounded-full pointer-events-none"
-          style={{
-            background: 'radial-gradient(ellipse at center, rgba(37, 70, 240, 0.18) 0%, rgba(4, 8, 28, 0) 70%)',
-            filter: 'blur(70px)',
-          }}
-        />
-      </div>
+          {/* Ambient Center Glow */}
+          <div
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[850px] h-[550px] rounded-full pointer-events-none"
+            style={{
+              background: 'radial-gradient(ellipse at center, rgba(37, 70, 240, 0.18) 0%, rgba(4, 8, 28, 0) 70%)',
+              filter: 'blur(70px)',
+            }}
+          />
+        </div>
+      )}
 
       {/* ========================================================================= */}
-      {/* 3. TOP BRAND HEADER (NETBOUNCE LOGO IDENTITY) */}
+      {/* 3. TOP BRAND HEADER (UNBRANDED NEUTRAL FOR EXTERNAL) */}
       {/* ========================================================================= */}
       <header className="relative z-20 w-full max-w-7xl mx-auto px-6 sm:px-10 pt-6 pb-4 flex items-center justify-between">
-        {/* Left: NetBounce NB Hero Badge */}
-        <div className="flex items-center gap-3.5">
-          <div className="h-11 w-11 rounded-2xl bg-[#080f33]/80 border border-white/20 flex items-center justify-center backdrop-blur-xl shadow-[0_4px_20px_rgba(0,0,0,0.4)] p-1.5 transition-transform hover:scale-105">
-            <img
-              src="/intro-assets/nb_mark_white_clean.png"
-              alt="NB"
-              className="w-full h-full object-contain filter drop-shadow-[0_2px_8px_rgba(255,255,255,0.4)]"
-            />
-          </div>
-          <div>
-            <div className="flex items-center gap-2 leading-none">
-              <span className="text-base font-extrabold text-white tracking-tight">NetBounce</span>
-              <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-gradient-to-r from-[#1416c1] to-[#2546f0] text-white tracking-wider shadow-sm">
-                SAGA
-              </span>
+        {/* Left: Branding Identity */}
+        {isExternal ? (
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl bg-slate-800/90 border border-teal-500/30 flex items-center justify-center text-teal-400 shadow-lg backdrop-blur-md">
+              <ShieldCheck size={20} />
             </div>
-            <div className="text-[10px] sm:text-[10.5px] tracking-[0.16em] uppercase font-bold text-white drop-shadow-[0_1px_4px_rgba(0,0,0,0.8)] mt-1.5">
-              SUPPORT ASSESSMENT &amp; GROWTH ANALYTICS
+            <div>
+              <div className="text-base font-extrabold text-white tracking-tight">Candidate Evaluation Portal</div>
+              <div className="text-[10px] sm:text-[10.5px] uppercase font-bold text-slate-400 tracking-wider">Independent Technical Feedback</div>
             </div>
           </div>
-        </div>
+        ) : (
+          <div className="flex items-center gap-3.5">
+            <div className="h-11 w-11 rounded-2xl bg-[#080f33]/80 border border-white/20 flex items-center justify-center backdrop-blur-xl shadow-[0_4px_20px_rgba(0,0,0,0.4)] p-1.5 transition-transform hover:scale-105">
+              <img
+                src="/intro-assets/nb_mark_white_clean.png"
+                alt="NB"
+                className="w-full h-full object-contain filter drop-shadow-[0_2px_8px_rgba(255,255,255,0.4)]"
+              />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 leading-none">
+                <span className="text-base font-extrabold text-white tracking-tight">NetBounce</span>
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-gradient-to-r from-[#1416c1] to-[#2546f0] text-white tracking-wider shadow-sm">
+                  SAGA
+                </span>
+              </div>
+              <div className="text-[10px] sm:text-[10.5px] tracking-[0.16em] uppercase font-bold text-white drop-shadow-[0_1px_4px_rgba(0,0,0,0.8)] mt-1.5">
+                SUPPORT ASSESSMENT &amp; GROWTH ANALYTICS
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Right: Controls & Navigation */}
         <div className="flex items-center gap-3">
-          {/* Replay Brand Intro Button */}
-          <button
-            id="brand-intro-btn"
-            onClick={replayIntro}
-            title="Replay Brand Intro"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-blue-200 hover:text-white bg-[#0a123d]/70 hover:bg-[#1416c1]/40 border border-blue-500/30 backdrop-blur-md transition-all shadow-sm cursor-pointer"
-          >
-            <RotateCcw size={12} className="text-blue-400" />
-            <span className="hidden sm:inline">Brand Intro</span>
-          </button>
+          {!isExternal && (
+            <button
+              id="brand-intro-btn"
+              onClick={replayIntro}
+              title="Replay Brand Intro"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-blue-200 hover:text-white bg-[#0a123d]/70 hover:bg-[#1416c1]/40 border border-blue-500/30 backdrop-blur-md transition-all shadow-sm cursor-pointer"
+            >
+              <RotateCcw size={12} className="text-blue-400" />
+              <span className="hidden sm:inline">Brand Intro</span>
+            </button>
+          )}
 
           {/* TSE Interview Evaluation Tag */}
-          <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs bg-[#060c2b]/80 border border-blue-500/20 backdrop-blur-md text-blue-100 shadow-sm">
-            <span className="h-2 w-2 rounded-full bg-blue-400 animate-pulse shadow-[0_0_8px_#38bdf8]" />
-            <span className="font-semibold">Candidate Portal</span>
+          <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs bg-[#060c2b]/80 border border-slate-700/60 backdrop-blur-md text-slate-200 shadow-sm">
+            <span className="h-2 w-2 rounded-full bg-teal-400 animate-pulse shadow-[0_0_8px_#14b8a6]" />
+            <span className="font-semibold">{isExternal ? 'Candidate Session' : 'Candidate Portal'}</span>
           </div>
 
-          <button
-            onClick={() => navigate('/login')}
-            className="hidden md:flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold text-slate-300 hover:text-white bg-[#081033]/60 hover:bg-[#1416c1]/40 border border-slate-700/60 hover:border-blue-500/40 backdrop-blur-md transition-all"
-          >
-            <span>TTT Portal</span>
-            <ExternalLink size={12} />
-          </button>
+          {!isExternal && (
+            <button
+              onClick={() => navigate('/login')}
+              className="hidden md:flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold text-slate-300 hover:text-white bg-[#081033]/60 hover:bg-[#1416c1]/40 border border-slate-700/60 hover:border-blue-500/40 backdrop-blur-md transition-all"
+            >
+              <span>TTT Portal</span>
+              <ExternalLink size={12} />
+            </button>
+          )}
         </div>
       </header>
 
@@ -542,41 +589,42 @@ export default function CandidateSaga() {
               transition={{ duration: 0.35, ease: 'easeOut' }}
               className="w-full max-w-2xl mx-auto"
             >
-              {/* NetBounce Branded Hero Slab */}
+              {/* Branded or Neutral Hero Slab */}
               <div>
-                <div className="p-7 sm:p-10 rounded-3xl bg-[#070e30]/80 border border-blue-500/25 backdrop-blur-2xl shadow-[0_20px_60px_rgba(2,4,16,0.8)] space-y-5 relative overflow-hidden">
+                <div className={`p-7 sm:p-10 rounded-3xl ${isExternal ? 'bg-slate-900/85 border border-slate-700/70 shadow-[0_20px_60px_rgba(0,0,0,0.85)]' : 'bg-[#070e30]/80 border border-blue-500/25 shadow-[0_20px_60px_rgba(2,4,16,0.8)]'} backdrop-blur-2xl space-y-5 relative overflow-hidden`}>
                   {/* Subtle Top Edge Light Sheen */}
-                  <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-blue-400/50 to-transparent" />
+                  <div className={`absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent ${isExternal ? 'via-teal-400/40' : 'via-blue-400/50'} to-transparent`} />
 
-                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-[#1416c1]/25 border border-blue-500/30 text-blue-200">
-                    <Sparkles className="h-3.5 w-3.5 text-blue-400" />
+                  <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold ${isExternal ? 'bg-teal-500/15 border border-teal-500/30 text-teal-300' : 'bg-[#1416c1]/25 border border-blue-500/30 text-blue-200'}`}>
+                    <Sparkles className={`h-3.5 w-3.5 ${isExternal ? 'text-teal-400' : 'text-blue-400'}`} />
                     <span>Technical Support Engineer Evaluation</span>
                   </div>
 
                   <h1 className="text-4xl sm:text-5xl font-black tracking-tight text-white leading-[1.1]">
                     Your feedback <br />
-                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-white via-blue-100 to-blue-400">
-                      empowers growth.
+                    <span className={`text-transparent bg-clip-text bg-gradient-to-r ${isExternal ? 'from-white via-slate-100 to-teal-300' : 'from-white via-blue-100 to-blue-400'}`}>
+                      {isExternal ? 'empowers excellence.' : 'empowers growth.'}
                     </span>
                   </h1>
 
-                  <p className="text-base text-blue-100/80 font-normal leading-relaxed max-w-xl">
-                    NetBounce brings candidates and technical support engineers together.
-                    Share your experience during your interview round to elevate the quality of our engineering sessions.
+                  <p className="text-base text-slate-300 font-normal leading-relaxed max-w-xl">
+                    {isExternal
+                      ? 'Share your experience during your technical interview and support session. Your evaluation is completely confidential and helps maintain high quality engineering support.'
+                      : 'NetBounce brings candidates and technical support engineers together. Share your experience during your interview round to elevate the quality of our engineering sessions.'}
                   </p>
 
-                  <div className="flex flex-wrap items-center gap-5 pt-1 text-xs text-blue-200/75">
+                  <div className="flex flex-wrap items-center gap-5 pt-1 text-xs text-slate-400">
                     <div className="flex items-center gap-1.5">
-                      <Clock size={14} className="text-blue-400" />
+                      <Clock size={14} className={isExternal ? 'text-teal-400' : 'text-blue-400'} />
                       <span>Takes 2 minutes</span>
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <ShieldCheck size={14} className="text-blue-400" />
+                      <ShieldCheck size={14} className={isExternal ? 'text-teal-400' : 'text-blue-400'} />
                       <span>100% Confidential</span>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <CheckCircle2 size={14} className="text-emerald-400" />
-                      <span>Direct TSE Review</span>
+                      <span>Direct Engineering Review</span>
                     </div>
                   </div>
 
@@ -584,9 +632,13 @@ export default function CandidateSaga() {
                     <button
                       data-testid="start-feedback-btn"
                       onClick={() => setViewState('form')}
-                      className="group inline-flex items-center justify-center gap-3 px-8 py-4 rounded-full font-bold text-sm bg-gradient-to-r from-[#1416c1] via-[#1e2beb] to-[#2546f0] text-white hover:from-[#191bf0] hover:to-[#385aff] hover:shadow-[0_0_35px_rgba(20,22,193,0.65)] hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
+                      className={`group inline-flex items-center justify-center gap-3 px-8 py-4 rounded-full font-bold text-sm text-white ${
+                        isExternal
+                          ? 'bg-gradient-to-r from-teal-600 via-teal-500 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 hover:shadow-[0_0_35px_rgba(20,184,166,0.5)]'
+                          : 'bg-gradient-to-r from-[#1416c1] via-[#1e2beb] to-[#2546f0] hover:from-[#191bf0] hover:to-[#385aff] hover:shadow-[0_0_35px_rgba(20,22,193,0.65)]'
+                      } hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 cursor-pointer`}
                     >
-                      <span>Start SAGA Feedback</span>
+                      <span>{isExternal ? 'Start Candidate Feedback' : 'Start SAGA Feedback'}</span>
                       <ArrowRight
                         size={16}
                         className="group-hover:translate-x-1.5 transition-transform duration-200"
@@ -983,7 +1035,9 @@ export default function CandidateSaga() {
                           Any closing notes?
                         </h2>
                         <p className="text-xs text-blue-200/70 mt-1">
-                          Share any additional feedback that helps NetBounce make future sessions even better.
+                          {isExternal
+                            ? 'Share any additional feedback that helps make future technical sessions even better.'
+                            : 'Share any additional feedback that helps NetBounce make future sessions even better.'}
                         </p>
                       </div>
 
@@ -1007,16 +1061,20 @@ export default function CandidateSaga() {
                 <div className="pt-5 border-t border-blue-500/20 flex items-center justify-between">
                   <button
                     onClick={handleBack}
-                    className="h-10 px-5 rounded-full text-xs font-semibold bg-[#040822] hover:bg-[#070e30] border border-blue-500/30 text-blue-200 hover:text-white transition-all"
+                    className="h-10 px-5 rounded-full text-xs font-semibold bg-[#040822] hover:bg-[#070e30] border border-blue-500/30 text-blue-200 hover:text-white transition-all cursor-pointer"
                   >
                     Back
                   </button>
 
                   <button
                     onClick={handleNext}
-                    className="h-10 px-6 rounded-full text-xs font-bold bg-gradient-to-r from-[#1416c1] via-[#1d2be8] to-[#2546f0] text-white hover:from-[#1a1df5] hover:to-[#385aff] shadow-[0_0_20px_rgba(20,22,193,0.5)] hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center gap-1.5"
+                    className={`h-10 px-6 rounded-full text-xs font-bold text-white transition-all flex items-center gap-1.5 cursor-pointer ${
+                      isExternal
+                        ? 'bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 shadow-[0_0_20px_rgba(20,184,166,0.5)]'
+                        : 'bg-gradient-to-r from-[#1416c1] via-[#1d2be8] to-[#2546f0] hover:from-[#1a1df5] hover:to-[#385aff] shadow-[0_0_20px_rgba(20,22,193,0.5)]'
+                    } hover:scale-[1.02] active:scale-[0.98]`}
                   >
-                    <span>{currentStep === 5 ? 'Submit SAGA Feedback' : 'Continue'}</span>
+                    <span>{currentStep === 5 ? (isExternal ? 'Submit Candidate Feedback' : 'Submit SAGA Feedback') : 'Continue'}</span>
                     <ChevronRight size={15} />
                   </button>
                 </div>
@@ -1036,11 +1094,11 @@ export default function CandidateSaga() {
               className="w-full max-w-md mx-auto text-center"
             >
               <div className="p-8 rounded-3xl bg-[#070e30]/80 border border-blue-500/30 backdrop-blur-2xl shadow-[0_25px_60px_rgba(2,4,16,0.85)] relative overflow-hidden">
-                <div className="h-16 w-16 mx-auto rounded-2xl bg-gradient-to-tr from-[#1416c1] to-[#2546f0] border border-blue-400/50 flex items-center justify-center shadow-[0_0_25px_rgba(20,22,193,0.6)]">
+                <div className={`h-16 w-16 mx-auto rounded-2xl ${isExternal ? 'bg-gradient-to-tr from-teal-600 to-emerald-600 border border-teal-400/50 shadow-[0_0_25px_rgba(20,184,166,0.6)]' : 'bg-gradient-to-tr from-[#1416c1] to-[#2546f0] border border-blue-400/50 shadow-[0_0_25px_rgba(20,22,193,0.6)]'} flex items-center justify-center`}>
                   <CheckCircle2 size={32} className="text-white" />
                 </div>
 
-                <div className="mt-5 text-[11px] font-bold tracking-widest uppercase text-blue-400">
+                <div className={`mt-5 text-[11px] font-bold tracking-widest uppercase ${isExternal ? 'text-teal-400' : 'text-blue-400'}`}>
                   Response Recorded
                 </div>
 
@@ -1048,14 +1106,20 @@ export default function CandidateSaga() {
                   Thank you, {formData.candidateName || 'Candidate'}!
                 </h3>
 
-                <p className="mt-2 text-xs text-blue-100/75 leading-relaxed max-w-sm mx-auto">
-                  Your feedback has been securely logged into the NetBounce Placement LLC Tech Team Tracker.
+                <p className="mt-2 text-xs text-slate-300 leading-relaxed max-w-sm mx-auto">
+                  {isExternal
+                    ? 'Your feedback has been securely submitted. Thank you for your time and contribution.'
+                    : 'Your feedback has been securely logged into the NetBounce Placement LLC Tech Team Tracker.'}
                 </p>
 
                 <div className="mt-6 pt-5 border-t border-blue-500/20">
                   <button
                     onClick={resetForm}
-                    className="w-full h-11 rounded-full text-xs font-bold bg-gradient-to-r from-[#1416c1] to-[#2546f0] text-white hover:from-[#1b1ef7] hover:to-[#385aff] transition-all shadow-[0_0_20px_rgba(20,22,193,0.5)]"
+                    className={`w-full h-11 rounded-full text-xs font-bold text-white transition-all shadow-md cursor-pointer ${
+                      isExternal
+                        ? 'bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500'
+                        : 'bg-gradient-to-r from-[#1416c1] to-[#2546f0] hover:from-[#1b1ef7] hover:to-[#385aff]'
+                    }`}
                   >
                     Submit Another Feedback
                   </button>
@@ -1067,17 +1131,27 @@ export default function CandidateSaga() {
       </main>
 
       {/* ========================================================================= */}
-      {/* 5. MINIMAL NETBOUNCE FOOTER */}
+      {/* 5. MINIMAL FOOTER */}
       {/* ========================================================================= */}
-      <footer className="relative z-10 w-full max-w-7xl mx-auto px-6 sm:px-10 py-5 flex flex-col sm:flex-row items-center justify-between text-[11px] text-blue-300/60 border-t border-blue-500/15">
+      <footer className="relative z-10 w-full max-w-7xl mx-auto px-6 sm:px-10 py-5 flex flex-col sm:flex-row items-center justify-between text-[11px] text-slate-400 border-t border-slate-700/40">
         <div className="flex items-center gap-2">
-          <span>Powered by</span>
-          <span className="text-white font-semibold">NetBounce Placement LLC</span>
-          <span>•</span>
-          <span className="text-blue-300 font-medium">Candidate SAGA</span>
+          {isExternal ? (
+            <>
+              <span className="text-white font-semibold">Candidate Technical Evaluation Portal</span>
+              <span>•</span>
+              <span className="text-teal-400 font-medium">Independent Evaluation</span>
+            </>
+          ) : (
+            <>
+              <span>Powered by</span>
+              <span className="text-white font-semibold">NetBounce Placement LLC</span>
+              <span>•</span>
+              <span className="text-blue-300 font-medium">Candidate SAGA</span>
+            </>
+          )}
         </div>
         <div className="mt-2 sm:mt-0 flex items-center gap-4">
-          <span>Enterprise Technical Support</span>
+          <span>{isExternal ? 'Technical Interview Review' : 'Enterprise Technical Support'}</span>
           <span>•</span>
           <span>Confidential &amp; Encrypted</span>
         </div>

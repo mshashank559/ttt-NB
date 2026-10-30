@@ -4,7 +4,7 @@ import {
   Star, Search, Calendar as CalIcon, Building2, UserRound, Briefcase,
   CheckCircle2, Clock, MessageSquare, Filter, ChevronRight, X,
   ShieldCheck, AlertCircle, Sparkles, Award, ArrowUpRight, Check,
-  Link2, Copy, ExternalLink, Share2, Send
+  Link2, Copy, ExternalLink, Share2, Send, Globe
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useApp } from '../context/AppContext';
@@ -101,6 +101,7 @@ export default function FeedbackPage() {
   const [dateRange, setDateRange] = useState('all'); // 'all' | 'today' | 'week' | 'month'
   const [typeFilter, setTypeFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [workflowFilter, setWorkflowFilter] = useState('all'); // 'all' | 'internal' | 'external'
 
   // Drill-down states
   const [selectedTechSupport, setSelectedTechSupport] = useState(null); // { name, date }
@@ -124,11 +125,12 @@ export default function FeedbackPage() {
   const buildCandidateLink = (record) => {
     const origin = window.location.origin;
     const pathname = window.location.pathname;
-    const recruiter = record.recruiterName || 'Aditi Sharma';
+    const isExt = Boolean(record.isExternal || record.taskSource === 'external' || record.taskClassification === 'External');
+    const recruiter = isExt ? (record.externalCreator || 'Manpatel') : (record.recruiterName || 'Aditi Sharma');
     const tseId = record.techSupportId || 'TSE-NB-008';
     const tseName = record.techSupport || 'Shreya';
     const jobRole = record.jobRole || 'Software Engineer';
-    return `${origin}${pathname}#/candidate-saga?id=${record.id}&recruiter=${encodeURIComponent(recruiter)}&tseId=${encodeURIComponent(tseId)}&tseName=${encodeURIComponent(tseName)}&candidate=${encodeURIComponent(record.candidateName || '')}&company=${encodeURIComponent(record.company || '')}&type=${encodeURIComponent(record.techSupportType || 'TQC')}&technology=${encodeURIComponent(jobRole)}&role=${encodeURIComponent(jobRole)}`;
+    return `${origin}${pathname}#/candidate-saga?id=${record.id}&external=${isExt}&recruiter=${encodeURIComponent(recruiter)}&tseId=${encodeURIComponent(tseId)}&tseName=${encodeURIComponent(tseName)}&candidate=${encodeURIComponent(record.candidateName || '')}&company=${encodeURIComponent(record.company || '')}&type=${encodeURIComponent(record.techSupportType || 'TQC')}&technology=${encodeURIComponent(jobRole)}&role=${encodeURIComponent(jobRole)}`;
   };
 
   const handleCopyLink = (url) => {
@@ -275,6 +277,11 @@ export default function FeedbackPage() {
         round: t.taskType || fb?.round || 'Interview',
         techSupportType: t.taskType || fb?.techSupportType || 'Interview',
         taskStatus: t.status,
+        isExternal: Boolean(t.isExternal || t.taskSource === 'external' || fb?.isExternal),
+        taskSource: t.taskSource || fb?.taskSource || (t.isExternal ? 'external' : 'internal'),
+        taskClassification: t.taskClassification || fb?.taskClassification || (t.isExternal ? 'External' : 'Internal'),
+        externalCreator: t.externalCreator || fb?.externalCreator || (t.isExternal ? 'Manpatel' : ''),
+        externalCreatorId: t.externalCreatorId || fb?.externalCreatorId || '',
         candidateFeedback: fb?.candidateFeedback || {
           submitted: false,
           performanceRating: null,
@@ -298,6 +305,13 @@ export default function FeedbackPage() {
   // Filtered records for the main table
   const filteredFeedbacks = useMemo(() => {
     return (unifiedFeedbacks || []).filter((item) => {
+      // Workflow filter (All | Internal | External)
+      if (workflowFilter !== 'all') {
+        const isExt = Boolean(item.isExternal || item.taskSource === 'external' || item.taskClassification === 'External');
+        if (workflowFilter === 'external' && !isExt) return false;
+        if (workflowFilter === 'internal' && isExt) return false;
+      }
+
       // Search filter
       if (search.trim()) {
         const q = search.toLowerCase();
@@ -348,7 +362,7 @@ export default function FeedbackPage() {
 
       return true;
     });
-  }, [unifiedFeedbacks, search, dateRange, typeFilter, statusFilter]);
+  }, [unifiedFeedbacks, workflowFilter, search, dateRange, typeFilter, statusFilter]);
 
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -569,6 +583,17 @@ export default function FeedbackPage() {
             <option value="candidate_submitted">Candidate Submitted ✓</option>
             <option value="not_rated">Not Rated</option>
           </select>
+
+          {/* Workflow filter dropdown */}
+          <select
+            value={workflowFilter}
+            onChange={(e) => setWorkflowFilter(e.target.value)}
+            className="bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-[#1416c1] shadow-xs"
+          >
+            <option value="all">All Workflows</option>
+            <option value="internal">Internal Tasks</option>
+            <option value="external">External (Manpatel)</option>
+          </select>
         </div>
       </div>
 
@@ -668,8 +693,13 @@ export default function FeedbackPage() {
 
                       {/* Column 3: Candidate & Recruiter */}
                       <td className="py-3.5 px-4">
-                        <div className="font-bold text-slate-900">
-                          {row.candidateName}
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-bold text-slate-900">{row.candidateName}</span>
+                          {(row.isExternal || row.taskSource === 'external' || row.taskClassification === 'External') && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-teal-50 text-teal-700 border border-teal-300 shadow-2xs">
+                              <Globe size={9} /> EXTERNAL
+                            </span>
+                          )}
                         </div>
                         <div className="text-[10px] text-slate-500 flex items-center gap-1.5 mt-0.5">
                           <span className="flex items-center gap-1">
@@ -683,12 +713,20 @@ export default function FeedbackPage() {
                         </div>
                         {/* Recruiter & Team Badges */}
                         <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                          <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-50 text-purple-700 border border-purple-200">
-                            Recruiter: {row.recruiterName || 'Aditi Sharma'}
-                          </span>
-                          <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
-                            {row.teamName || 'Team Mukesh'}
-                          </span>
+                          {(row.isExternal || row.taskSource === 'external') ? (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-teal-50 text-teal-800 border border-teal-200">
+                              External Creator: {row.externalCreator || row.recruiterName || 'Manpatel'}
+                            </span>
+                          ) : (
+                            <>
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-50 text-purple-700 border border-purple-200">
+                                Recruiter: {row.recruiterName || 'Aditi Sharma'}
+                              </span>
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                                {row.teamName || 'Team Mukesh'}
+                              </span>
+                            </>
+                          )}
                         </div>
                       </td>
 

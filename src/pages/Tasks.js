@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Plus, Search, UserRound, Calendar as CalIcon, Clock, Building2, Briefcase, FileText, StickyNote, MessageSquare, ShieldAlert, CheckCircle2, Sparkles, Lock, Paperclip, UploadCloud, X, File, Download, Eye, Trash2, UserMinus, AlertTriangle, Pencil } from 'lucide-react';
+import { Plus, Search, UserRound, Calendar as CalIcon, Clock, Building2, Briefcase, FileText, StickyNote, MessageSquare, ShieldAlert, CheckCircle2, Sparkles, Lock, Paperclip, UploadCloud, X, File, Download, Eye, Trash2, UserMinus, AlertTriangle, Pencil, Globe } from 'lucide-react';
 import { toast } from 'sonner';
 import { useApp } from '../context/AppContext';
 import { PageHeader, StatusBadge, TaskTypeBadge, SectionCard, EmptyState, Pagination } from '../components/common';
@@ -12,7 +12,7 @@ import { Textarea } from '../components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../components/ui/sheet';
 
-const roleCanCreate = (r) => r === 'tsm' || r === 'management' || r === 'marketing_tl' || r === 'marketing_sr' || r === 'recruiter';
+const roleCanCreate = (r) => r === 'tsm' || r === 'management' || r === 'marketing_tl' || r === 'marketing_sr' || r === 'recruiter' || r === 'external_user';
 const roleCanEditAny = (r) => r === 'tsm' || r === 'management';
 
 export function to24HourTime(timeStr, period = 'AM') {
@@ -324,6 +324,7 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
   const todayStr = new Date().toISOString().slice(0, 10);
 
   const isMarketingUser = roleIsMarketing(currentRole) || currentRole === 'marketing_tl' || currentRole === 'marketing_sr';
+  const isExternalUser = currentRole === 'external_user' || (currentUser?.name || '').toLowerCase() === 'manpatel';
 
   const userTeamId = currentUser?.teamId ||
     (currentUser?.team === 'team-mukesh' || currentUser?.id === 'u-1791911058812' || (currentUser?.name || '').toLowerCase().includes('mukesh') ? 'team-mukesh' :
@@ -343,7 +344,7 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
     endTime: '10:30',
     endPeriod: 'AM',
     timing: '10:00 AM - 10:30 AM EST',
-    assigneeId: isMarketingUser ? '' : (tseUsers[0]?.id || ''),
+    assigneeId: (isMarketingUser || isExternalUser) ? '' : (tseUsers[0]?.id || ''),
     duration: '30 mins',
     taskType: 'Interview',
     interviewDateTime: `${todayStr}T10:00`,
@@ -351,12 +352,13 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
     position: '',
     companyName: '',
     status: 'Pending',
-    teamId: initialTeam.id,
-    teamName: initialTeam.name,
-    teamLeadId: initialTeam.leadId,
-    assignedSrId: '',
-    assignedSrName: '',
-    assignedSrEmail: '',
+    teamId: isExternalUser ? 'external' : initialTeam.id,
+    teamName: isExternalUser ? 'External' : initialTeam.name,
+    teamLeadId: isExternalUser ? (currentUser?.id || 'u-manpatel-01') : initialTeam.leadId,
+    assignedSrId: isExternalUser ? (currentUser?.id || 'u-manpatel-01') : '',
+    assignedSrName: isExternalUser ? (currentUser?.name || 'Manpatel') : '',
+    assignedSrEmail: isExternalUser ? (currentUser?.email || 'manpatel@external.com') : '',
+    recruiterName: isExternalUser ? (currentUser?.name || 'Manpatel') : '',
     remark: '',
     description: '',
     notes: '',
@@ -518,16 +520,17 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
         position: '',
         companyName: '',
         candidateName: '',
-        teamId: isMarketingUser ? initialTeam.id : prev.teamId || initialTeam.id,
-        teamName: isMarketingUser ? initialTeam.name : prev.teamName || initialTeam.name,
-        teamLeadId: isMarketingUser ? initialTeam.leadId : prev.teamLeadId || initialTeam.leadId,
-        assignedSrId: '',
-        assignedSrName: '',
-        assignedSrEmail: '',
-        assigneeId: isMarketingUser ? '' : (prev.assigneeId || tseUsers[0]?.id || ''),
+        teamId: isExternalUser ? 'external' : (isMarketingUser ? initialTeam.id : prev.teamId || initialTeam.id),
+        teamName: isExternalUser ? 'External' : (isMarketingUser ? initialTeam.name : prev.teamName || initialTeam.name),
+        teamLeadId: isExternalUser ? (currentUser?.id || 'u-manpatel-01') : (isMarketingUser ? initialTeam.leadId : prev.teamLeadId || initialTeam.leadId),
+        assignedSrId: isExternalUser ? (currentUser?.id || 'u-manpatel-01') : '',
+        assignedSrName: isExternalUser ? (currentUser?.name || 'Manpatel') : '',
+        assignedSrEmail: isExternalUser ? (currentUser?.email || 'manpatel@external.com') : '',
+        recruiterName: isExternalUser ? (currentUser?.name || 'Manpatel') : '',
+        assigneeId: (isMarketingUser || isExternalUser) ? '' : (prev.assigneeId || tseUsers[0]?.id || ''),
       }));
     }
-  }, [open, isMarketingUser, initialTeam]);
+  }, [open, isMarketingUser, isExternalUser, initialTeam, currentUser]);
 
   // Multi-format File Upload Handler (Feature 2)
   const handleFileUpload = async (e) => {
@@ -715,13 +718,22 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
       endPeriod: form.taskType === 'Interview' ? (form.endPeriod || 'AM') : '',
       timing: calculatedTiming,
       duration: calculatedDuration,
-      assigneeId: isMarketingUser ? '' : (selectedTse?.id || ''),
-      techPerson: isMarketingUser ? 'Unassigned' : (selectedTse?.name || 'Unassigned'),
-      codeName: isMarketingUser ? 'Unassigned' : (selectedTse?.codeName || (selectedTse?.name ? getTseCodeName(selectedTse?.name) : 'Unassigned')),
-      assignedSrId: form.assignedSrId || '',
-      assignedSrName: form.assignedSrName || '',
-      assignedSrEmail: form.assignedSrEmail || '',
-      recruiterName: form.assignedSrName || '',
+      assigneeId: (isMarketingUser || isExternalUser) ? '' : (selectedTse?.id || ''),
+      techPerson: (isMarketingUser || isExternalUser) ? 'Unassigned' : (selectedTse?.name || 'Unassigned'),
+      codeName: (isMarketingUser || isExternalUser) ? 'Unassigned' : (selectedTse?.codeName || (selectedTse?.name ? getTseCodeName(selectedTse?.name) : 'Unassigned')),
+      assignedSrId: isExternalUser ? (currentUser?.id || 'u-manpatel-01') : (form.assignedSrId || ''),
+      assignedSrName: isExternalUser ? (currentUser?.name || 'Manpatel') : (form.assignedSrName || ''),
+      assignedSrEmail: isExternalUser ? (currentUser?.email || 'manpatel@external.com') : (form.assignedSrEmail || ''),
+      recruiterName: isExternalUser ? (currentUser?.name || 'Manpatel') : (form.assignedSrName || ''),
+      createdById: currentUser?.id || (isExternalUser ? 'u-manpatel-01' : ''),
+      creatorName: currentUser?.name || (isExternalUser ? 'Manpatel' : ''),
+      isExternal: isExternalUser,
+      taskSource: isExternalUser ? 'external' : 'internal',
+      taskClassification: isExternalUser ? 'External' : 'Internal',
+      externalCreator: isExternalUser ? (currentUser?.name || 'Manpatel') : '',
+      externalCreatorId: isExternalUser ? (currentUser?.id || 'u-manpatel-01') : '',
+      teamId: isExternalUser ? 'external' : form.teamId,
+      teamName: isExternalUser ? 'External' : form.teamName,
       title: `${form.candidateName.trim()} — ${form.taskType}${form.companyName ? ` (${form.companyName.trim()})` : ''}`,
       category: form.taskType,
       interviewDateTime,
@@ -736,80 +748,110 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="bg-white border-slate-200 text-slate-900 max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl" data-testid="create-task-modal">
         <DialogHeader>
-          <DialogTitle className="text-slate-900 text-lg">Create New Task / Candidate Record</DialogTitle>
+          <div className="flex items-center gap-2">
+            <DialogTitle className="text-slate-900 text-lg">
+              {isExternalUser ? 'Create External Candidate Task' : 'Create New Task / Candidate Record'}
+            </DialogTitle>
+            {isExternalUser && (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-teal-50 text-teal-700 border border-teal-300">
+                EXTERNAL WORKFLOW
+              </span>
+            )}
+          </div>
           <DialogDescription className="text-slate-500 text-xs">
-            {isMarketingUser
+            {isExternalUser
+              ? 'External task created by Manpatel. Will be automatically routed to TSM for TSE assignment.'
+              : isMarketingUser
               ? `Create task under ${initialTeam.name} (${initialTeam.leadName}). All Senior Recruiters mapped dynamically from DB.`
               : 'Assign candidate task with Marketing Team Lead ownership & designated Tech Support Engineer.'}
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
-          {/* Step 1: Marketing Team Lead */}
-          <div className="md:col-span-1">
-            <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-              <span>Marketing Team Lead</span>
-              <span className="text-rose-500">*</span>
-            </label>
-            {isMarketingUser ? (
-              <div className="mt-1.5 h-10 px-3.5 rounded-lg bg-slate-100 border border-slate-300 text-slate-900 text-xs font-bold flex items-center justify-between">
-                <span>{initialTeam.name} ({initialTeam.leadName})</span>
-                <span className="text-[10px] text-blue-700 font-bold bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                  Your Team
-                </span>
+          {isExternalUser ? (
+            <div className="md:col-span-2 p-3.5 rounded-xl bg-teal-50/80 border border-teal-200 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="h-8 w-8 rounded-lg bg-teal-600 text-white flex items-center justify-center font-bold">
+                  <Globe size={16} />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-teal-950">External Task Creator: Manpatel</div>
+                  <div className="text-[11px] text-teal-700 font-medium">Automatic Routing: Enters TSM Task Queue for TSE Assignment</div>
+                </div>
               </div>
-            ) : (
-              <Select value={form.teamId} onValueChange={handleTeamChange}>
-                <SelectTrigger data-testid="task-form-team" className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white">
-                  <SelectValue placeholder="Select Marketing Team" />
-                </SelectTrigger>
-                <SelectContent className="bg-white border-slate-200 text-slate-900">
-                  {MARKETING_TEAMS.map(team => (
-                    <SelectItem key={team.id} value={team.id}>
-                      {team.name} ({team.leadName})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          </div>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal-100 text-teal-800 border border-teal-300">
+                External Pipeline
+              </span>
+            </div>
+          ) : (
+            <>
+              {/* Step 1: Marketing Team Lead */}
+              <div className="md:col-span-1">
+                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <span>Marketing Team Lead</span>
+                  <span className="text-rose-500">*</span>
+                </label>
+                {isMarketingUser ? (
+                  <div className="mt-1.5 h-10 px-3.5 rounded-lg bg-slate-100 border border-slate-300 text-slate-900 text-xs font-bold flex items-center justify-between">
+                    <span>{initialTeam.name} ({initialTeam.leadName})</span>
+                    <span className="text-[10px] text-blue-700 font-bold bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                      Your Team
+                    </span>
+                  </div>
+                ) : (
+                  <Select value={form.teamId} onValueChange={handleTeamChange}>
+                    <SelectTrigger data-testid="task-form-team" className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white">
+                      <SelectValue placeholder="Select Marketing Team" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-white border-slate-200 text-slate-900">
+                      {MARKETING_TEAMS.map(team => (
+                        <SelectItem key={team.id} value={team.id}>
+                          {team.name} ({team.leadName})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
 
-          {/* Step 2: Senior Recruiter (Marketing SR) mapped dynamically from DB */}
-          <div className="md:col-span-1">
-            <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-              <span>Senior Recruiter (Marketing SR)</span>
-              <span className="text-rose-500">*</span>
-            </label>
-            <Select
-              value={form.assignedSrId}
-              onValueChange={(srId) => {
-                const srUser = availableSrs.find(u => u.id === srId);
-                setForm(prev => ({
-                  ...prev,
-                  assignedSrId: srId,
-                  assignedSrName: srUser?.name || '',
-                  assignedSrEmail: srUser?.email || '',
-                  recruiterName: srUser?.name || '',
-                }));
-              }}
-            >
-              <SelectTrigger data-testid="task-form-sr" className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white text-xs">
-                <SelectValue placeholder="Select Senior Recruiter" />
-              </SelectTrigger>
-              <SelectContent className="bg-white border-slate-200 text-slate-900 max-h-56">
-                {availableSrs.map(sr => (
-                  <SelectItem key={sr.id} value={sr.id}>
-                    {sr.name} ({sr.empId || sr.tttNbId || 'SR'})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-[10px] text-slate-500 mt-1 font-medium">
-              {availableSrs.length > 0
-                ? `Mapped from DB (${availableSrs.length} SRs in ${form.teamName || initialTeam.name})`
-                : 'No SRs registered in this team yet'}
-            </p>
-          </div>
+              {/* Step 2: Senior Recruiter (Marketing SR) mapped dynamically from DB */}
+              <div className="md:col-span-1">
+                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <span>Senior Recruiter (Marketing SR)</span>
+                  <span className="text-rose-500">*</span>
+                </label>
+                <Select
+                  value={form.assignedSrId}
+                  onValueChange={(srId) => {
+                    const srUser = availableSrs.find(u => u.id === srId);
+                    setForm(prev => ({
+                      ...prev,
+                      assignedSrId: srId,
+                      assignedSrName: srUser?.name || '',
+                      assignedSrEmail: srUser?.email || '',
+                      recruiterName: srUser?.name || '',
+                    }));
+                  }}
+                >
+                  <SelectTrigger data-testid="task-form-sr" className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white text-xs">
+                    <SelectValue placeholder="Select Senior Recruiter" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-white border-slate-200 text-slate-900 max-h-56">
+                    {availableSrs.map(sr => (
+                      <SelectItem key={sr.id} value={sr.id}>
+                        {sr.name} ({sr.empId || sr.tttNbId || 'SR'})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[10px] text-slate-500 mt-1 font-medium">
+                  {availableSrs.length > 0
+                    ? `Mapped from DB (${availableSrs.length} SRs in ${form.teamName || initialTeam.name})`
+                    : 'No SRs registered in this team yet'}
+                </p>
+              </div>
+            </>
+          )}
 
           {/* Task Type */}
           <div className="md:col-span-2">
@@ -913,8 +955,8 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
             </div>
           )}
 
-          {/* Tech Person (TSE) - Only visible when NOT Marketing TL / SR */}
-          {!isMarketingUser && (
+          {/* Tech Person (TSE) - Only visible when NOT Marketing TL / SR and NOT External User */}
+          {!isMarketingUser && !isExternalUser && (
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Tech Person (TSE)</label>
@@ -2013,12 +2055,13 @@ const TaskDrawer = ({ task, onClose }) => {
 
   const handleCopyFeedbackLink = (t) => {
     if (['tsm', 'tse'].includes(currentRole)) {
-      toast.error('TSM is not authorized to generate Candidate SAGA feedback links.');
+      toast.error('TSM is not authorized to generate Candidate feedback links.');
       return;
     }
     const origin = window.location.origin;
     const pathname = window.location.pathname;
-    const recruiter = t.assignedSrName || t.recruiterName || 'Marketing SR';
+    const isExt = Boolean(t.isExternal || t.taskSource === 'external' || t.taskClassification === 'External');
+    const recruiter = isExt ? (t.externalCreator || 'Manpatel') : (t.assignedSrName || t.recruiterName || 'Marketing SR');
 
     // Authoritative TSE lookup
     const assigneeUser = (users || []).find(u => u.id === t.assigneeId || u.empId === t.assigneeId || u.tttNbId === t.assigneeId) ||
@@ -2027,7 +2070,7 @@ const TaskDrawer = ({ task, onClose }) => {
     const officialTseId = assigneeUser?.empId || assigneeUser?.tttNbId || TSE_IDS[tseCodeName] || t.assigneeId || 'TTT-NB-TSE';
     const jobRole = t.position || 'Software Engineer';
 
-    const link = `${origin}${pathname}#/candidate-saga?id=fb-task-${t.id}&recruiter=${encodeURIComponent(recruiter)}&tseId=${encodeURIComponent(officialTseId)}&tseName=${encodeURIComponent(tseCodeName)}&candidate=${encodeURIComponent(t.candidateName || '')}&company=${encodeURIComponent(t.companyName || '')}&type=${encodeURIComponent(t.taskType || 'Interview')}&technology=${encodeURIComponent(jobRole)}&role=${encodeURIComponent(jobRole)}`;
+    const link = `${origin}${pathname}#/candidate-saga?id=fb-task-${t.id}&external=${isExt}&recruiter=${encodeURIComponent(recruiter)}&tseId=${encodeURIComponent(officialTseId)}&tseName=${encodeURIComponent(tseCodeName)}&candidate=${encodeURIComponent(t.candidateName || '')}&company=${encodeURIComponent(t.companyName || '')}&type=${encodeURIComponent(t.taskType || 'Interview')}&technology=${encodeURIComponent(jobRole)}&role=${encodeURIComponent(jobRole)}`;
 
     try {
       if (navigator.clipboard) {
@@ -2035,7 +2078,18 @@ const TaskDrawer = ({ task, onClose }) => {
       }
     } catch (e) {}
 
-    toast.success(`Feedback Link generated & copied! Recruiter: ${recruiter} • TSE: ${tseCodeName} (${officialTseId}) • Role: ${jobRole}`);
+    // Track link generation
+    fetch(`/api/tasks/${t.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ feedbackLinkGenerated: true, feedbackLinkUrl: link }),
+    }).catch(() => {});
+
+    if (isExt) {
+      toast.success(`External Unbranded Feedback Link generated & copied for ${t.candidateName || 'Candidate'}!`);
+    } else {
+      toast.success(`Feedback Link generated & copied! Recruiter: ${recruiter} • TSE: ${tseCodeName} (${officialTseId}) • Role: ${jobRole}`);
+    }
   };
 
   if (!task) return null;
@@ -2064,6 +2118,12 @@ const TaskDrawer = ({ task, onClose }) => {
                 {task.interviewOutcome && (
                   <span className="text-xs px-2.5 py-0.5 rounded-full bg-purple-100 border border-purple-200 text-purple-800 font-bold flex items-center gap-1">
                     🎯 {task.interviewOutcome}
+                  </span>
+                )}
+                {(task.isExternal || task.taskSource === 'external' || task.taskClassification === 'External') && (
+                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-teal-50 border border-teal-300 text-teal-800 font-extrabold flex items-center gap-1 shadow-2xs">
+                    <Globe size={11} className="text-teal-600" />
+                    EXTERNAL TASK
                   </span>
                 )}
               </div>
@@ -2763,6 +2823,7 @@ export default function Tasks() {
     assignee: 'all',
     sr: 'all',
     team: 'all',
+    workflow: 'all',
     q: '',
     dateFrom: '',
     dateTo: '',
@@ -2778,7 +2839,7 @@ export default function Tasks() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   const canManageTasks = currentRole === 'tsm' || currentRole === 'management' || currentRole === 'upper_management';
-  const canEditTask = ['tsm', 'marketing_tl', 'marketing_sr', 'management', 'upper_management'].includes(currentRole);
+  const canEditTask = ['tsm', 'marketing_tl', 'marketing_sr', 'management', 'upper_management', 'external_user'].includes(currentRole);
 
   const tseUsers = useMemo(() => (users || []).filter(u => u.role === 'tse'), [users]);
   const canAssignTse = ['tsm', 'management', 'upper_management'].includes(currentRole);
@@ -2940,9 +3001,10 @@ export default function Tasks() {
       const taskDate = (t.date || t.dueDate || (t.interviewDateTime ? t.interviewDateTime.slice(0, 10) : '') || '').slice(0, 10);
       const matchFrom = !filters.dateFrom || (taskDate && taskDate >= filters.dateFrom);
       const matchTo = !filters.dateTo || (taskDate && taskDate <= filters.dateTo);
-      const matchTeam = isTaskMatchingTeam(t);
+      const isExt = Boolean(t.isExternal || t.taskSource === 'external' || t.taskClassification === 'External');
+      const matchWorkflow = filters.workflow === 'all' || (filters.workflow === 'external' ? isExt : !isExt);
 
-      return matchStatus && matchType && matchAssignee && matchSr && matchQ && matchFrom && matchTo && matchTeam;
+      return matchStatus && matchType && matchAssignee && matchSr && matchQ && matchFrom && matchTo && matchTeam && matchWorkflow;
     });
   }, [tasks, filters, currentRole, currentUser, isMarketingTl, teamMemberIds, teamMemberNames, users]);
 
@@ -3108,6 +3170,18 @@ export default function Tasks() {
               </SelectContent>
             </Select>
           )}
+
+          {/* Workflow Filter (All | Internal | External) */}
+          <Select value={filters.workflow} onValueChange={v => setFilters({ ...filters, workflow: v })}>
+            <SelectTrigger data-testid="task-filter-workflow" className="bg-white border-slate-300 text-slate-900">
+              <SelectValue placeholder="All Workflows" />
+            </SelectTrigger>
+            <SelectContent className="bg-white border-slate-200 text-slate-900">
+              <SelectItem value="all">All Workflows</SelectItem>
+              <SelectItem value="internal">Internal Tasks</SelectItem>
+              <SelectItem value="external">External (Manpatel)</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </SectionCard>
 
@@ -3271,8 +3345,22 @@ export default function Tasks() {
 
                       {/* Candidate Name */}
                       <td className="py-3 px-4">
-                        <div className="font-bold text-slate-900">{t.candidateName || t.title}</div>
-                        <div className="mono text-[10px] text-blue-600 font-medium">{t.id}</div>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-bold text-slate-900">{t.candidateName || t.title}</span>
+                          {(t.isExternal || t.taskSource === 'external' || t.taskClassification === 'External') && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-teal-50 text-teal-700 border border-teal-300 shadow-2xs">
+                              <Globe size={9} /> EXTERNAL
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="mono text-[10px] text-blue-600 font-medium">{t.id}</span>
+                          {(t.creatorName || t.externalCreator) && (
+                            <span className="text-[10px] text-slate-400">
+                              by {t.creatorName || t.externalCreator}
+                            </span>
+                          )}
+                        </div>
                       </td>
 
                       {/* Position */}

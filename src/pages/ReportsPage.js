@@ -4,7 +4,7 @@ import {
   Trophy, Award, AlertTriangle, Briefcase, Building2, UserRound,
   Download, FileSpreadsheet, FileText, Search, Filter, X, ChevronRight,
   Star, CheckCircle2, Clock, ShieldCheck, ArrowUpDown, ChevronDown,
-  Layers, Sparkles, RefreshCw, Eye, ChevronUp
+  Layers, Sparkles, RefreshCw, Eye, ChevronUp, Globe
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
@@ -177,6 +177,7 @@ export default function ReportsPage() {
   const [perfFilter, setPerfFilter] = useState('all');
   const [feedbackStatusFilter, setFeedbackStatusFilter] = useState('all');
   const [marketingFilter, setMarketingFilter] = useState('all');
+  const [workflowFilter, setWorkflowFilter] = useState('all'); // 'all' | 'internal' | 'external'
 
   // Sorting State (Default: Overall Rating Descending)
   const [sortBy, setSortBy] = useState('overallRating');
@@ -266,6 +267,10 @@ export default function ReportsPage() {
         round: t.taskType || fb?.round || 'Interview',
         techSupportType: t.taskType || fb?.techSupportType || 'Interview',
         taskStatus: t.status,
+        isExternal: Boolean(t.isExternal || t.taskSource === 'external' || fb?.isExternal),
+        taskSource: t.taskSource || fb?.taskSource || (t.isExternal ? 'external' : 'internal'),
+        taskClassification: t.taskClassification || fb?.taskClassification || (t.isExternal ? 'External' : 'Internal'),
+        externalCreator: t.externalCreator || fb?.externalCreator || (t.isExternal ? 'Manpatel' : ''),
         candidateFeedback: fb?.candidateFeedback || t.candidateFeedback || {
           submitted: false,
           performanceRating: null,
@@ -415,11 +420,18 @@ export default function ReportsPage() {
         return false;
       }
 
+      // 10. Workflow Filter (All | Internal | External)
+      if (workflowFilter !== 'all') {
+        const isExt = Boolean(item.isExternal || item.taskSource === 'external' || item.taskClassification === 'External');
+        if (workflowFilter === 'external' && !isExt) return false;
+        if (workflowFilter === 'internal' && isExt) return false;
+      }
+
       return true;
     });
   }, [
     normalizedFeedbacks, search, dateRange, selectedTseFilter, techFilter,
-    companyFilter, roundFilter, typeFilter, feedbackStatusFilter, marketingFilter
+    companyFilter, roundFilter, typeFilter, feedbackStatusFilter, marketingFilter, workflowFilter
   ]);
 
   // TSE-Level Aggregation (Computed dynamically from Real Sessions)
@@ -646,11 +658,12 @@ export default function ReportsPage() {
     setPerfFilter('all');
     setFeedbackStatusFilter('all');
     setMarketingFilter('all');
+    setWorkflowFilter('all');
   };
 
   const hasActiveFilters = search || dateRange !== 'all' || selectedTseFilter !== 'all' ||
     techFilter !== 'all' || companyFilter !== 'all' || roundFilter !== 'all' ||
-    typeFilter !== 'all' || perfFilter !== 'all' || feedbackStatusFilter !== 'all' || marketingFilter !== 'all';
+    typeFilter !== 'all' || perfFilter !== 'all' || feedbackStatusFilter !== 'all' || marketingFilter !== 'all' || workflowFilter !== 'all';
 
   // =========================================================================
   // PDF EXPORT HANDLER (NetBounce Royal Blue, White KPI cards with Black border, Vector Stars)
@@ -1463,6 +1476,17 @@ export default function ReportsPage() {
             <option value="reviewed">Reviewed by Mkt ✓</option>
             <option value="not_reviewed">Not Reviewed</option>
           </select>
+
+          {/* Workflow Filter (All | Internal | External) */}
+          <select
+            value={workflowFilter}
+            onChange={(e) => setWorkflowFilter(e.target.value)}
+            className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-blue-600 font-semibold"
+          >
+            <option value="all">All Workflows</option>
+            <option value="internal">Internal Tasks</option>
+            <option value="external">External (Manpatel)</option>
+          </select>
         </div>
 
         {/* Filter Summary and Clear Trigger */}
@@ -1781,8 +1805,20 @@ export default function ReportsPage() {
                           <tr key={s.id} className="hover:bg-slate-50/80 transition-colors">
                             <td className="py-3 px-3 font-mono text-slate-600 whitespace-nowrap">{s.date}</td>
                             <td className="py-3 px-3">
-                              <div className="font-semibold text-slate-900">{s.candidateName}</div>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-semibold text-slate-900">{s.candidateName}</span>
+                                {(s.isExternal || s.taskSource === 'external' || s.taskClassification === 'External') && (
+                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-full text-[9px] font-black uppercase tracking-wider bg-teal-50 text-teal-700 border border-teal-300">
+                                    <Globe size={9} /> EXTERNAL
+                                  </span>
+                                )}
+                              </div>
                               <div className="text-[10px] text-slate-500 truncate">{s.candidateEmail || 'Candidate'}</div>
+                              {(s.externalCreator || (s.isExternal && s.recruiterName)) && (
+                                <div className="text-[9px] text-teal-700 font-semibold mt-0.5">
+                                  by {s.externalCreator || s.recruiterName}
+                                </div>
+                              )}
                               {s.candidateFeedback?.comments && (
                                 <div className="text-[10px] text-slate-600 italic bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200 mt-1 max-w-xs">
                                   "{s.candidateFeedback.comments}"

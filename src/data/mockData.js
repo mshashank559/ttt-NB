@@ -8,6 +8,7 @@ export const ROLES = {
   marketing_tl: { id: 'marketing_tl', label: 'Marketing TL', short: 'MTL' },
   marketing_sr: { id: 'marketing_sr', label: 'Marketing SR', short: 'MSR' },
   recruiter: { id: 'recruiter', label: 'Recruiter / POC', short: 'POC' },
+  external_user: { id: 'external_user', label: 'External User', short: 'EXT' },
 };
 
 // Marketing Teams (Team Mukesh & Team Shivam)
@@ -562,6 +563,19 @@ export const USERS = [
     status: 'Active',
     avatar: 'https://api.dicebear.com/7.x/notionists/svg?seed=tech_Logan_8',
   },
+  {
+    id: 'u-manpatel-01',
+    name: 'Manpatel',
+    email: 'manpatel@external.com',
+    password: 'Password@123',
+    role: 'external_user',
+    dept: 'External',
+    empId: 'TTT-NB-EXT-01',
+    tttNbId: 'TTT-NB-EXT-01',
+    codeName: 'Manpatel',
+    status: 'Active',
+    avatar: 'https://api.dicebear.com/7.x/personas/svg?seed=manpatel_external_01',
+  },
   ...MARKETING_SR_USERS,
 ];
 
@@ -595,6 +609,7 @@ export const permissionsByRole = {
   marketing_tl: ['dashboard', 'tasks', 'interviews', 'calendar', 'feedback', 'reports', 'notifications', 'profile'],
   marketing_sr: ['dashboard', 'tasks', 'interviews', 'calendar', 'feedback', 'notifications', 'profile'],
   recruiter: ['dashboard', 'tasks', 'interviews', 'calendar', 'notifications', 'profile'],
+  external_user: ['dashboard', 'tasks', 'feedback', 'notifications', 'profile'],
 };
 
 export function calculateOverallRating(candidateFeedback, marketingReview) {
@@ -979,6 +994,24 @@ export const filterAuthorizedData = (items, currentUser, currentRole) => {
   // 6. TSM: Operational scope
   if (currentRole === 'tsm') {
     return items;
+  }
+
+  // 7. External User (e.g. Manpatel):
+  // Can ONLY see tasks/interviews/feedbacks created by him or belonging to his external workflow!
+  if (currentRole === 'external_user') {
+    const currentId = currentUser.id;
+    const currentName = (currentUser.name || '').toLowerCase();
+
+    return items.filter(item => {
+      const isCreatorId = item.createdById === currentId || item.externalCreatorId === currentId;
+      const isCreatorName = (item.creatorName && item.creatorName.toLowerCase().includes(currentName)) ||
+        (item.externalCreator && item.externalCreator.toLowerCase().includes(currentName)) ||
+        (item.recruiterName && item.recruiterName.toLowerCase().includes(currentName));
+      const isExplicitExternal = (item.isExternal || item.taskSource === 'external') && (
+        isCreatorId || isCreatorName || !item.createdById || item.externalCreator === 'Manpatel'
+      );
+      return isCreatorId || isCreatorName || isExplicitExternal;
+    });
   }
 
   return items;

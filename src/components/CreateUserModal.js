@@ -12,6 +12,7 @@ export const ASSIGNABLE_ROLES = [
   { id: 'tsm', label: 'TSM', short: 'TSM', defaultDept: 'Tech Support', color: 'text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800' },
   { id: 'marketing_tl', label: 'Marketing TL', short: 'MTL', defaultDept: 'Marketing', color: 'text-amber-600 bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800' },
   { id: 'marketing_sr', label: 'Marketing SR', short: 'MSR', defaultDept: 'Marketing', color: 'text-rose-600 bg-rose-50 dark:bg-rose-900/20 border-rose-200 dark:border-rose-800' },
+  { id: 'external_user', label: 'External User', short: 'EXT', defaultDept: 'External', color: 'text-teal-600 bg-teal-50 dark:bg-teal-900/20 border-teal-200 dark:border-teal-800' },
 ];
 
 export const DEPARTMENTS = [
@@ -19,6 +20,7 @@ export const DEPARTMENTS = [
   'Operations',
   'Marketing',
   'Executive',
+  'External',
 ];
 
 export const getNextTttNbId = (userList) => {
