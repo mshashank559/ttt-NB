@@ -43,11 +43,14 @@ const Root = () => {
 };
 
 function App() {
-  const [showIntro, setShowIntro] = useState(true);
+  const isExternalCandidate = typeof window !== 'undefined' && 
+    (window.location.href.includes('candidate-saga') && 
+     (window.location.href.includes('external=true') || window.location.href.includes('recruiter=Manpatel') || window.location.href.includes('source=external') || window.location.href.includes('isExternal=true')));
+  const [showIntro, setShowIntro] = useState(!isExternalCandidate);
 
   return (
     <div className="App min-h-screen relative">
-      {showIntro && (
+      {showIntro && !isExternalCandidate && (
         <CinematicIntro onComplete={() => setShowIntro(false)} />
       )}
       <AppProvider>

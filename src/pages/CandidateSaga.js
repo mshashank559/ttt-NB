@@ -62,8 +62,10 @@ export default function CandidateSaga() {
   const paramCandidate = searchParams.get('candidate');
   const paramCompany = searchParams.get('company');
   const paramType = searchParams.get('type');
-  const paramTechnology = searchParams.get('technology') || searchParams.get('position') || searchParams.get('role') || '';
-  const paramExternal = searchParams.get('external') === 'true' || searchParams.get('source') === 'external' || searchParams.get('isExternal') === 'true';
+  const paramExternal = searchParams.get('external') === 'true' || 
+                        searchParams.get('source') === 'external' || 
+                        searchParams.get('isExternal') === 'true' || 
+                        (searchParams.get('recruiter') || '').toLowerCase().includes('manpatel');
 
   const isFromDirectLink = Boolean(paramId || paramTseName);
 
@@ -112,9 +114,12 @@ export default function CandidateSaga() {
 
   // If detected external after task loads, ensure intro is closed
   useEffect(() => {
-    if (isExternal && introActive) {
-      setIntroActive(false);
-      setIntroStage('done');
+    if (isExternal) {
+      document.title = "Candidate Evaluation Portal | Technical Feedback";
+      if (introActive) {
+        setIntroActive(false);
+        setIntroStage('done');
+      }
     }
   }, [isExternal, introActive]);
 
@@ -414,93 +419,81 @@ export default function CandidateSaga() {
       </AnimatePresence>
 
       {/* ========================================================================= */}
-      {/* 2. ENVIRONMENT BACKGROUND (BRANDED CLOUDS FOR INTERNAL, CLEAN GRADIENT FOR EXTERNAL) */}
+      {/* 2. ENVIRONMENT BACKGROUND (EXACT CANDIDATE SAGA SKY & CLOUDS WITH PARALLAX) */}
       {/* ========================================================================= */}
-      {isExternal ? (
-        <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none select-none bg-gradient-to-b from-[#0a1128] via-[#0f172a] to-[#030712]">
-          <div
-            className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[450px] rounded-full pointer-events-none"
-            style={{
-              background: 'radial-gradient(ellipse at center, rgba(13, 148, 136, 0.15) 0%, rgba(2, 6, 23, 0) 70%)',
-              filter: 'blur(70px)',
-            }}
-          />
-        </div>
-      ) : (
-        <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none select-none">
-          {/* Sky Base Image (Same as netbounceplacement.com Frame Hero) */}
-          <img
-            src="/intro-assets/frame_hero.webp"
-            alt="NetBounce Sky"
-            className="absolute inset-0 w-full h-full object-cover"
-          />
+      <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none select-none">
+        {/* Sky Base Image (Candidate Saga Hero Sky) */}
+        <img
+          src="/intro-assets/frame_hero.webp"
+          alt="Sky Backdrop"
+          className="absolute inset-0 w-full h-full object-cover"
+        />
 
-          {/* Soft Contrast Gradient to balance bright sky and readability */}
-          <div
-            className="absolute inset-0"
-            style={{
-              background: 'linear-gradient(180deg, rgba(8, 20, 60, 0.42) 0%, rgba(6, 14, 45, 0.28) 40%, rgba(4, 9, 32, 0.68) 100%)',
-            }}
-          />
+        {/* Soft Contrast Gradient to balance bright sky and readability */}
+        <div
+          className="absolute inset-0"
+          style={{
+            background: 'linear-gradient(180deg, rgba(8, 20, 60, 0.42) 0%, rgba(6, 14, 45, 0.28) 40%, rgba(4, 9, 32, 0.68) 100%)',
+          }}
+        />
 
-          {/* CLOUD 1 (Top / Right Drift & Mouse Parallax - Exact NetBounce Cloud-1) */}
-          <motion.img
-            src="/intro-assets/cloud_1.webp"
-            alt="Cloud 1"
-            className="absolute pointer-events-none select-none"
-            style={{
-              width: '64%',
-              maxWidth: '1350px',
-              top: '-6%',
-              right: '-18%',
-              filter: 'drop-shadow(0 25px 45px rgba(8, 25, 75, 0.3))',
-            }}
-            animate={{
-              x: mousePos.x * 24,
-              y: [0, -18, 0, 14, 0],
-              rotate: [-0.6, 0.6, -0.6],
-            }}
-            transition={{
-              x: { type: 'spring', stiffness: 45, damping: 25 },
-              y: { repeat: Infinity, duration: 14, ease: 'easeInOut' },
-              rotate: { repeat: Infinity, duration: 16, ease: 'easeInOut' },
-            }}
-          />
+        {/* CLOUD 1 (Top / Right Drift & Mouse Parallax - Exact Candidate Saga Cloud-1) */}
+        <motion.img
+          src="/intro-assets/cloud_1.webp"
+          alt="Cloud 1"
+          className="absolute pointer-events-none select-none"
+          style={{
+            width: '64%',
+            maxWidth: '1350px',
+            top: '-6%',
+            right: '-18%',
+            filter: 'drop-shadow(0 25px 45px rgba(8, 25, 75, 0.3))',
+          }}
+          animate={{
+            x: mousePos.x * 24,
+            y: [0, -18, 0, 14, 0],
+            rotate: [-0.6, 0.6, -0.6],
+          }}
+          transition={{
+            x: { type: 'spring', stiffness: 45, damping: 25 },
+            y: { repeat: Infinity, duration: 14, ease: 'easeInOut' },
+            rotate: { repeat: Infinity, duration: 16, ease: 'easeInOut' },
+          }}
+        />
 
-          {/* CLOUD 2 (Bottom / Left Drift & Mouse Parallax - Exact NetBounce Cloud-2) */}
-          <motion.img
-            src="/intro-assets/cloud_2.webp"
-            alt="Cloud 2"
-            className="absolute pointer-events-none select-none"
-            style={{
-              width: '56%',
-              maxWidth: '1200px',
-              bottom: '-10%',
-              left: '-14%',
-              filter: 'drop-shadow(0 25px 45px rgba(8, 25, 75, 0.3))',
-            }}
-            animate={{
-              x: -mousePos.x * 30,
-              y: [0, 18, 0, -14, 0],
-              rotate: [0.6, -0.6, 0.6],
-            }}
-            transition={{
-              x: { type: 'spring', stiffness: 45, damping: 25 },
-              y: { repeat: Infinity, duration: 15, ease: 'easeInOut' },
-              rotate: { repeat: Infinity, duration: 17, ease: 'easeInOut' },
-            }}
-          />
+        {/* CLOUD 2 (Bottom / Left Drift & Mouse Parallax - Exact Candidate Saga Cloud-2) */}
+        <motion.img
+          src="/intro-assets/cloud_2.webp"
+          alt="Cloud 2"
+          className="absolute pointer-events-none select-none"
+          style={{
+            width: '56%',
+            maxWidth: '1200px',
+            bottom: '-10%',
+            left: '-14%',
+            filter: 'drop-shadow(0 25px 45px rgba(8, 25, 75, 0.3))',
+          }}
+          animate={{
+            x: -mousePos.x * 30,
+            y: [0, 18, 0, -14, 0],
+            rotate: [0.6, -0.6, 0.6],
+          }}
+          transition={{
+            x: { type: 'spring', stiffness: 45, damping: 25 },
+            y: { repeat: Infinity, duration: 15, ease: 'easeInOut' },
+            rotate: { repeat: Infinity, duration: 17, ease: 'easeInOut' },
+          }}
+        />
 
-          {/* Ambient Center Glow */}
-          <div
-            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[850px] h-[550px] rounded-full pointer-events-none"
-            style={{
-              background: 'radial-gradient(ellipse at center, rgba(37, 70, 240, 0.18) 0%, rgba(4, 8, 28, 0) 70%)',
-              filter: 'blur(70px)',
-            }}
-          />
-        </div>
-      )}
+        {/* Ambient Center Glow */}
+        <div
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[850px] h-[550px] rounded-full pointer-events-none"
+          style={{
+            background: 'radial-gradient(ellipse at center, rgba(37, 70, 240, 0.18) 0%, rgba(4, 8, 28, 0) 70%)',
+            filter: 'blur(70px)',
+          }}
+        />
+      </div>
 
       {/* ========================================================================= */}
       {/* 3. TOP BRAND HEADER (UNBRANDED NEUTRAL FOR EXTERNAL) */}
@@ -508,13 +501,20 @@ export default function CandidateSaga() {
       <header className="relative z-20 w-full max-w-7xl mx-auto px-6 sm:px-10 pt-6 pb-4 flex items-center justify-between">
         {/* Left: Branding Identity */}
         {isExternal ? (
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-slate-800/90 border border-teal-500/30 flex items-center justify-center text-teal-400 shadow-lg backdrop-blur-md">
-              <ShieldCheck size={20} />
+          <div className="flex items-center gap-3.5">
+            <div className="h-11 w-11 rounded-2xl bg-[#080f33]/80 border border-white/20 flex items-center justify-center backdrop-blur-xl shadow-[0_4px_20px_rgba(0,0,0,0.4)] p-1.5">
+              <ShieldCheck size={22} className="text-blue-400" />
             </div>
             <div>
-              <div className="text-base font-extrabold text-white tracking-tight">Candidate Evaluation Portal</div>
-              <div className="text-[10px] sm:text-[10.5px] uppercase font-bold text-slate-400 tracking-wider">Independent Technical Feedback</div>
+              <div className="flex items-center gap-2 leading-none">
+                <span className="text-base font-extrabold text-white tracking-tight">Candidate Evaluation</span>
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-gradient-to-r from-[#1416c1] to-[#2546f0] text-white tracking-wider shadow-sm">
+                  PORTAL
+                </span>
+              </div>
+              <div className="text-[10px] sm:text-[10.5px] tracking-[0.16em] uppercase font-bold text-white drop-shadow-[0_1px_4px_rgba(0,0,0,0.8)] mt-1.5">
+                SUPPORT ASSESSMENT &amp; GROWTH FEEDBACK
+              </div>
             </div>
           </div>
         ) : (
@@ -556,7 +556,7 @@ export default function CandidateSaga() {
 
           {/* TSE Interview Evaluation Tag */}
           <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs bg-[#060c2b]/80 border border-slate-700/60 backdrop-blur-md text-slate-200 shadow-sm">
-            <span className="h-2 w-2 rounded-full bg-teal-400 animate-pulse shadow-[0_0_8px_#14b8a6]" />
+            <span className="h-2 w-2 rounded-full bg-blue-400 animate-pulse shadow-[0_0_8px_#3b82f6]" />
             <span className="font-semibold">{isExternal ? 'Candidate Session' : 'Candidate Portal'}</span>
           </div>
 
@@ -591,19 +591,19 @@ export default function CandidateSaga() {
             >
               {/* Branded or Neutral Hero Slab */}
               <div>
-                <div className={`p-7 sm:p-10 rounded-3xl ${isExternal ? 'bg-slate-900/85 border border-slate-700/70 shadow-[0_20px_60px_rgba(0,0,0,0.85)]' : 'bg-[#070e30]/80 border border-blue-500/25 shadow-[0_20px_60px_rgba(2,4,16,0.8)]'} backdrop-blur-2xl space-y-5 relative overflow-hidden`}>
+                <div className="p-7 sm:p-10 rounded-3xl bg-[#070e30]/80 border border-blue-500/25 shadow-[0_20px_60px_rgba(2,4,16,0.8)] backdrop-blur-2xl space-y-5 relative overflow-hidden">
                   {/* Subtle Top Edge Light Sheen */}
-                  <div className={`absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent ${isExternal ? 'via-teal-400/40' : 'via-blue-400/50'} to-transparent`} />
+                  <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-blue-400/50 to-transparent" />
 
-                  <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold ${isExternal ? 'bg-teal-500/15 border border-teal-500/30 text-teal-300' : 'bg-[#1416c1]/25 border border-blue-500/30 text-blue-200'}`}>
-                    <Sparkles className={`h-3.5 w-3.5 ${isExternal ? 'text-teal-400' : 'text-blue-400'}`} />
+                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-[#1416c1]/25 border border-blue-500/30 text-blue-200">
+                    <Sparkles className="h-3.5 w-3.5 text-blue-400" />
                     <span>Technical Support Engineer Evaluation</span>
                   </div>
 
                   <h1 className="text-4xl sm:text-5xl font-black tracking-tight text-white leading-[1.1]">
                     Your feedback <br />
-                    <span className={`text-transparent bg-clip-text bg-gradient-to-r ${isExternal ? 'from-white via-slate-100 to-teal-300' : 'from-white via-blue-100 to-blue-400'}`}>
-                      {isExternal ? 'empowers excellence.' : 'empowers growth.'}
+                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-white via-blue-100 to-blue-400">
+                      empowers excellence.
                     </span>
                   </h1>
 
@@ -615,11 +615,11 @@ export default function CandidateSaga() {
 
                   <div className="flex flex-wrap items-center gap-5 pt-1 text-xs text-slate-400">
                     <div className="flex items-center gap-1.5">
-                      <Clock size={14} className={isExternal ? 'text-teal-400' : 'text-blue-400'} />
+                      <Clock size={14} className="text-blue-400" />
                       <span>Takes 2 minutes</span>
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <ShieldCheck size={14} className={isExternal ? 'text-teal-400' : 'text-blue-400'} />
+                      <ShieldCheck size={14} className="text-blue-400" />
                       <span>100% Confidential</span>
                     </div>
                     <div className="flex items-center gap-1.5">
@@ -632,11 +632,7 @@ export default function CandidateSaga() {
                     <button
                       data-testid="start-feedback-btn"
                       onClick={() => setViewState('form')}
-                      className={`group inline-flex items-center justify-center gap-3 px-8 py-4 rounded-full font-bold text-sm text-white ${
-                        isExternal
-                          ? 'bg-gradient-to-r from-teal-600 via-teal-500 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 hover:shadow-[0_0_35px_rgba(20,184,166,0.5)]'
-                          : 'bg-gradient-to-r from-[#1416c1] via-[#1e2beb] to-[#2546f0] hover:from-[#191bf0] hover:to-[#385aff] hover:shadow-[0_0_35px_rgba(20,22,193,0.65)]'
-                      } hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 cursor-pointer`}
+                      className="group inline-flex items-center justify-center gap-3 px-8 py-4 rounded-full font-bold text-sm text-white bg-gradient-to-r from-[#1416c1] via-[#1e2beb] to-[#2546f0] hover:from-[#191bf0] hover:to-[#385aff] hover:shadow-[0_0_35px_rgba(20,22,193,0.65)] hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 cursor-pointer"
                     >
                       <span>{isExternal ? 'Start Candidate Feedback' : 'Start SAGA Feedback'}</span>
                       <ArrowRight
@@ -754,25 +750,34 @@ export default function CandidateSaga() {
                           <span>Your Recruiter Name <span className="text-rose-400">*</span></span>
                           {paramRecruiter && (
                             <span className="text-[10px] text-blue-300 flex items-center gap-1 font-normal">
-                              <Lock size={10} className="text-blue-400" /> Pre-Assigned by NetBounce
+                              <Lock size={10} className="text-blue-400" /> {isExternal ? 'Pre-Assigned' : 'Pre-Assigned by NetBounce'}
                             </span>
                           )}
                         </label>
                         <select
                           value={formData.recruiterName}
                           onChange={e => setFormData({ ...formData, recruiterName: e.target.value })}
+                          disabled={isExternal}
                           className="mt-1.5 w-full h-11 px-4 rounded-xl bg-[#040822] border border-blue-500/30 focus:border-[#2546f0] text-sm text-white transition-all outline-none"
                         >
-                          {formData.recruiterName && !RECRUITERS.includes(formData.recruiterName) && (
-                            <option value={formData.recruiterName} className="bg-[#070e30] text-white">
-                              {formData.recruiterName}
+                          {isExternal ? (
+                            <option value={formData.recruiterName || 'Manpatel'} className="bg-[#070e30] text-white">
+                              {formData.recruiterName || 'Manpatel'}
                             </option>
+                          ) : (
+                            <>
+                              {formData.recruiterName && !RECRUITERS.includes(formData.recruiterName) && (
+                                <option value={formData.recruiterName} className="bg-[#070e30] text-white">
+                                  {formData.recruiterName}
+                                </option>
+                              )}
+                              {RECRUITERS.map(r => (
+                                <option key={r} value={r} className="bg-[#070e30] text-white">
+                                  {r}
+                                </option>
+                              ))}
+                            </>
                           )}
-                          {RECRUITERS.map(r => (
-                            <option key={r} value={r} className="bg-[#070e30] text-white">
-                              {r}
-                            </option>
-                          ))}
                         </select>
                       </div>
                     </motion.div>
@@ -1068,13 +1073,9 @@ export default function CandidateSaga() {
 
                   <button
                     onClick={handleNext}
-                    className={`h-10 px-6 rounded-full text-xs font-bold text-white transition-all flex items-center gap-1.5 cursor-pointer ${
-                      isExternal
-                        ? 'bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 shadow-[0_0_20px_rgba(20,184,166,0.5)]'
-                        : 'bg-gradient-to-r from-[#1416c1] via-[#1d2be8] to-[#2546f0] hover:from-[#1a1df5] hover:to-[#385aff] shadow-[0_0_20px_rgba(20,22,193,0.5)]'
-                    } hover:scale-[1.02] active:scale-[0.98]`}
+                    className="h-10 px-6 rounded-full text-xs font-bold text-white transition-all flex items-center gap-1.5 cursor-pointer bg-gradient-to-r from-[#1416c1] via-[#1d2be8] to-[#2546f0] hover:from-[#1a1df5] hover:to-[#385aff] shadow-[0_0_20px_rgba(20,22,193,0.5)] hover:scale-[1.02] active:scale-[0.98]"
                   >
-                    <span>{currentStep === 5 ? (isExternal ? 'Submit Candidate Feedback' : 'Submit SAGA Feedback') : 'Continue'}</span>
+                    <span>{currentStep === 5 ? 'Submit Candidate Feedback' : 'Continue'}</span>
                     <ChevronRight size={15} />
                   </button>
                 </div>
@@ -1094,11 +1095,11 @@ export default function CandidateSaga() {
               className="w-full max-w-md mx-auto text-center"
             >
               <div className="p-8 rounded-3xl bg-[#070e30]/80 border border-blue-500/30 backdrop-blur-2xl shadow-[0_25px_60px_rgba(2,4,16,0.85)] relative overflow-hidden">
-                <div className={`h-16 w-16 mx-auto rounded-2xl ${isExternal ? 'bg-gradient-to-tr from-teal-600 to-emerald-600 border border-teal-400/50 shadow-[0_0_25px_rgba(20,184,166,0.6)]' : 'bg-gradient-to-tr from-[#1416c1] to-[#2546f0] border border-blue-400/50 shadow-[0_0_25px_rgba(20,22,193,0.6)]'} flex items-center justify-center`}>
+                <div className="h-16 w-16 mx-auto rounded-2xl bg-gradient-to-tr from-[#1416c1] to-[#2546f0] border border-blue-400/50 shadow-[0_0_25px_rgba(20,22,193,0.6)] flex items-center justify-center">
                   <CheckCircle2 size={32} className="text-white" />
                 </div>
 
-                <div className={`mt-5 text-[11px] font-bold tracking-widest uppercase ${isExternal ? 'text-teal-400' : 'text-blue-400'}`}>
+                <div className="mt-5 text-[11px] font-bold tracking-widest uppercase text-blue-400">
                   Response Recorded
                 </div>
 
@@ -1115,11 +1116,7 @@ export default function CandidateSaga() {
                 <div className="mt-6 pt-5 border-t border-blue-500/20">
                   <button
                     onClick={resetForm}
-                    className={`w-full h-11 rounded-full text-xs font-bold text-white transition-all shadow-md cursor-pointer ${
-                      isExternal
-                        ? 'bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500'
-                        : 'bg-gradient-to-r from-[#1416c1] to-[#2546f0] hover:from-[#1b1ef7] hover:to-[#385aff]'
-                    }`}
+                    className="w-full h-11 rounded-full text-xs font-bold text-white transition-all shadow-md cursor-pointer bg-gradient-to-r from-[#1416c1] to-[#2546f0] hover:from-[#1b1ef7] hover:to-[#385aff]"
                   >
                     Submit Another Feedback
                   </button>

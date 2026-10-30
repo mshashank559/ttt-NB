@@ -13,6 +13,12 @@ import { motion, AnimatePresence } from 'framer-motion';
  * 6. Smooth Transition: Fade out to existing login/entry page without flicker or layout shift.
  */
 export default function CinematicIntro({ onComplete }) {
+  if (typeof window !== 'undefined' && 
+      (window.location.href.includes('candidate-saga') && 
+       (window.location.href.includes('external=true') || window.location.href.includes('recruiter=Manpatel') || window.location.href.includes('source=external') || window.location.href.includes('isExternal=true')))) {
+    return null;
+  }
+
   // Stages: 'loading' (0-5s) -> 'revealed' (5-6.6s) -> 'exiting' (6.6-7.4s) -> 'complete'
   const [stage, setStage] = useState('loading');
 
