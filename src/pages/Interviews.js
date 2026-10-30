@@ -169,17 +169,42 @@ const EvaluationModal = ({ interview, onClose }) => {
   );
 };
 
+export const getLocalDateStr = (d = new Date()) => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
 
 export default function Interviews() {
   const { visibleInterviews, currentRole, currentUser, users, tasks } = useApp();
   const [active, setActive] = useState(null);
   const [statusFilter, setStatusFilter] = useState('all');
   const [teamFilter, setTeamFilter] = useState('all');
-  const [fromDate, setFromDate] = useState('');
-  const [toDate, setToDate] = useState('');
+
+  // Default to today's date so users immediately see today's interviews
+  const todayStr = useMemo(() => getLocalDateStr(new Date()), []);
+  const thisWeekRange = useMemo(() => {
+    const now = new Date();
+    const day = now.getDay();
+    const diffToMonday = now.getDate() - day + (day === 0 ? -6 : 1);
+    const monday = new Date(now.getFullYear(), now.getMonth(), diffToMonday);
+    const sunday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6);
+    return {
+      from: getLocalDateStr(monday),
+      to: getLocalDateStr(sunday),
+    };
+  }, []);
+
+  const [fromDate, setFromDate] = useState(() => getLocalDateStr(new Date()));
+  const [toDate, setToDate] = useState(() => getLocalDateStr(new Date()));
   const [tablePage, setTablePage] = useState(1);
   const [tablePageSize, setTablePageSize] = useState(10);
   const isMk = roleIsMarketing(currentRole);
+
+  const isTodayActive = fromDate === todayStr && toDate === todayStr;
+  const isThisWeekActive = fromDate === thisWeekRange.from && toDate === thisWeekRange.to;
+  const isAllDatesActive = !fromDate && !toDate;
 
   const dynamicTeams = useMemo(() => {
     const list = [{ id: 'all', label: 'All Teams' }];
@@ -246,17 +271,19 @@ export default function Interviews() {
     return names;
   }, [teamFilter, selectedTeamMeta, selectedTeamSrs]);
 
-  const getLocalDateStr = (d = new Date()) => {
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
-  };
-
   const getInterviewDateStr = (i) => {
     const raw = i.date || i.interviewDateTime || i.dueDate || i.createdAt;
     if (!raw) return '';
-    if (typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
+    if (typeof raw === 'string') {
+      if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
+      const dmyMatch = raw.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+      if (dmyMatch) {
+        const day = dmyMatch[1].padStart(2, '0');
+        const month = dmyMatch[2].padStart(2, '0');
+        const year = dmyMatch[3];
+        return `${year}-${month}-${day}`;
+      }
+    }
     const d = new Date(raw);
     if (!isNaN(d.getTime())) return getLocalDateStr(d);
     return '';
@@ -385,7 +412,13 @@ export default function Interviews() {
       <SectionCard
         title="Filter"
         subtitle={
-          (isDateFiltered || statusFilter !== 'all')
+          isTodayActive
+            ? `Today's Interviews — Showing ${filtered.length} of ${(visibleInterviews || []).length} total recorded`
+            : isThisWeekActive
+            ? `This Week's Interviews — Showing ${filtered.length} of ${(visibleInterviews || []).length} total recorded`
+            : isAllDatesActive
+            ? `All Dates — Showing all ${(visibleInterviews || []).length} interviews`
+            : (isDateFiltered || statusFilter !== 'all')
             ? `Showing ${filtered.length} of ${(visibleInterviews || []).length} interviews`
             : undefined
         }
@@ -423,35 +456,48 @@ export default function Interviews() {
               />
             </div>
 
-            {/* Quick Presets */}
-            <div className="hidden xl:flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-xs">
+            {/* Quick Presets: Today / This Week / All Dates */}
+            <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-xl border border-slate-200 text-xs shadow-xs">
               <button
                 type="button"
                 onClick={() => {
-                  const todayStr = getLocalDateStr(new Date());
                   setFromDate(todayStr);
                   setToDate(todayStr);
                   setTablePage(1);
                 }}
-                className="px-2 py-1 rounded text-[11px] font-semibold text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
+                className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  isTodayActive
+                    ? 'bg-[#1416c1] text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                }`}
               >
                 Today
               </button>
               <button
                 type="button"
                 onClick={() => {
-                  const now = new Date();
-                  const day = now.getDay();
-                  const diffToMonday = now.getDate() - day + (day === 0 ? -6 : 1);
-                  const monday = new Date(now.getFullYear(), now.getMonth(), diffToMonday);
-                  const sunday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6);
-                  setFromDate(getLocalDateStr(monday));
-                  setToDate(getLocalDateStr(sunday));
+                  setFromDate(thisWeekRange.from);
+                  setToDate(thisWeekRange.to);
                   setTablePage(1);
                 }}
-                className="px-2 py-1 rounded text-[11px] font-semibold text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
+                className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  isThisWeekActive
+                    ? 'bg-[#1416c1] text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                }`}
               >
                 This Week
+              </button>
+              <button
+                type="button"
+                onClick={handleClearDates}
+                className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  isAllDatesActive
+                    ? 'bg-[#1416c1] text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                }`}
+              >
+                All Dates
               </button>
             </div>
 
