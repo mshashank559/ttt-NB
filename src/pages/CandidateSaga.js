@@ -62,6 +62,7 @@ export default function CandidateSaga() {
   const paramCandidate = searchParams.get('candidate');
   const paramCompany = searchParams.get('company');
   const paramType = searchParams.get('type');
+  const paramTechnology = searchParams.get('technology') || searchParams.get('position') || searchParams.get('role') || '';
   const paramExternal = searchParams.get('external') === 'true' || 
                         searchParams.get('source') === 'external' || 
                         searchParams.get('isExternal') === 'true' || 
