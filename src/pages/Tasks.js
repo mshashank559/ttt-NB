@@ -3046,6 +3046,7 @@ export default function Tasks() {
       const taskDate = (t.date || t.dueDate || (t.interviewDateTime ? t.interviewDateTime.slice(0, 10) : '') || '').slice(0, 10);
       const matchFrom = !filters.dateFrom || (taskDate && taskDate >= filters.dateFrom);
       const matchTo = !filters.dateTo || (taskDate && taskDate <= filters.dateTo);
+      const matchTeam = isTaskMatchingTeam(t);
       const matchWorkflow = filters.workflow === 'all' || (filters.workflow === 'external' ? isExt : !isExt);
 
       return matchStatus && matchType && matchAssignee && matchSr && matchQ && matchFrom && matchTo && matchTeam && matchWorkflow;

@@ -51,23 +51,24 @@ const statusDistribution = (tasks) => {
   return Object.entries(counts).map(([name, value]) => ({ name, value }));
 };
 
-const perTseBars = (tasks, users) => {
-  const tses = users.filter(u => u.role === 'tse');
+const perTseBars = (tasks = [], users = []) => {
+  const tses = (users || []).filter(u => u && u.role === 'tse');
   return tses.map(u => ({
-    name: u.name.split(' ')[0],
-    completed: tasks.filter(t => t.assigneeId === u.id && t.status === 'Completed').length,
-    pending: tasks.filter(t => t.assigneeId === u.id && t.status === 'Pending').length,
+    name: u?.name ? u.name.split(' ')[0] : (u?.codeName || 'TSE'),
+    completed: (tasks || []).filter(t => t.assigneeId === u.id && (t.status === 'Completed' || t.status === 'Done')).length,
+    pending: (tasks || []).filter(t => t.assigneeId === u.id && (t.status === 'Pending' || t.status === 'In Progress')).length,
   }));
 };
 
-const priorityDistribution = (tasks) => {
-  const counts = tasks.reduce((acc, t) => { acc[t.priority] = (acc[t.priority] || 0) + 1; return acc; }, {});
+const priorityDistribution = (tasks = []) => {
+  const counts = (tasks || []).reduce((acc, t) => { acc[t.priority] = (acc[t.priority] || 0) + 1; return acc; }, {});
   return ['Urgent','High','Medium','Low'].map(p => ({ name: p, value: counts[p] || 0 }));
 };
 
-const InterviewFunnel = ({ interviews }) => {
+const InterviewFunnel = ({ interviews = [] }) => {
+  const list = Array.isArray(interviews) ? interviews : [];
   const stages = ['Scheduled', 'Interview Rescheduled', 'Interview Completed - Feedback Received', 'Cleared'];
-  const data = stages.map(s => ({ name: s, value: interviews.filter(i => i.status === s).length }));
+  const data = stages.map(s => ({ name: s, value: list.filter(i => i.status === s).length }));
   const max = Math.max(...data.map(d => d.value), 1);
   return (
     <div className="space-y-2.5">
@@ -501,7 +502,7 @@ export default function Dashboard() {
                 </div>
                 <div className="p-3 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/5">
                   <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">Interviews</div>
-                  <div className="text-xl font-bold text-blue-600 dark:text-blue-400 tabular-nums mt-0.5">{Math.round(visibleInterviews.length * (i===2?1:i===0?0.4:0.6))}</div>
+                  <div className="text-xl font-bold text-blue-600 dark:text-blue-400 tabular-nums mt-0.5">{Math.round((visibleInterviews || []).length * (i===2?1:i===0?0.4:0.6))}</div>
                 </div>
               </div>
             </SectionCard>
@@ -517,7 +518,7 @@ export default function Dashboard() {
       <div className="space-y-6">
         <PageHeader
           title="Management Dashboard"
-          subtitle={`Welcome back, ${currentUser?.name?.split(' ')[0]}. Operational pulse at a glance.`}
+          subtitle={`Welcome back, ${currentUser?.name ? currentUser.name.split(' ')[0] : 'Management'}. Operational pulse at a glance.`}
           actions={
             <button
               data-testid="goto-reports-btn"
@@ -676,11 +677,12 @@ export default function Dashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-white/5">
-                {users.filter(u => u.role === 'tse').map(u => {
-                  const a = tasks.filter(t => t.assigneeId === u.id);
-                  const c = a.filter(t => t.status === 'Completed').length;
-                  const p = a.filter(t => t.status === 'Pending').length;
+                {(users || []).filter(u => u && u.role === 'tse').map(u => {
+                  const a = (tasks || []).filter(t => t.assigneeId === u.id);
+                  const c = a.filter(t => t.status === 'Completed' || t.status === 'Done').length;
+                  const p = a.filter(t => t.status === 'Pending' || t.status === 'In Progress').length;
                   const rate = a.length ? Math.round((c / a.length) * 100) : 0;
+                  const initials = u?.name ? u.name.split(' ').map(p => p[0]).slice(0, 2).join('') : (u?.codeName?.slice(0, 2) || 'TS');
                   return (
                     <tr
                       key={u.id}
@@ -690,9 +692,9 @@ export default function Dashboard() {
                     >
                       <td className="py-3 text-slate-900 dark:text-white font-semibold flex items-center gap-2">
                         <div className="h-7 w-7 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-xs font-bold flex items-center justify-center">
-                          {u.name.split(' ').map(p => p[0]).slice(0, 2).join('')}
+                          {initials}
                         </div>
-                        {u.name}
+                        {u?.name || u?.codeName || 'TSE'}
                       </td>
                       <td className="tabular-nums text-slate-700 dark:text-slate-300 font-medium">{a.length}</td>
                       <td className="tabular-nums text-emerald-600 dark:text-emerald-400 font-bold">{c}</td>
