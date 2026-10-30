@@ -1477,16 +1477,18 @@ export default function ReportsPage() {
             <option value="not_reviewed">Not Reviewed</option>
           </select>
 
-          {/* Workflow Filter (All | Internal | External) */}
-          <select
-            value={workflowFilter}
-            onChange={(e) => setWorkflowFilter(e.target.value)}
-            className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-blue-600 font-semibold"
-          >
-            <option value="all">All Workflows</option>
-            <option value="internal">Internal Tasks</option>
-            <option value="external">External (Manpatel)</option>
-          </select>
+          {/* Workflow Filter (All | Internal | External) - Internal roles only */}
+          {currentRole !== 'external_user' && (
+            <select
+              value={workflowFilter}
+              onChange={(e) => setWorkflowFilter(e.target.value)}
+              className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-blue-600 font-semibold"
+            >
+              <option value="all">All Workflows</option>
+              <option value="internal">Internal Tasks</option>
+              <option value="external">External (Manpatel)</option>
+            </select>
+          )}
         </div>
 
         {/* Filter Summary and Clear Trigger */}

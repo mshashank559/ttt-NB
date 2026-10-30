@@ -471,11 +471,13 @@ app.get('/api/tasks', async (req, res) => {
       }
     } else if (role === 'external_user') {
       filter = {
+        isExternal: true,
         $or: [
           { createdById: userId },
           { externalCreatorId: userId },
           { externalCreator: 'Manpatel' },
           { creatorName: 'Manpatel' },
+          { recruiterName: 'Manpatel' },
           { isExternal: true },
         ],
       };
@@ -859,6 +861,7 @@ app.get('/api/feedbacks', async (req, res) => {
       filter = { teamId: teamId || defaultTeam };
     } else if (role === 'external_user') {
       filter = {
+        isExternal: true,
         $or: [
           { externalCreatorId: userId },
           { externalCreator: 'Manpatel' },

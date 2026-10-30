@@ -305,9 +305,12 @@ export default function FeedbackPage() {
   // Filtered records for the main table
   const filteredFeedbacks = useMemo(() => {
     return (unifiedFeedbacks || []).filter((item) => {
+      const isExt = Boolean(item.isExternal || item.taskSource === 'external' || item.taskClassification === 'External');
+      // If external user, NEVER show internal feedback!
+      if (currentRole === 'external_user' && !isExt) return false;
+
       // Workflow filter (All | Internal | External)
       if (workflowFilter !== 'all') {
-        const isExt = Boolean(item.isExternal || item.taskSource === 'external' || item.taskClassification === 'External');
         if (workflowFilter === 'external' && !isExt) return false;
         if (workflowFilter === 'internal' && isExt) return false;
       }
@@ -458,8 +461,12 @@ export default function FeedbackPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Feedback Management"
-        subtitle="Candidate session feedback, TSE evaluations, and tech support performance ratings."
+        title={currentRole === 'external_user' ? 'Candidate Feedback' : 'Feedback Management'}
+        subtitle={
+          currentRole === 'external_user'
+            ? 'Candidate session feedback and evaluations for your external tasks.'
+            : 'Candidate session feedback, TSE evaluations, and tech support performance ratings.'
+        }
       />
 
       {/* Role Responsibility Banner for Marketing Evaluators (Marketing TL & Marketing SR) */}
@@ -584,16 +591,18 @@ export default function FeedbackPage() {
             <option value="not_rated">Not Rated</option>
           </select>
 
-          {/* Workflow filter dropdown */}
-          <select
-            value={workflowFilter}
-            onChange={(e) => setWorkflowFilter(e.target.value)}
-            className="bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-[#1416c1] shadow-xs"
-          >
-            <option value="all">All Workflows</option>
-            <option value="internal">Internal Tasks</option>
-            <option value="external">External (Manpatel)</option>
-          </select>
+          {/* Workflow filter dropdown (Internal roles only: TSM, management, etc.) */}
+          {currentRole !== 'external_user' && (
+            <select
+              value={workflowFilter}
+              onChange={(e) => setWorkflowFilter(e.target.value)}
+              className="bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-[#1416c1] shadow-xs"
+            >
+              <option value="all">All Workflows</option>
+              <option value="internal">Internal Tasks</option>
+              <option value="external">External (Manpatel)</option>
+            </select>
+          )}
         </div>
       </div>
 

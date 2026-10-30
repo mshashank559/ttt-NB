@@ -1683,68 +1683,87 @@ const EditTaskModal = ({ task, open, onOpenChange }) => {
         </DialogHeader>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
-          {/* Marketing Team Lead */}
-          <div className="md:col-span-1">
-            <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-              <span>Marketing Team Lead</span>
-              <span className="text-rose-500">*</span>
-            </label>
-            {isMarketingUser && currentRole !== 'management' && currentRole !== 'upper_management' ? (
-              <div className="mt-1.5 h-10 px-3.5 rounded-lg bg-slate-100 border border-slate-300 text-slate-900 text-xs font-bold flex items-center justify-between">
-                <span>{form.teamName || 'Marketing Team'}</span>
-                <span className="text-[10px] text-blue-700 font-bold bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                  Assigned Team
-                </span>
+          {Boolean(task?.isExternal || task?.taskSource === 'external' || currentRole === 'external_user') ? (
+            <div className="md:col-span-2 p-3.5 rounded-xl bg-teal-50/80 border border-teal-200 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="h-8 w-8 rounded-lg bg-teal-600 text-white flex items-center justify-center font-bold">
+                  <Globe size={16} />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-teal-950">External Client Workflow (Manpatel)</div>
+                  <div className="text-[11px] text-teal-700 font-medium">External pipeline task routed directly to TSM queue</div>
+                </div>
               </div>
-            ) : (
-              <Select value={form.teamId} onValueChange={handleTeamChange}>
-                <SelectTrigger data-testid="edit-task-form-team" className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white text-xs">
-                  <SelectValue placeholder="Select Marketing Team" />
-                </SelectTrigger>
-                <SelectContent className="bg-white border-slate-200 text-slate-900">
-                  {MARKETING_TEAMS.map(team => (
-                    <SelectItem key={team.id} value={team.id}>
-                      {team.name} ({team.leadName})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          </div>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal-100 text-teal-800 border border-teal-300">
+                External Pipeline
+              </span>
+            </div>
+          ) : (
+            <>
+              {/* Marketing Team Lead */}
+              <div className="md:col-span-1">
+                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <span>Marketing Team Lead</span>
+                  <span className="text-rose-500">*</span>
+                </label>
+                {isMarketingUser && currentRole !== 'management' && currentRole !== 'upper_management' ? (
+                  <div className="mt-1.5 h-10 px-3.5 rounded-lg bg-slate-100 border border-slate-300 text-slate-900 text-xs font-bold flex items-center justify-between">
+                    <span>{form.teamName || 'Marketing Team'}</span>
+                    <span className="text-[10px] text-blue-700 font-bold bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                      Assigned Team
+                    </span>
+                  </div>
+                ) : (
+                  <Select value={form.teamId} onValueChange={handleTeamChange}>
+                    <SelectTrigger data-testid="edit-task-form-team" className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white text-xs">
+                      <SelectValue placeholder="Select Marketing Team" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-white border-slate-200 text-slate-900">
+                      {MARKETING_TEAMS.map(team => (
+                        <SelectItem key={team.id} value={team.id}>
+                          {team.name} ({team.leadName})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
 
-          {/* Senior Recruiter */}
-          <div className="md:col-span-1">
-            <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-              <span>Senior Recruiter (Marketing SR)</span>
-              <span className="text-rose-500">*</span>
-            </label>
-            <Select
-              value={form.assignedSrId}
-              onValueChange={(srId) => {
-                const srUser = availableSrs.find(u => u.id === srId);
-                setForm(prev => ({
-                  ...prev,
-                  assignedSrId: srId,
-                  assignedSrName: srUser?.name || '',
-                  assignedSrEmail: srUser?.email || '',
-                }));
-              }}
-            >
-              <SelectTrigger data-testid="edit-task-form-sr" className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white text-xs">
-                <SelectValue placeholder="Select Senior Recruiter" />
-              </SelectTrigger>
-              <SelectContent className="bg-white border-slate-200 text-slate-900 max-h-56">
-                {availableSrs.map(sr => (
-                  <SelectItem key={sr.id} value={sr.id}>
-                    {sr.name} ({sr.empId || sr.tttNbId || 'SR'})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-[10px] text-slate-500 mt-1 font-medium">
-              {form.assignedSrName ? `Assigned: ${form.assignedSrName}` : 'Select responsible Senior Recruiter'}
-            </p>
-          </div>
+              {/* Senior Recruiter */}
+              <div className="md:col-span-1">
+                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <span>Senior Recruiter (Marketing SR)</span>
+                  <span className="text-rose-500">*</span>
+                </label>
+                <Select
+                  value={form.assignedSrId}
+                  onValueChange={(srId) => {
+                    const srUser = availableSrs.find(u => u.id === srId);
+                    setForm(prev => ({
+                      ...prev,
+                      assignedSrId: srId,
+                      assignedSrName: srUser?.name || '',
+                      assignedSrEmail: srUser?.email || '',
+                    }));
+                  }}
+                >
+                  <SelectTrigger data-testid="edit-task-form-sr" className="mt-1.5 bg-slate-50 border-slate-300 text-slate-900 focus:bg-white text-xs">
+                    <SelectValue placeholder="Select Senior Recruiter" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-white border-slate-200 text-slate-900 max-h-56">
+                    {availableSrs.map(sr => (
+                      <SelectItem key={sr.id} value={sr.id}>
+                        {sr.name} ({sr.empId || sr.tttNbId || 'SR'})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[10px] text-slate-500 mt-1 font-medium">
+                  {form.assignedSrName ? `Assigned: ${form.assignedSrName}` : 'Select responsible Senior Recruiter'}
+                </p>
+              </div>
+            </>
+          )}
 
           {/* Task Type */}
           <div className="md:col-span-2">
@@ -2324,24 +2343,35 @@ const TaskDrawer = ({ task, onClose }) => {
                     })()}
               </div>
             </div>
-            <div>
-              <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1 flex items-center gap-1.5">
-                <Building2 size={12} className="text-blue-600" /> Marketing Team
+            {(task.isExternal || currentRole === 'external_user') ? (
+              <div>
+                <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1 flex items-center gap-1.5">
+                  <Globe size={12} className="text-teal-600" /> Pipeline Source
+                </div>
+                <div className="text-sm font-semibold text-teal-800">External Client (Manpatel)</div>
               </div>
-              <div className="text-sm font-semibold text-slate-900">{task.teamName || 'Team Mukesh'}</div>
-            </div>
-            <div>
-              <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1 flex items-center gap-1.5">
-                <UserRound size={12} className="text-blue-600" /> Senior Recruiter (SR)
-              </div>
-              <div className="text-sm font-semibold text-slate-900">
-                {task.assignedSrName ? (
-                  <span className="text-blue-700 font-bold">{task.assignedSrName}</span>
-                ) : (
-                  <span className="text-amber-700 font-medium italic">Pending Assignment</span>
-                )}
-              </div>
-            </div>
+            ) : (
+              <>
+                <div>
+                  <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1 flex items-center gap-1.5">
+                    <Building2 size={12} className="text-blue-600" /> Marketing Team
+                  </div>
+                  <div className="text-sm font-semibold text-slate-900">{task.teamName || 'Team Mukesh'}</div>
+                </div>
+                <div>
+                  <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1 flex items-center gap-1.5">
+                    <UserRound size={12} className="text-blue-600" /> Senior Recruiter (SR)
+                  </div>
+                  <div className="text-sm font-semibold text-slate-900">
+                    {task.assignedSrName ? (
+                      <span className="text-blue-700 font-bold">{task.assignedSrName}</span>
+                    ) : (
+                      <span className="text-amber-700 font-medium italic">Pending Assignment</span>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
             <div>
               <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1 flex items-center gap-1.5">
                 <Briefcase size={12} className="text-blue-600" /> Position
@@ -2823,7 +2853,7 @@ export default function Tasks() {
     assignee: 'all',
     sr: 'all',
     team: 'all',
-    workflow: 'all',
+    workflow: currentRole === 'external_user' ? 'external' : 'all',
     q: '',
     dateFrom: '',
     dateTo: '',
@@ -2982,8 +3012,23 @@ export default function Tasks() {
     let base = tasks;
     if (currentRole === 'tse') {
       base = base.filter(t => t.assigneeId === currentUser?.id || (currentUser?.name && t.techPerson?.toLowerCase() === currentUser?.name?.toLowerCase()));
+    } else if (currentRole === 'external_user') {
+      const cId = currentUser?.id;
+      const cName = (currentUser?.name || '').toLowerCase();
+      base = base.filter(t => {
+        const isExt = Boolean(t.isExternal || t.taskSource === 'external' || t.taskClassification === 'External');
+        if (!isExt) return false;
+        return t.createdById === cId || t.externalCreatorId === cId ||
+          (t.creatorName && t.creatorName.toLowerCase().includes(cName)) ||
+          (t.externalCreator && t.externalCreator.toLowerCase().includes(cName)) ||
+          t.externalCreator === 'Manpatel' ||
+          !t.createdById;
+      });
     }
     return base.filter(t => {
+      const isExt = Boolean(t.isExternal || t.taskSource === 'external' || t.taskClassification === 'External');
+      if (currentRole === 'external_user' && !isExt) return false;
+
       const matchStatus = filters.status === 'all' || t.status === filters.status;
       const matchType = filters.taskType === 'all' || t.taskType === filters.taskType;
       const matchAssignee = filters.assignee === 'all' || t.assigneeId === filters.assignee;
@@ -3001,7 +3046,6 @@ export default function Tasks() {
       const taskDate = (t.date || t.dueDate || (t.interviewDateTime ? t.interviewDateTime.slice(0, 10) : '') || '').slice(0, 10);
       const matchFrom = !filters.dateFrom || (taskDate && taskDate >= filters.dateFrom);
       const matchTo = !filters.dateTo || (taskDate && taskDate <= filters.dateTo);
-      const isExt = Boolean(t.isExternal || t.taskSource === 'external' || t.taskClassification === 'External');
       const matchWorkflow = filters.workflow === 'all' || (filters.workflow === 'external' ? isExt : !isExt);
 
       return matchStatus && matchType && matchAssignee && matchSr && matchQ && matchFrom && matchTo && matchTeam && matchWorkflow;
@@ -3029,8 +3073,14 @@ export default function Tasks() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={currentRole === 'tse' ? 'My Tasks' : 'Tasks'}
-        subtitle={currentRole === 'tse' ? 'Your personal task queue — update status to keep your TSM informed.' : 'All active work across your team from Task Sheet.'}
+        title={currentRole === 'tse' ? 'My Tasks' : currentRole === 'external_user' ? 'External Tasks' : 'Tasks'}
+        subtitle={
+          currentRole === 'tse'
+            ? 'Your personal task queue — update status to keep your TSM informed.'
+            : currentRole === 'external_user'
+            ? 'All external candidate tasks submitted for technical evaluation.'
+            : 'All active work across your team from Task Sheet.'
+        }
         actions={roleCanCreate(currentRole) ? (
           <button
             data-testid="create-task-btn"
@@ -3102,7 +3152,8 @@ export default function Tasks() {
           </div>
 
           {/* Marketing TL / Team Filter for Upper Management, Management, TSM, and other roles */}
-          {currentRole !== 'tse' && (
+          {/* Marketing TL / Team Filter - Hidden for TSE and External User */}
+          {currentRole !== 'tse' && currentRole !== 'external_user' && (
             <Select
               value={filters.team}
               onValueChange={v => setFilters({ ...filters, team: v, sr: 'all' })}
@@ -3155,7 +3206,7 @@ export default function Tasks() {
                 ))}
               </SelectContent>
             </Select>
-          ) : currentRole !== 'tse' && (
+          ) : currentRole !== 'tse' && currentRole !== 'external_user' && (
             <Select value={filters.assignee} onValueChange={v => setFilters({ ...filters, assignee: v })}>
               <SelectTrigger data-testid="task-filter-assignee" className="bg-white border-slate-300 text-slate-900">
                 <SelectValue placeholder="All Tech Persons" />
@@ -3171,17 +3222,19 @@ export default function Tasks() {
             </Select>
           )}
 
-          {/* Workflow Filter (All | Internal | External) */}
-          <Select value={filters.workflow} onValueChange={v => setFilters({ ...filters, workflow: v })}>
-            <SelectTrigger data-testid="task-filter-workflow" className="bg-white border-slate-300 text-slate-900">
-              <SelectValue placeholder="All Workflows" />
-            </SelectTrigger>
-            <SelectContent className="bg-white border-slate-200 text-slate-900">
-              <SelectItem value="all">All Workflows</SelectItem>
-              <SelectItem value="internal">Internal Tasks</SelectItem>
-              <SelectItem value="external">External (Manpatel)</SelectItem>
-            </SelectContent>
-          </Select>
+          {/* Workflow Filter (All | Internal | External) - ONLY for internal roles! Never for external_user */}
+          {currentRole !== 'external_user' && (
+            <Select value={filters.workflow} onValueChange={v => setFilters({ ...filters, workflow: v })}>
+              <SelectTrigger data-testid="task-filter-workflow" className="bg-white border-slate-300 text-slate-900">
+                <SelectValue placeholder="All Workflows" />
+              </SelectTrigger>
+              <SelectContent className="bg-white border-slate-200 text-slate-900">
+                <SelectItem value="all">All Workflows</SelectItem>
+                <SelectItem value="internal">Internal Tasks</SelectItem>
+                <SelectItem value="external">External (Manpatel)</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
         </div>
       </SectionCard>
 
@@ -3197,7 +3250,7 @@ export default function Tasks() {
                   <th className="py-3 px-4 font-semibold">Date</th>
                   <th className="py-3 px-4 font-semibold">Duration</th>
                   <th className="py-3 px-4 font-semibold">
-                    {isMarketingTl ? 'Pseudo Name' : (roleIsMarketing(currentRole) ? 'Tech ID' : 'Tech Person')}
+                    {currentRole === 'external_user' ? 'Technical Support' : (isMarketingTl ? 'Pseudo Name' : (roleIsMarketing(currentRole) ? 'Tech ID' : 'Tech Person'))}
                   </th>
                   <th className="py-3 px-3 font-semibold">Task</th>
                   <th className="py-3 px-4 font-semibold">Candidate Name</th>
@@ -3207,7 +3260,7 @@ export default function Tasks() {
                   <th className="py-3 px-3 font-semibold">Attachments</th>
                   <th className="py-3 px-4 font-semibold">Comment</th>
                   <th className="py-3 px-4 font-semibold">Candidate Feedback</th>
-                  <th className="py-3 px-4 font-semibold text-right">Assign TSE</th>
+                  <th className="py-3 px-4 font-semibold text-right">{currentRole === 'external_user' ? 'Assignment Status' : 'Assign TSE'}</th>
                   {(canManageTasks || canEditTask) && <th className="py-3 px-3 font-semibold text-right">Actions</th>}
                 </tr>
               </thead>
@@ -3241,11 +3294,13 @@ export default function Tasks() {
                   }
 
                   const techName = isUnassigned
-                    ? 'Unassigned'
+                    ? (currentRole === 'external_user' ? 'Pending TSM Assignment' : 'Unassigned')
                     : (isMarketingTl
                       ? codeName
                       : (isMarketing
                         ? (a?.empId || a?.tttNbId || t.techPersonId || t.assigneeId || 'TSE-ID')
+                        : currentRole === 'external_user'
+                        ? 'Assigned Technical Engineer'
                         : codeName));
                   const timing = t.interviewDateTime ? getInterviewTimingMeta(t.interviewDateTime) : null;
                   const currentAssigneeId = t.assigneeId || tseUsers.find(u =>

@@ -997,20 +997,22 @@ export const filterAuthorizedData = (items, currentUser, currentRole) => {
   }
 
   // 7. External User (e.g. Manpatel):
-  // Can ONLY see tasks/interviews/feedbacks created by him or belonging to his external workflow!
+  // 7. External User (e.g. Manpatel):
+  // Can ONLY see external tasks/feedbacks belonging strictly to the external workflow! Internal tasks must NEVER leak!
   if (currentRole === 'external_user') {
     const currentId = currentUser.id;
     const currentName = (currentUser.name || '').toLowerCase();
 
     return items.filter(item => {
+      // ABSOLUTE ISOLATION: Must be explicitly external!
+      const isExt = Boolean(item.isExternal || item.taskSource === 'external' || item.taskClassification === 'External');
+      if (!isExt) return false;
+
       const isCreatorId = item.createdById === currentId || item.externalCreatorId === currentId;
       const isCreatorName = (item.creatorName && item.creatorName.toLowerCase().includes(currentName)) ||
         (item.externalCreator && item.externalCreator.toLowerCase().includes(currentName)) ||
         (item.recruiterName && item.recruiterName.toLowerCase().includes(currentName));
-      const isExplicitExternal = (item.isExternal || item.taskSource === 'external') && (
-        isCreatorId || isCreatorName || !item.createdById || item.externalCreator === 'Manpatel'
-      );
-      return isCreatorId || isCreatorName || isExplicitExternal;
+      return isCreatorId || isCreatorName || item.externalCreator === 'Manpatel' || !item.createdById;
     });
   }
 

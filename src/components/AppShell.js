@@ -96,7 +96,9 @@ const Sidebar = ({ mobile, onClose, onOpenAvatarModal }) => {
           {!collapsed && (
             <div className="leading-tight overflow-hidden">
               <div className="text-sm font-bold text-white whitespace-nowrap truncate">Tech Team Tracker</div>
-              <div className="text-[10px] uppercase tracking-wider text-blue-200/80 font-medium truncate">NetBounce Operations</div>
+              <div className="text-[10px] uppercase tracking-wider text-blue-200/80 font-medium truncate">
+                {currentRole === 'external_user' ? 'External Evaluation Desk' : 'NetBounce Operations'}
+              </div>
             </div>
           )}
         </div>
@@ -336,11 +338,13 @@ const CommandPalette = () => {
             </CommandItem>
           ))}
         </CommandGroup>
-        <CommandGroup heading="People">
-          {users.slice(0, 6).map(u => (
-            <CommandItem key={u.id} onSelect={() => go('/team')}>{u.name} — {u.dept}</CommandItem>
-          ))}
-        </CommandGroup>
+        {currentRole !== 'external_user' && (
+          <CommandGroup heading="People">
+            {users.slice(0, 6).map(u => (
+              <CommandItem key={u.id} onSelect={() => go('/team')}>{u.name} — {u.dept}</CommandItem>
+            ))}
+          </CommandGroup>
+        )}
       </CommandList>
     </CommandDialog>
   );
@@ -356,7 +360,7 @@ const TopBar = ({ onOpenMobileNav, onOpenAvatarModal, onOpenAiPanel }) => {
     <header className="h-16 flex-shrink-0 flex items-center gap-3 md:gap-4 px-4 md:px-6 border-b border-slate-300/90 dark:border-white/10 bg-white/95 dark:bg-[#0B1120]/95 backdrop-blur-md sticky top-0 z-30 shadow-xs transition-colors duration-200">
       <button data-testid="mobile-nav-toggle" onClick={onOpenMobileNav} className="lg:hidden text-slate-600 dark:text-slate-300 p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"><Menu size={18} /></button>
       <div className="hidden sm:flex items-center gap-2 text-sm">
-        <span className="text-slate-500 dark:text-slate-400 font-medium">Operations</span>
+        <span className="text-slate-500 dark:text-slate-400 font-medium">{currentRole === 'external_user' ? 'External' : 'Operations'}</span>
         <span className="text-slate-300 dark:text-slate-600">/</span>
         <span className="text-slate-900 dark:text-white font-bold">{page}</span>
       </div>
