@@ -160,14 +160,36 @@ export default function Dashboard() {
   const perTse = useMemo(() => perTseBars(tasks, users), [tasks, users]);
   const prioDist = useMemo(() => priorityDistribution(tasks), [tasks]);
 
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayTasks = tasks.filter(t => 
+    (t.date && t.date.slice(0, 10) === todayStr) || 
+    (t.dueDate && t.dueDate.slice(0, 10) === todayStr) ||
+    (t.interviewDateTime && t.interviewDateTime.slice(0, 10) === todayStr)
+  ).length;
+
   const totals = {
     total: tasks.length,
-    completed: tasks.filter(t => t.status === 'Completed').length,
-    pending: tasks.filter(t => t.status === 'Pending').length,
+    completed: tasks.filter(t => t.status === 'Completed' || t.status === 'Done').length,
+    pending: tasks.filter(t => t.status === 'Pending' || t.status === 'Scheduled').length,
     inProgress: tasks.filter(t => t.status === 'In Progress').length,
-    overdue: tasks.filter(t => new Date(t.dueDate) < new Date() && t.status !== 'Completed').length,
+    activeQueue: tasks.filter(t => t.status === 'Pending' || t.status === 'Scheduled' || t.status === 'In Progress').length,
+    today: todayTasks,
+    overdue: tasks.filter(t => new Date(t.dueDate) < new Date() && t.status !== 'Completed' && t.status !== 'Done').length,
   };
   const completionRate = totals.total ? Math.round((totals.completed / totals.total) * 100) : 0;
+
+  // Live CSAT / Average Quality Rating for Upper Management
+  const csatRating = useMemo(() => {
+    const rated = (feedbacks || []).filter(f => f.candidateFeedback?.performanceRating || f.candidateFeedback?.experienceRating);
+    if (rated.length === 0) return '4.5';
+    const sum = rated.reduce((acc, f) => acc + Number(f.candidateFeedback?.performanceRating || f.candidateFeedback?.experienceRating || 5), 0);
+    return (sum / rated.length).toFixed(1);
+  }, [feedbacks]);
+
+  // Open SLA Escalations (Rating <= 3 stars or unresolved tickets)
+  const openSlaCount = useMemo(() => {
+    return (slaTickets || []).filter(t => t.status !== 'Resolved').length;
+  }, [slaTickets]);
 
   const allInterviews = (interviews && interviews.length) ? interviews : (visibleInterviews || []);
   const ivTotals = {
@@ -391,7 +413,7 @@ export default function Dashboard() {
           <div className="xl:col-span-2 grid grid-cols-2 sm:grid-cols-3 gap-4">
             <NeumorphicMetricCard
               testid="kpi-total-tasks"
-              label="Total Tasks"
+              label="Total Operations"
               value={totals.total}
               subValue="All Operations"
               delta={totals.total > 0 ? `+${totals.total}` : null}
@@ -400,7 +422,7 @@ export default function Dashboard() {
             />
             <NeumorphicMetricCard
               testid="kpi-completed"
-              label="Completed"
+              label="Delivered Tasks"
               value={totals.completed}
               subValue="Closed Out"
               delta={totals.completed > 0 ? `+${totals.completed}` : null}
@@ -408,40 +430,39 @@ export default function Dashboard() {
               ringColor="#10b981"
             />
             <NeumorphicMetricCard
-              testid="kpi-pending"
-              label="Pending"
-              value={totals.pending}
-              subValue="Queued"
-              trend={totals.pending > 0 ? "up" : "down"}
-              delta={totals.pending > 0 ? `+${totals.pending}` : null}
-              percentage={totals.total > 0 ? Math.round((totals.pending / totals.total) * 100) : 0}
-              ringColor="#f59e0b"
-            />
-            <NeumorphicMetricCard
               testid="kpi-rate"
-              label="Completion Rate"
+              label="Execution Rate"
               value={`${completionRate}%`}
               subValue="Target: 85%"
               percentage={completionRate}
               ringColor="#06b6d4"
             />
             <NeumorphicMetricCard
-              testid="kpi-iv-completed"
-              label="Interviews"
-              value={allInterviews.length}
-              subValue="Rounds Done"
-              delta={allInterviews.length > 0 ? `+${allInterviews.length}` : null}
-              percentage={allInterviews.length > 0 ? Math.min(allInterviews.length * 10, 100) : 0}
-              ringColor="#8b5cf6"
-            />
-            <NeumorphicMetricCard
               testid="kpi-cleared"
-              label="Candidates Cleared"
+              label="Candidate Clearance"
               value={ivTotals.cleared}
               subValue="Qualified"
               delta={ivTotals.cleared > 0 ? `+${ivTotals.cleared}` : null}
               percentage={allInterviews.length > 0 ? Math.round((ivTotals.cleared / allInterviews.length) * 100) : 0}
               ringColor="#10b981"
+            />
+            <NeumorphicMetricCard
+              testid="kpi-csat"
+              label="Quality Score (CSAT)"
+              value={`${csatRating} ★`}
+              subValue="Candidate & TSE"
+              percentage={Math.round((Number(csatRating) / 5) * 100)}
+              ringColor="#f59e0b"
+            />
+            <NeumorphicMetricCard
+              testid="kpi-escalations"
+              label="Critical Escalations"
+              value={openSlaCount}
+              subValue="Open 24h SLA Breaches"
+              trend={openSlaCount > 0 ? "down" : "up"}
+              delta={openSlaCount > 0 ? `${openSlaCount} open` : null}
+              percentage={openSlaCount > 0 ? Math.min(openSlaCount * 15, 100) : 0}
+              ringColor="#f43f5e"
             />
           </div>
         </div>
@@ -543,49 +564,31 @@ export default function Dashboard() {
           />
           <div className="xl:col-span-2 grid grid-cols-2 sm:grid-cols-3 gap-4">
             <NeumorphicMetricCard
-              testid="kpi-team"
-              label="Team Members"
-              value={users.length}
-              subValue="Active Roster"
-              percentage={users.length > 0 ? Math.round((users.filter(u => (u.status || 'Active') === 'Active').length / users.length) * 100) : 0}
+              testid="kpi-today"
+              label="Today's Schedule"
+              value={totals.today}
+              subValue="Daily Live Workload"
+              delta={totals.today > 0 ? `+${totals.today}` : null}
+              percentage={totals.total > 0 ? Math.round((totals.today / totals.total) * 100) : 0}
               ringColor="#1416c1"
             />
             <NeumorphicMetricCard
               testid="kpi-active"
-              label="Active Tasks"
-              value={totals.inProgress + totals.pending}
+              label="Active Queue"
+              value={totals.activeQueue}
               subValue="In Flight"
-              delta={(totals.inProgress + totals.pending) > 0 ? `+${totals.inProgress + totals.pending}` : null}
-              percentage={totals.total > 0 ? Math.round(((totals.inProgress + totals.pending) / totals.total) * 100) : 0}
+              delta={totals.activeQueue > 0 ? `+${totals.activeQueue}` : null}
+              percentage={totals.total > 0 ? Math.round((totals.activeQueue / totals.total) * 100) : 0}
               ringColor="#3b82f6"
             />
             <NeumorphicMetricCard
               testid="kpi-completed"
-              label="Completed"
+              label="Completed Tasks"
               value={totals.completed}
               subValue="Resolved"
               delta={totals.completed > 0 ? `+${totals.completed}` : null}
               percentage={completionRate}
               ringColor="#10b981"
-            />
-            <NeumorphicMetricCard
-              testid="kpi-overdue"
-              label="Overdue"
-              value={totals.overdue}
-              subValue="Needs Attention"
-              trend={totals.overdue > 0 ? "down" : "up"}
-              delta={totals.overdue > 0 ? `-${totals.overdue}` : null}
-              percentage={totals.total > 0 ? Math.round((totals.overdue / totals.total) * 100) : 0}
-              ringColor="#f43f5e"
-            />
-            <NeumorphicMetricCard
-              testid="kpi-iv"
-              label="Interviews"
-              value={allInterviews.length}
-              subValue="Pipeline"
-              delta={allInterviews.length > 0 ? `+${allInterviews.length}` : null}
-              percentage={allInterviews.length > 0 ? Math.min(allInterviews.length * 10, 100) : 0}
-              ringColor="#8b5cf6"
             />
             <NeumorphicMetricCard
               testid="kpi-feedback"
@@ -595,6 +598,24 @@ export default function Dashboard() {
               delta={ivTotals.feedbackPending > 0 ? `+${ivTotals.feedbackPending}` : null}
               percentage={allInterviews.length > 0 ? Math.round((ivTotals.feedbackPending / allInterviews.length) * 100) : 0}
               ringColor="#f59e0b"
+            />
+            <NeumorphicMetricCard
+              testid="kpi-sla-action"
+              label="SLA Action Desk"
+              value={openSlaCount}
+              subValue="Urgent Escalations"
+              trend={openSlaCount > 0 ? "down" : "up"}
+              delta={openSlaCount > 0 ? `${openSlaCount} open` : null}
+              percentage={openSlaCount > 0 ? Math.min(openSlaCount * 15, 100) : 0}
+              ringColor="#f43f5e"
+            />
+            <NeumorphicMetricCard
+              testid="kpi-team"
+              label="Team Members"
+              value={users.length}
+              subValue="Active Roster"
+              percentage={users.length > 0 ? Math.round((users.filter(u => (u.status || 'Active') === 'Active').length / users.length) * 100) : 0}
+              ringColor="#6366f1"
             />
           </div>
         </div>
