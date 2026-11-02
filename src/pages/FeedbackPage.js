@@ -98,11 +98,8 @@ export default function FeedbackPage() {
 
   // Filters state
   const [search, setSearch] = useState('');
-  const [dateRange, setDateRange] = useState('all'); // 'all' | 'today' | 'week' | 'month' | 'custom'
-  const [customDateFrom, setCustomDateFrom] = useState('');
-  const [customDateTo, setCustomDateTo] = useState('');
-  const [calendarOpen, setCalendarOpen] = useState(false);
-  const calendarRef = useRef(null);
+  const [dateRange, setDateRange] = useState('all'); // 'all' | 'today' | 'week' | 'month'
+  const [candidateFeedbackFilter, setCandidateFeedbackFilter] = useState('all'); // 'all' | 'pending' | 'received'
   const [typeFilter, setTypeFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [workflowFilter, setWorkflowFilter] = useState('all'); // 'all' | 'internal' | 'external'
@@ -114,18 +111,6 @@ export default function FeedbackPage() {
 
   // Row-level Generated Link Modal State
   const [activeLinkModal, setActiveLinkModal] = useState(null); // { record, link }
-
-  // Close calendar popover when clicking outside
-  useEffect(() => {
-    if (!calendarOpen) return;
-    const handler = (e) => {
-      if (calendarRef.current && !calendarRef.current.contains(e.target)) {
-        setCalendarOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [calendarOpen]);
 
   // Marketing review form state
   const [marketingForm, setMarketingForm] = useState({
@@ -364,6 +349,13 @@ export default function FeedbackPage() {
         if (rating.state !== 'NOT_RATED') return false;
       }
 
+      // Candidate feedback submission status filter (Pending vs Received/Submitted)
+      if (candidateFeedbackFilter === 'pending') {
+        if (item.candidateFeedback?.submitted) return false;
+      } else if (candidateFeedbackFilter === 'received') {
+        if (!item.candidateFeedback?.submitted) return false;
+      }
+
       // Date range filter
       if (dateRange !== 'all') {
         const itemDate = new Date(item.date);
@@ -376,30 +368,19 @@ export default function FeedbackPage() {
           if (diffDays > 7 || diffDays < -7) return false;
         } else if (dateRange === 'month') {
           if (itemDate.getMonth() !== now.getMonth() && itemDate.getMonth() !== 9) return false;
-        } else if (dateRange === 'custom') {
-          if (customDateFrom) {
-            const fromDate = new Date(customDateFrom);
-            fromDate.setHours(0, 0, 0, 0);
-            if (itemDate < fromDate) return false;
-          }
-          if (customDateTo) {
-            const toDate = new Date(customDateTo);
-            toDate.setHours(23, 59, 59, 999);
-            if (itemDate > toDate) return false;
-          }
         }
       }
 
       return true;
     });
-  }, [unifiedFeedbacks, workflowFilter, search, dateRange, customDateFrom, customDateTo, typeFilter, statusFilter]);
+  }, [unifiedFeedbacks, workflowFilter, search, dateRange, candidateFeedbackFilter, typeFilter, statusFilter]);
 
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, dateRange, customDateFrom, customDateTo, typeFilter, statusFilter]);
+  }, [search, dateRange, candidateFeedbackFilter, typeFilter, statusFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredFeedbacks.length / pageSize));
   const paginatedFeedbacks = useMemo(() => {
@@ -578,7 +559,7 @@ export default function FeedbackPage() {
             ].map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => { setDateRange(tab.id); setCalendarOpen(false); }}
+                onClick={() => setDateRange(tab.id)}
                 className={`px-3 py-1 rounded-md transition-colors ${
                   dateRange === tab.id
                     ? 'bg-[#1416c1] text-white font-semibold shadow-xs'
@@ -590,76 +571,45 @@ export default function FeedbackPage() {
             ))}
           </div>
 
-          {/* Custom date range picker */}
-          <div className="relative" ref={calendarRef}>
+          {/* Candidate Feedback Status Filter (Pending vs Received/Submitted) */}
+          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200 text-xs">
             <button
-              onClick={() => setCalendarOpen((o) => !o)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
-                dateRange === 'custom'
-                  ? 'bg-[#1416c1] text-white border-[#1416c1] shadow-xs'
-                  : 'bg-white border-slate-300 text-slate-600 hover:text-slate-900 hover:border-slate-400'
+              type="button"
+              onClick={() => setCandidateFeedbackFilter('all')}
+              className={`px-3 py-1 rounded-md transition-colors ${
+                candidateFeedbackFilter === 'all'
+                  ? 'bg-[#1416c1] text-white font-semibold shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 font-medium'
               }`}
             >
-              <CalIcon size={13} />
-              {dateRange === 'custom' && customDateFrom
-                ? `${customDateFrom}${customDateTo ? ' → ' + customDateTo : ''}`
-                : 'Custom Range'}
+              All
             </button>
-
-            {calendarOpen && (
-              <div className="absolute left-0 top-full mt-1.5 z-50 bg-white border border-slate-200 rounded-xl shadow-xl p-4 w-72">
-                <div className="text-xs font-semibold text-slate-700 mb-3 flex items-center gap-1.5">
-                  <CalIcon size={13} className="text-[#1416c1]" />
-                  Select Date Range
-                </div>
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-xs text-slate-500 mb-1 font-medium">From</label>
-                    <input
-                      type="date"
-                      value={customDateFrom}
-                      onChange={(e) => {
-                        setCustomDateFrom(e.target.value);
-                        setDateRange('custom');
-                      }}
-                      className="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-[#1416c1] bg-slate-50"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-slate-500 mb-1 font-medium">To</label>
-                    <input
-                      type="date"
-                      value={customDateTo}
-                      min={customDateFrom || undefined}
-                      onChange={(e) => {
-                        setCustomDateTo(e.target.value);
-                        setDateRange('custom');
-                      }}
-                      className="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-[#1416c1] bg-slate-50"
-                    />
-                  </div>
-                </div>
-                <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-100">
-                  <button
-                    onClick={() => {
-                      setCustomDateFrom('');
-                      setCustomDateTo('');
-                      setDateRange('all');
-                      setCalendarOpen(false);
-                    }}
-                    className="text-xs text-slate-500 hover:text-slate-700 font-medium"
-                  >
-                    Clear
-                  </button>
-                  <button
-                    onClick={() => setCalendarOpen(false)}
-                    className="text-xs bg-[#1416c1] text-white px-3 py-1 rounded-lg font-medium hover:bg-blue-800 transition-colors"
-                  >
-                    Apply
-                  </button>
-                </div>
-              </div>
-            )}
+            <button
+              type="button"
+              onClick={() => setCandidateFeedbackFilter(candidateFeedbackFilter === 'pending' ? 'all' : 'pending')}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-md transition-colors ${
+                candidateFeedbackFilter === 'pending'
+                  ? 'bg-amber-600 text-white font-semibold shadow-xs'
+                  : 'text-slate-600 hover:text-amber-800 font-medium'
+              }`}
+              title="Filter by Pending Candidate Feedback"
+            >
+              <Clock size={12} className={candidateFeedbackFilter === 'pending' ? 'text-white' : 'text-amber-600'} />
+              <span>Pending Candidate Feedback</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setCandidateFeedbackFilter(candidateFeedbackFilter === 'received' ? 'all' : 'received')}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-md transition-colors ${
+                candidateFeedbackFilter === 'received'
+                  ? 'bg-emerald-600 text-white font-semibold shadow-xs'
+                  : 'text-slate-600 hover:text-emerald-800 font-medium'
+              }`}
+              title="Filter by Candidate Feedback Received (Submitted ✓)"
+            >
+              <CheckCircle2 size={12} className={candidateFeedbackFilter === 'received' ? 'text-white' : 'text-emerald-600'} />
+              <span>Candidate Feedback Received (Submitted ✓)</span>
+            </button>
           </div>
 
           {/* Type dropdown */}
