@@ -30,7 +30,50 @@ const AppCtx = createContext(null);
 export const AppProvider = ({ children }) => {
   const [currentRole, setCurrentRole] = useState(null); // null = login screen
   const [currentUserId, setCurrentUserId] = useState(null);
-  const [tasks, setTasks] = useState(INITIAL_TASKS);
+  const [tasks, setTasks] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('ttt_tasks');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed.map(t => {
+              const isExt = Boolean(
+                t.isExternal === true ||
+                t.taskSource === 'external' ||
+                t.taskClassification === 'External' ||
+                t.teamId === 'external' ||
+                (t.teamName || '').toLowerCase() === 'external' ||
+                t.createdById === 'u-manpatel-01' ||
+                (t.creatorName || '').toLowerCase() === 'manpatel' ||
+                (t.externalCreator || '').toLowerCase() === 'manpatel' ||
+                (t.recruiterName || '').toLowerCase() === 'manpatel' ||
+                t.assignedSrId === 'u-manpatel-01' ||
+                (t.assignedSrName || '').toLowerCase() === 'manpatel'
+              );
+              if (isExt) {
+                return {
+                  ...t,
+                  isExternal: true,
+                  taskSource: 'external',
+                  taskClassification: 'External',
+                  teamId: 'external',
+                  teamName: 'External',
+                  externalCreator: t.externalCreator || 'Manpatel',
+                  externalCreatorId: t.externalCreatorId || 'u-manpatel-01',
+                  creatorName: t.creatorName || 'Manpatel',
+                  createdById: t.createdById || 'u-manpatel-01',
+                  recruiterName: t.recruiterName || 'Manpatel',
+                };
+              }
+              return t;
+            });
+          }
+        }
+      } catch (e) {}
+    }
+    return INITIAL_TASKS;
+  });
   const [interviews, setInterviews] = useState(INITIAL_INTERVIEWS);
   const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS);
   const [events, setEvents] = useState(INITIAL_EVENTS);
@@ -165,7 +208,58 @@ export const AppProvider = ({ children }) => {
         if (tasksRes && tasksRes.ok) {
           const liveTasks = await tasksRes.json();
           if (Array.isArray(liveTasks)) {
-            setTasks(liveTasks);
+            const normalizedTasks = liveTasks.map(t => {
+              const isExt = Boolean(
+                t.isExternal === true ||
+                t.taskSource === 'external' ||
+                t.taskClassification === 'External' ||
+                t.teamId === 'external' ||
+                (t.teamName || '').toLowerCase() === 'external' ||
+                t.createdById === 'u-manpatel-01' ||
+                (t.creatorName || '').toLowerCase() === 'manpatel' ||
+                (t.externalCreator || '').toLowerCase() === 'manpatel' ||
+                (t.recruiterName || '').toLowerCase() === 'manpatel' ||
+                t.assignedSrId === 'u-manpatel-01' ||
+                (t.assignedSrName || '').toLowerCase() === 'manpatel'
+              );
+              if (isExt) {
+                return {
+                  ...t,
+                  isExternal: true,
+                  taskSource: 'external',
+                  taskClassification: 'External',
+                  teamId: 'external',
+                  teamName: 'External',
+                  teamLeadId: 'u-manpatel-01',
+                  externalCreator: t.externalCreator || 'Manpatel',
+                  externalCreatorId: t.externalCreatorId || 'u-manpatel-01',
+                  creatorName: t.creatorName || 'Manpatel',
+                  createdById: t.createdById || 'u-manpatel-01',
+                  recruiterName: t.recruiterName || 'Manpatel',
+                };
+              }
+              return t;
+            });
+
+            setTasks(prev => {
+              const liveIds = new Set(normalizedTasks.map(lt => String(lt.id)));
+              const recentLocalExtTasks = (prev || []).filter(pt =>
+                !liveIds.has(String(pt.id)) &&
+                Boolean(
+                  pt.isExternal ||
+                  pt.taskSource === 'external' ||
+                  pt.teamId === 'external' ||
+                  pt.createdById === 'u-manpatel-01' ||
+                  (pt.creatorName || '').toLowerCase() === 'manpatel' ||
+                  (pt.externalCreator || '').toLowerCase() === 'manpatel'
+                )
+              );
+              const merged = [...recentLocalExtTasks, ...normalizedTasks];
+              try {
+                localStorage.setItem('ttt_tasks', JSON.stringify(merged));
+              } catch (e) {}
+              return merged;
+            });
           }
         }
 
@@ -462,7 +556,21 @@ export const AppProvider = ({ children }) => {
     const candidateName = task.candidateName || 'Candidate';
     const taskType = task.taskType || 'Interview';
     const date = task.date || new Date().toISOString().slice(0, 10);
-    const assignedTeam = MARKETING_TEAMS.find(t => t.id === task.teamId || t.name === task.teamName) || MARKETING_TEAMS[0];
+    const isTaskExt = Boolean(
+      task.isExternal === true ||
+      task.taskSource === 'external' ||
+      task.taskClassification === 'External' ||
+      task.teamId === 'external' ||
+      (task.teamName || '').toLowerCase() === 'external' ||
+      currentRole === 'external_user' ||
+      (currentUser?.name || '').toLowerCase() === 'manpatel' ||
+      task.createdById === 'u-manpatel-01' ||
+      task.externalCreator === 'Manpatel'
+    );
+
+    const assignedTeam = isTaskExt
+      ? { id: 'external', name: 'External', leadId: 'u-manpatel-01', leadName: 'Manpatel' }
+      : (MARKETING_TEAMS.find(t => t.id === task.teamId || t.name === task.teamName) || MARKETING_TEAMS[0]);
     const codeName = assignee?.codeName || getTseCodeName(assignee?.name);
 
     const newTask = {
@@ -472,8 +580,8 @@ export const AppProvider = ({ children }) => {
       date,
       dueDate: date,
       createdAt: date,
-      techPerson: assignee?.name || task.techPerson || 'Unassigned',
-      codeName,
+      techPerson: isTaskExt ? (task.techPerson || 'Unassigned') : (assignee?.name || task.techPerson || 'Unassigned'),
+      codeName: isTaskExt ? (task.codeName || 'Unassigned') : codeName,
       candidateName,
       title: `${candidateName} — ${taskType}${task.companyName ? ` (${task.companyName})` : ''}`,
       position: task.position || 'Software Engineer',
@@ -486,25 +594,38 @@ export const AppProvider = ({ children }) => {
       remark: task.remark || '',
       description: task.description || '',
       notes: task.notes || '',
-      teamId: assignedTeam.id,
-      teamName: assignedTeam.name,
-      teamLeadId: assignedTeam.leadId,
-      assignedSrId: task.assignedSrId || '',
-      assignedSrName: task.assignedSrName || '',
-      assignedSrEmail: task.assignedSrEmail || '',
-      pocId: task.assignedSrId || task.pocId || '',
-      recruiterName: task.assignedSrName || task.recruiterName || assignedTeam.name,
+      teamId: isTaskExt ? 'external' : assignedTeam.id,
+      teamName: isTaskExt ? 'External' : assignedTeam.name,
+      teamLeadId: isTaskExt ? 'u-manpatel-01' : assignedTeam.leadId,
+      assignedSrId: isTaskExt ? 'u-manpatel-01' : (task.assignedSrId || ''),
+      assignedSrName: isTaskExt ? (currentUser?.name || 'Manpatel') : (task.assignedSrName || ''),
+      assignedSrEmail: isTaskExt ? (currentUser?.email || 'manpatel@external.com') : (task.assignedSrEmail || ''),
+      pocId: isTaskExt ? 'u-manpatel-01' : (task.assignedSrId || task.pocId || ''),
+      recruiterName: isTaskExt ? (currentUser?.name || 'Manpatel') : (task.assignedSrName || task.recruiterName || assignedTeam.name),
+      isExternal: isTaskExt,
+      taskSource: isTaskExt ? 'external' : 'internal',
+      taskClassification: isTaskExt ? 'External' : 'Internal',
+      externalCreator: isTaskExt ? (currentUser?.name || 'Manpatel') : '',
+      externalCreatorId: isTaskExt ? (currentUser?.id || 'u-manpatel-01') : '',
+      creatorName: isTaskExt ? (currentUser?.name || 'Manpatel') : (creator?.name || ''),
+      createdById: isTaskExt ? (currentUser?.id || 'u-manpatel-01') : (creator?.id || ''),
       completionRemark: '',
-      assigneeId: assignee?.id || task.assigneeId,
-      createdById: creator?.id,
+      assigneeId: isTaskExt ? '' : (assignee?.id || task.assigneeId),
       timeline: [
-        { at: date, event: `Assigned to ${assignee?.name || 'Unassigned'} for ${taskType}`, by: creator?.name || 'TSM' },
+        { at: date, event: isTaskExt ? 'Submitted for TSM Technical Assignment' : `Assigned to ${assignee?.name || 'Unassigned'} for ${taskType}`, by: creator?.name || (isTaskExt ? 'Manpatel' : 'TSM') },
       ],
       attachments: Array.isArray(task.attachments) ? task.attachments : [],
     };
-    setTasks(prev => [newTask, ...prev]);
 
-    // Also auto-create linked feedback session for Marketing console
+    setTasks(prev => {
+      const updated = [newTask, ...prev];
+      try {
+        localStorage.setItem('ttt_tasks', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+
+    // Also auto-create linked feedback session for Marketing/External console
     const matchingTse = TECH_SUPPORT_TEAM.find(t =>
       (codeName && t.supportName.toLowerCase() === codeName.toLowerCase()) ||
       (assignee?.name && t.employeeName.toLowerCase().includes(assignee.name.toLowerCase())) ||
@@ -527,15 +648,19 @@ export const AppProvider = ({ children }) => {
       employeeName: resolvedRealName,
       candidateName,
       candidateEmail: task.candidateEmail || '',
-      recruiterName: task.assignedSrName || task.recruiterName || assignedTeam.name,
-      pocId: task.assignedSrId || task.pocId || '',
-      teamId: assignedTeam.id,
-      teamLeadId: assignedTeam.leadId,
-      teamName: assignedTeam.name,
+      recruiterName: isTaskExt ? (currentUser?.name || 'Manpatel') : (task.assignedSrName || task.recruiterName || assignedTeam.name),
+      pocId: isTaskExt ? 'u-manpatel-01' : (task.assignedSrId || task.pocId || ''),
+      teamId: isTaskExt ? 'external' : assignedTeam.id,
+      teamLeadId: isTaskExt ? 'u-manpatel-01' : assignedTeam.leadId,
+      teamName: isTaskExt ? 'External' : assignedTeam.name,
       jobRole: task.position || 'Software Engineer',
       company: task.companyName || '',
       round: taskType,
       techSupportType: taskType,
+      isExternal: isTaskExt,
+      taskSource: isTaskExt ? 'external' : 'internal',
+      externalCreator: isTaskExt ? (currentUser?.name || 'Manpatel') : '',
+      externalCreatorId: isTaskExt ? (currentUser?.id || 'u-manpatel-01') : '',
       timestamp: new Date().toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
       candidateFeedback: {
         submitted: false,
@@ -549,9 +674,12 @@ export const AppProvider = ({ children }) => {
     updateFeedbacksWithStorage(prev => [linkedFeedback, ...prev]);
 
     // Save in MongoDB Atlas (Mumbai)
-    fetch('/api/tasks', {
+    fetch('/api/tasks?role=' + (isTaskExt ? 'external_user' : ''), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-user-role': isTaskExt ? 'external_user' : (currentRole || ''),
+      },
       body: JSON.stringify(newTask),
     })
       .then(res => {
@@ -564,7 +692,11 @@ export const AppProvider = ({ children }) => {
       })
       .then((data) => {
         if (data?.task?.id && data.task.id !== id) {
-          setTasks(prev => prev.map(t => t.id === id ? { ...t, id: data.task.id } : t));
+          setTasks(prev => {
+            const updated = prev.map(t => t.id === id ? { ...t, ...data.task, id: data.task.id, isExternal: isTaskExt } : t);
+            try { localStorage.setItem('ttt_tasks', JSON.stringify(updated)); } catch (e) {}
+            return updated;
+          });
         }
         fetch('/api/feedbacks')
           .then(res => res.json())

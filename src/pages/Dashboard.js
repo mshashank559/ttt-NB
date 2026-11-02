@@ -184,13 +184,22 @@ export default function Dashboard() {
 
   // ---------- EXTERNAL USER (MANPATEL) ----------
   if (currentRole === 'external_user') {
-    const myTasks = tasks.filter(t => 
-      t.createdById === currentUser?.id || 
-      t.externalCreatorId === currentUser?.id || 
-      t.externalCreator === 'Manpatel' || 
+    const isExtTask = (t) => Boolean(
+      t.isExternal === true ||
+      t.taskSource === 'external' ||
+      t.taskClassification === 'External' ||
+      t.teamId === 'external' ||
+      (t.teamName || '').toLowerCase() === 'external' ||
+      t.createdById === currentUser?.id ||
+      t.createdById === 'u-manpatel-01' ||
+      t.externalCreatorId === currentUser?.id ||
+      t.externalCreatorId === 'u-manpatel-01' ||
+      t.externalCreator === 'Manpatel' ||
       (currentUser?.name && t.externalCreator?.toLowerCase() === currentUser?.name?.toLowerCase()) ||
-      t.isExternal
+      (t.creatorName && t.creatorName.toLowerCase().includes('manpatel')) ||
+      (t.recruiterName && t.recruiterName.toLowerCase().includes('manpatel'))
     );
+    const myTasks = tasks.filter(isExtTask);
 
     const extTotals = {
       total: myTasks.length,

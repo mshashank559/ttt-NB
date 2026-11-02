@@ -2976,7 +2976,24 @@ export default function Tasks() {
     return (users || []).filter(u => u.role === 'marketing_sr' && (!activeTeam || u.team === activeTeam || u.teamId === activeTeam));
   }, [users, tlTeam, filters.team]);
 
+  const isExternalTask = (t) => {
+    if (!t) return false;
+    return Boolean(
+      t.isExternal === true ||
+      t.taskSource === 'external' ||
+      t.taskClassification === 'External' ||
+      t.teamId === 'external' ||
+      (t.teamName || '').toLowerCase() === 'external' ||
+      t.createdById === 'u-manpatel-01' ||
+      t.externalCreatorId === 'u-manpatel-01' ||
+      (t.creatorName && t.creatorName.toLowerCase().includes('manpatel')) ||
+      (t.externalCreator && t.externalCreator.toLowerCase().includes('manpatel')) ||
+      (t.recruiterName && t.recruiterName.toLowerCase().includes('manpatel'))
+    );
+  };
+
   const isTaskMatchingTeam = (t) => {
+    if (currentRole === 'external_user' || isExternalTask(t)) return true;
     if (!filters.team || filters.team === 'all') return true;
 
     // Strict candidate team mapping
@@ -3038,20 +3055,10 @@ export default function Tasks() {
     if (currentRole === 'tse') {
       base = base.filter(t => t.assigneeId === currentUser?.id || (currentUser?.name && t.techPerson?.toLowerCase() === currentUser?.name?.toLowerCase()));
     } else if (currentRole === 'external_user') {
-      const cId = currentUser?.id;
-      const cName = (currentUser?.name || '').toLowerCase();
-      base = base.filter(t => {
-        const isExt = Boolean(t.isExternal || t.taskSource === 'external' || t.taskClassification === 'External');
-        if (!isExt) return false;
-        return t.createdById === cId || t.externalCreatorId === cId ||
-          (t.creatorName && t.creatorName.toLowerCase().includes(cName)) ||
-          (t.externalCreator && t.externalCreator.toLowerCase().includes(cName)) ||
-          t.externalCreator === 'Manpatel' ||
-          !t.createdById;
-      });
+      base = base.filter(t => isExternalTask(t));
     }
     return base.filter(t => {
-      const isExt = Boolean(t.isExternal || t.taskSource === 'external' || t.taskClassification === 'External');
+      const isExt = isExternalTask(t);
       if (currentRole === 'external_user' && !isExt) return false;
 
       const matchStatus = filters.status === 'all' || t.status === filters.status;
