@@ -2664,39 +2664,56 @@ const TaskDrawer = ({ task, onClose }) => {
             </ol>
           </div>
 
-          {/* TSM / Management Action Controls (Feature 4: Unassign & Delete) */}
-          {roleCanEditAny(currentRole) && (
-            <div className="pt-3 border-t border-slate-200 flex items-center gap-2">
-              {task.assigneeId && (
-                <button
-                  type="button"
-                  data-testid="drawer-btn-unassign-tse"
-                  onClick={() => {
-                    unassignTask && unassignTask(task.id);
-                    onClose();
-                  }}
-                  className="flex-1 h-9 rounded-lg border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-                >
-                  <UserMinus size={14} />
-                  <span>Unassign TSE</span>
-                </button>
-              )}
-              <button
-                type="button"
-                data-testid="drawer-btn-delete-task"
-                onClick={() => {
-                  if (window.confirm(`Are you sure you want to delete task ${task.id}? Linked feedback and audit records will remain preserved.`)) {
-                    deleteTask && deleteTask(task.id);
-                    onClose();
-                  }
-                }}
-                className="flex-1 h-9 rounded-lg border border-rose-300 bg-rose-50 text-rose-800 hover:bg-rose-100 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-              >
-                <Trash2 size={14} />
-                <span>Delete Task</span>
-              </button>
-            </div>
-          )}
+          {/* Action Controls (Unassign & Delete) */}
+          {(() => {
+            const canDeleteDrawerTask = Boolean(
+              currentRole !== 'tse' && (
+                roleCanEditAny(currentRole) ||
+                currentRole === 'upper_management' ||
+                (currentRole === 'external_user' && (isExternalRecord(task) || task?.createdById === currentUser?.id || task?.createdById === 'u-manpatel-01')) ||
+                task?.createdById === currentUser?.id ||
+                task?.assignedSrId === currentUser?.id ||
+                task?.pocId === currentUser?.id
+              )
+            );
+
+            if (!roleCanEditAny(currentRole) && !canDeleteDrawerTask) return null;
+
+            return (
+              <div className="pt-3 border-t border-slate-200 flex items-center gap-2">
+                {roleCanEditAny(currentRole) && task.assigneeId && (
+                  <button
+                    type="button"
+                    data-testid="drawer-btn-unassign-tse"
+                    onClick={() => {
+                      unassignTask && unassignTask(task.id);
+                      onClose();
+                    }}
+                    className="flex-1 h-9 rounded-lg border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <UserMinus size={14} />
+                    <span>Unassign TSE</span>
+                  </button>
+                )}
+                {canDeleteDrawerTask && (
+                  <button
+                    type="button"
+                    data-testid="drawer-btn-delete-task"
+                    onClick={() => {
+                      if (window.confirm(`Are you sure you want to delete task ${task.id}? Linked feedback and audit records will remain preserved.`)) {
+                        deleteTask && deleteTask(task.id);
+                        onClose();
+                      }
+                    }}
+                    className="flex-1 h-9 rounded-lg border border-rose-300 bg-rose-50 text-rose-800 hover:bg-rose-100 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <Trash2 size={14} />
+                    <span>Delete Task</span>
+                  </button>
+                )}
+              </div>
+            );
+          })()}
         </div>
       </SheetContent>
     </Sheet>
@@ -2895,6 +2912,23 @@ export default function Tasks() {
 
   const canManageTasks = currentRole === 'tsm' || currentRole === 'management' || currentRole === 'upper_management';
   const canEditTask = ['tsm', 'marketing_tl', 'marketing_sr', 'management', 'upper_management', 'external_user'].includes(currentRole);
+  const canDeleteTask = (t) => {
+    if (!t || currentRole === 'tse') return false;
+    if (canManageTasks) return true;
+    if (currentRole === 'external_user') {
+      return isExternalRecord(t) || t.createdById === currentUser?.id || t.createdById === 'u-manpatel-01';
+    }
+    const cId = currentUser?.id;
+    const cName = (currentUser?.name || '').toLowerCase();
+    return (
+      t.createdById === cId ||
+      t.assignedSrId === cId ||
+      t.pocId === cId ||
+      (t.creatorName && t.creatorName.toLowerCase() === cName) ||
+      (t.recruiterName && t.recruiterName.toLowerCase() === cName) ||
+      (t.assignedSrName && t.assignedSrName.toLowerCase() === cName)
+    );
+  };
 
   const tseUsers = useMemo(() => (users || []).filter(u => u.role === 'tse'), [users]);
   const canAssignTse = ['tsm', 'management', 'upper_management'].includes(currentRole);
@@ -3280,7 +3314,7 @@ export default function Tasks() {
                   <th className="py-3 px-4 font-semibold">Comment</th>
                   <th className="py-3 px-4 font-semibold">Candidate Feedback</th>
                   <th className="py-3 px-4 font-semibold text-right">{currentRole === 'external_user' ? 'Assignment Status' : 'Assign TSE'}</th>
-                  {(canManageTasks || canEditTask) && <th className="py-3 px-3 font-semibold text-right">Actions</th>}
+                  {(canManageTasks || canEditTask || currentRole !== 'tse') && <th className="py-3 px-3 font-semibold text-right">Actions</th>}
                 </tr>
               </thead>
               <tbody>
@@ -3555,7 +3589,7 @@ export default function Tasks() {
                       </td>
 
                       {/* Actions Column: Edit (Pencil), Unassign & Delete */}
-                      {(canManageTasks || canEditTask) && (
+                      {(canManageTasks || canEditTask || canDeleteTask(t)) && (
                         <td className="py-3 px-3 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-end gap-1.5">
                             {canEditTask && (
@@ -3580,7 +3614,7 @@ export default function Tasks() {
                                 <UserMinus size={14} />
                               </button>
                             )}
-                            {canManageTasks && (
+                            {canDeleteTask(t) && (
                               <button
                                 type="button"
                                 title="Delete task from queue"

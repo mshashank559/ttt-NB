@@ -176,6 +176,7 @@ export const AppProvider = ({ children }) => {
   });
 
   const [dbConnected, setDbConnected] = useState(false);
+  const deletedTaskIdsRef = useRef(new Set());
 
   // Live Sync with MongoDB Atlas Backend (Mumbai Region)
   React.useEffect(() => {
@@ -199,7 +200,9 @@ export const AppProvider = ({ children }) => {
         if (tasksRes && tasksRes.ok) {
           const liveTasks = await tasksRes.json();
           if (Array.isArray(liveTasks)) {
-            const normalizedTasks = liveTasks.map(t => {
+            const normalizedTasks = liveTasks
+              .filter(t => !deletedTaskIdsRef.current.has(String(t.id)))
+              .map(t => {
               if (isExternalRecord(t)) {
                 return {
                   ...t,
@@ -815,7 +818,16 @@ export const AppProvider = ({ children }) => {
   }, [currentUser, updateTask]);
 
   const deleteTask = useCallback((id) => {
-    setTasks(prev => prev.filter(t => t.id !== id));
+    if (id) {
+      deletedTaskIdsRef.current.add(String(id));
+    }
+    setTasks(prev => {
+      const updated = prev.filter(t => String(t.id) !== String(id));
+      try {
+        localStorage.setItem('ttt_tasks', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
     fetch(`/api/tasks/${id}`, {
       method: 'DELETE',
     }).catch(err => console.warn('Failed to delete task on server:', err));
