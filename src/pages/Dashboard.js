@@ -10,7 +10,7 @@ import { toast } from 'sonner';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip as RTooltip, CartesianGrid, BarChart, Bar, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 import { useApp } from '../context/AppContext';
 import { KpiCard, PageHeader, StatusBadge, TaskTypeBadge, SectionCard, EmptyState, ArcGaugeCard, NeumorphicMetricCard, CircularProgressRing } from '../components/common';
-import { ROLES, USERS, TECH_SUPPORT_TEAM, getInterviewTimingMeta, getSmartTseRecommendations, roleIsMarketing, getTseRealName, sortTasksByInterviewPriority } from '../data/mockData';
+import { ROLES, USERS, TECH_SUPPORT_TEAM, getInterviewTimingMeta, getSmartTseRecommendations, roleIsMarketing, getTseRealName, sortTasksByInterviewPriority, isExternalRecord } from '../data/mockData';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
@@ -184,22 +184,7 @@ export default function Dashboard() {
 
   // ---------- EXTERNAL USER (MANPATEL) ----------
   if (currentRole === 'external_user') {
-    const isExtTask = (t) => Boolean(
-      t.isExternal === true ||
-      t.taskSource === 'external' ||
-      t.taskClassification === 'External' ||
-      t.teamId === 'external' ||
-      (t.teamName || '').toLowerCase() === 'external' ||
-      t.createdById === currentUser?.id ||
-      t.createdById === 'u-manpatel-01' ||
-      t.externalCreatorId === currentUser?.id ||
-      t.externalCreatorId === 'u-manpatel-01' ||
-      t.externalCreator === 'Manpatel' ||
-      (currentUser?.name && t.externalCreator?.toLowerCase() === currentUser?.name?.toLowerCase()) ||
-      (t.creatorName && t.creatorName.toLowerCase().includes('manpatel')) ||
-      (t.recruiterName && t.recruiterName.toLowerCase().includes('manpatel'))
-    );
-    const myTasks = tasks.filter(isExtTask);
+    const myTasks = tasks.filter(t => isExternalRecord(t));
 
     const extTotals = {
       total: myTasks.length,
@@ -209,6 +194,7 @@ export default function Dashboard() {
     };
 
     const myFeedbacks = feedbacks.filter(f => 
+      isExternalRecord(f) ||
       f.createdById === currentUser?.id || 
       f.externalCreatorId === currentUser?.id || 
       f.externalCreator === 'Manpatel' || 

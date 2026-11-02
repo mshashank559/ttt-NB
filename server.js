@@ -540,9 +540,15 @@ app.post('/api/tasks', async (req, res) => {
       taskData.taskClassification = 'External';
       taskData.externalCreator = taskData.externalCreator || 'Manpatel';
       taskData.creatorName = taskData.creatorName || 'Manpatel';
-      if (!taskData.createdById) taskData.createdById = 'u-manpatel-01';
+      taskData.createdById = taskData.createdById || 'u-manpatel-01';
+      taskData.externalCreatorId = taskData.externalCreatorId || 'u-manpatel-01';
       taskData.recruiterName = taskData.recruiterName || 'Manpatel';
-      if (!taskData.teamName) taskData.teamName = 'External';
+      taskData.teamId = 'external';
+      taskData.teamName = 'External';
+      taskData.teamLeadId = 'u-manpatel-01';
+      taskData.assignedSrId = taskData.assignedSrId || 'u-manpatel-01';
+      taskData.assignedSrName = taskData.assignedSrName || 'Manpatel';
+      taskData.assignedSrEmail = taskData.assignedSrEmail || 'manpatel@external.com';
     }
 
     // Helper to calculate next available ID

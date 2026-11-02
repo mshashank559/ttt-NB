@@ -9,7 +9,7 @@ import {
 import { toast } from 'sonner';
 import { useApp } from '../context/AppContext';
 import { PageHeader, SectionCard, StatusBadge, Pagination } from '../components/common';
-import { calculateOverallRating, TECH_SUPPORT_TEAM, ROLES, roleIsMarketing, TSE_IDS, getTseId, getTseRealName } from '../data/mockData';
+import { calculateOverallRating, TECH_SUPPORT_TEAM, ROLES, roleIsMarketing, TSE_IDS, getTseId, getTseRealName, isExternalRecord } from '../data/mockData';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import { Textarea } from '../components/ui/textarea';
 
@@ -305,7 +305,7 @@ export default function FeedbackPage() {
   // Filtered records for the main table
   const filteredFeedbacks = useMemo(() => {
     return (unifiedFeedbacks || []).filter((item) => {
-      const isExt = Boolean(item.isExternal || item.taskSource === 'external' || item.taskClassification === 'External');
+      const isExt = isExternalRecord(item);
       // If external user, NEVER show internal feedback!
       if (currentRole === 'external_user' && !isExt) return false;
 

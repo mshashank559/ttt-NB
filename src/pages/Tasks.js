@@ -5,7 +5,7 @@ import { Plus, Search, UserRound, Calendar as CalIcon, Clock, Building2, Briefca
 import { toast } from 'sonner';
 import { useApp } from '../context/AppContext';
 import { PageHeader, StatusBadge, TaskTypeBadge, SectionCard, EmptyState, Pagination } from '../components/common';
-import { TASK_TYPES, TASK_STATUSES, MARKETING_TEAMS, getTseCodeName, getTsmCodeName, roleIsMarketing, getInterviewTimingMeta, sortTasksByInterviewPriority, getTaskScheduleMeta, getSmartTseRecommendations, INTERVIEW_OUTCOMES, TSE_IDS, getTseId, getTseRealName, checkTseAvailability, parseDurationMinutes } from '../data/mockData';
+import { TASK_TYPES, TASK_STATUSES, MARKETING_TEAMS, getTseCodeName, getTsmCodeName, roleIsMarketing, getInterviewTimingMeta, sortTasksByInterviewPriority, getTaskScheduleMeta, getSmartTseRecommendations, INTERVIEW_OUTCOMES, TSE_IDS, getTseId, getTseRealName, checkTseAvailability, parseDurationMinutes, isExternalRecord } from '../data/mockData';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
@@ -2976,21 +2976,7 @@ export default function Tasks() {
     return (users || []).filter(u => u.role === 'marketing_sr' && (!activeTeam || u.team === activeTeam || u.teamId === activeTeam));
   }, [users, tlTeam, filters.team]);
 
-  const isExternalTask = (t) => {
-    if (!t) return false;
-    return Boolean(
-      t.isExternal === true ||
-      t.taskSource === 'external' ||
-      t.taskClassification === 'External' ||
-      t.teamId === 'external' ||
-      (t.teamName || '').toLowerCase() === 'external' ||
-      t.createdById === 'u-manpatel-01' ||
-      t.externalCreatorId === 'u-manpatel-01' ||
-      (t.creatorName && t.creatorName.toLowerCase().includes('manpatel')) ||
-      (t.externalCreator && t.externalCreator.toLowerCase().includes('manpatel')) ||
-      (t.recruiterName && t.recruiterName.toLowerCase().includes('manpatel'))
-    );
-  };
+  const isExternalTask = (t) => isExternalRecord(t);
 
   const isTaskMatchingTeam = (t) => {
     if (currentRole === 'external_user' || isExternalTask(t)) return true;

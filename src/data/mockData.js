@@ -850,6 +850,26 @@ export const sanitizeForIdentityPrivacy = (record, role) => {
   return record;
 };
 
+// Robust External Task / Feedback Detection
+export const isExternalRecord = (item) => {
+  if (!item) return false;
+  return Boolean(
+    item.isExternal === true ||
+    item.taskSource === 'external' ||
+    item.taskClassification === 'External' ||
+    item.teamId === 'external' ||
+    (item.teamName || '').toLowerCase() === 'external' ||
+    item.createdById === 'u-manpatel-01' ||
+    item.externalCreatorId === 'u-manpatel-01' ||
+    item.assignedSrId === 'u-manpatel-01' ||
+    item.pocId === 'u-manpatel-01' ||
+    (item.creatorName && item.creatorName.toLowerCase().includes('manpatel')) ||
+    (item.externalCreator && item.externalCreator.toLowerCase().includes('manpatel')) ||
+    (item.recruiterName && item.recruiterName.toLowerCase().includes('manpatel')) ||
+    (item.assignedSrName && item.assignedSrName.toLowerCase().includes('manpatel'))
+  );
+};
+
 // Strict Central Data Scoping Filter
 export const filterAuthorizedData = (items, currentUser, currentRole) => {
   if (!items || !Array.isArray(items)) return [];
@@ -860,7 +880,7 @@ export const filterAuthorizedData = (items, currentUser, currentRole) => {
     return items;
   }
 
-  // 2. TSE: Can ONLY see candidate tasks/interviews specifically assigned to them!
+  // 2. TSE: Can ONLY see internal candidate tasks/interviews specifically assigned to them!
   if (currentRole === 'tse') {
     const currentName = (currentUser.name || '').toLowerCase();
     const currentCode = (currentUser.codeName || '').toLowerCase();
@@ -868,6 +888,7 @@ export const filterAuthorizedData = (items, currentUser, currentRole) => {
     const currentEmpId = currentUser.empId || '';
 
     return items.filter(item => {
+      if (isExternalRecord(item)) return false;
       const isAssigneeId = item.assigneeId === currentId ||
         item.interviewerId === currentId ||
         item.techSupportId === currentId ||
@@ -892,6 +913,7 @@ export const filterAuthorizedData = (items, currentUser, currentRole) => {
 
     return items
       .filter(item => {
+        if (isExternalRecord(item)) return false;
         const isPocId = item.pocId === currentId || item.assignedSrId === currentId;
         const isRecruiterName = (item.recruiterName && item.recruiterName.toLowerCase() === currentName) ||
           (item.assignedSrName && item.assignedSrName.toLowerCase() === currentName);
@@ -901,7 +923,7 @@ export const filterAuthorizedData = (items, currentUser, currentRole) => {
   }
 
   // 4. Marketing TL (Mukesh, Shivam, Vijesh):
-  // Can ONLY see candidates belonging to their own team + code names only
+  // Can ONLY see candidates belonging to their own team + code names only (External tasks strictly forbidden)
   if (currentRole === 'marketing_tl') {
     const currentTeamId = currentUser.teamId || currentUser.team || (
       currentUser?.id === 'u-1791911058812' || (currentUser?.name || '').toLowerCase().includes('mukesh') ? 'team-mukesh' :
@@ -912,6 +934,7 @@ export const filterAuthorizedData = (items, currentUser, currentRole) => {
 
     return items
       .filter(item => {
+        if (isExternalRecord(item)) return false;
         const cName = (item.candidateName || '').toLowerCase().trim();
         // Strict candidate team isolation: Samanvi Arcot & Mayuri Kate belong exclusively to Team Shivam
         if (cName.includes('samanvi arcot') || cName.includes('mayuri kate')) {
@@ -948,6 +971,7 @@ export const filterAuthorizedData = (items, currentUser, currentRole) => {
 
     return items
       .filter(item => {
+        if (isExternalRecord(item)) return false;
         const cName = (item.candidateName || '').toLowerCase().trim();
         // Strict candidate team isolation: Samanvi Arcot & Mayuri Kate belong exclusively to Team Shivam
         if (cName.includes('samanvi arcot') || cName.includes('mayuri kate')) {
@@ -997,23 +1021,9 @@ export const filterAuthorizedData = (items, currentUser, currentRole) => {
   }
 
   // 7. External User (e.g. Manpatel):
-  // 7. External User (e.g. Manpatel):
   // Can ONLY see external tasks/feedbacks belonging strictly to the external workflow! Internal tasks must NEVER leak!
   if (currentRole === 'external_user') {
-    const currentId = currentUser.id;
-    const currentName = (currentUser.name || '').toLowerCase();
-
-    return items.filter(item => {
-      // ABSOLUTE ISOLATION: Must be explicitly external!
-      const isExt = Boolean(item.isExternal || item.taskSource === 'external' || item.taskClassification === 'External');
-      if (!isExt) return false;
-
-      const isCreatorId = item.createdById === currentId || item.externalCreatorId === currentId;
-      const isCreatorName = (item.creatorName && item.creatorName.toLowerCase().includes(currentName)) ||
-        (item.externalCreator && item.externalCreator.toLowerCase().includes(currentName)) ||
-        (item.recruiterName && item.recruiterName.toLowerCase().includes(currentName));
-      return isCreatorId || isCreatorName || item.externalCreator === 'Manpatel' || !item.createdById;
-    });
+    return items.filter(item => isExternalRecord(item));
   }
 
   return items;

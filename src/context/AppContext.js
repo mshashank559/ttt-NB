@@ -22,6 +22,7 @@ import {
   getTseId,
   TSE_IDS,
   getTseRealName,
+  isExternalRecord,
 } from '../data/mockData';
 import { DEFAULT_AVATAR } from '../data/avatars';
 
@@ -38,20 +39,7 @@ export const AppProvider = ({ children }) => {
           const parsed = JSON.parse(saved);
           if (Array.isArray(parsed) && parsed.length > 0) {
             return parsed.map(t => {
-              const isExt = Boolean(
-                t.isExternal === true ||
-                t.taskSource === 'external' ||
-                t.taskClassification === 'External' ||
-                t.teamId === 'external' ||
-                (t.teamName || '').toLowerCase() === 'external' ||
-                t.createdById === 'u-manpatel-01' ||
-                (t.creatorName || '').toLowerCase() === 'manpatel' ||
-                (t.externalCreator || '').toLowerCase() === 'manpatel' ||
-                (t.recruiterName || '').toLowerCase() === 'manpatel' ||
-                t.assignedSrId === 'u-manpatel-01' ||
-                (t.assignedSrName || '').toLowerCase() === 'manpatel'
-              );
-              if (isExt) {
+              if (isExternalRecord(t)) {
                 return {
                   ...t,
                   isExternal: true,
@@ -59,6 +47,9 @@ export const AppProvider = ({ children }) => {
                   taskClassification: 'External',
                   teamId: 'external',
                   teamName: 'External',
+                  teamLeadId: 'u-manpatel-01',
+                  assignedSrId: 'u-manpatel-01',
+                  assignedSrName: 'Manpatel',
                   externalCreator: t.externalCreator || 'Manpatel',
                   externalCreatorId: t.externalCreatorId || 'u-manpatel-01',
                   creatorName: t.creatorName || 'Manpatel',
@@ -209,20 +200,7 @@ export const AppProvider = ({ children }) => {
           const liveTasks = await tasksRes.json();
           if (Array.isArray(liveTasks)) {
             const normalizedTasks = liveTasks.map(t => {
-              const isExt = Boolean(
-                t.isExternal === true ||
-                t.taskSource === 'external' ||
-                t.taskClassification === 'External' ||
-                t.teamId === 'external' ||
-                (t.teamName || '').toLowerCase() === 'external' ||
-                t.createdById === 'u-manpatel-01' ||
-                (t.creatorName || '').toLowerCase() === 'manpatel' ||
-                (t.externalCreator || '').toLowerCase() === 'manpatel' ||
-                (t.recruiterName || '').toLowerCase() === 'manpatel' ||
-                t.assignedSrId === 'u-manpatel-01' ||
-                (t.assignedSrName || '').toLowerCase() === 'manpatel'
-              );
-              if (isExt) {
+              if (isExternalRecord(t)) {
                 return {
                   ...t,
                   isExternal: true,
@@ -231,6 +209,8 @@ export const AppProvider = ({ children }) => {
                   teamId: 'external',
                   teamName: 'External',
                   teamLeadId: 'u-manpatel-01',
+                  assignedSrId: 'u-manpatel-01',
+                  assignedSrName: 'Manpatel',
                   externalCreator: t.externalCreator || 'Manpatel',
                   externalCreatorId: t.externalCreatorId || 'u-manpatel-01',
                   creatorName: t.creatorName || 'Manpatel',
@@ -244,15 +224,7 @@ export const AppProvider = ({ children }) => {
             setTasks(prev => {
               const liveIds = new Set(normalizedTasks.map(lt => String(lt.id)));
               const recentLocalExtTasks = (prev || []).filter(pt =>
-                !liveIds.has(String(pt.id)) &&
-                Boolean(
-                  pt.isExternal ||
-                  pt.taskSource === 'external' ||
-                  pt.teamId === 'external' ||
-                  pt.createdById === 'u-manpatel-01' ||
-                  (pt.creatorName || '').toLowerCase() === 'manpatel' ||
-                  (pt.externalCreator || '').toLowerCase() === 'manpatel'
-                )
+                !liveIds.has(String(pt.id)) && isExternalRecord(pt)
               );
               const merged = [...recentLocalExtTasks, ...normalizedTasks];
               try {
@@ -267,6 +239,21 @@ export const AppProvider = ({ children }) => {
           const liveFeedbacks = await feedbacksRes.json();
           if (Array.isArray(liveFeedbacks)) {
             const normalized = liveFeedbacks.map(f => {
+              if (isExternalRecord(f)) {
+                return {
+                  ...f,
+                  isExternal: true,
+                  taskSource: 'external',
+                  taskClassification: 'External',
+                  teamId: 'external',
+                  teamName: 'External',
+                  teamLeadId: 'u-manpatel-01',
+                  assignedSrId: 'u-manpatel-01',
+                  assignedSrName: 'Manpatel',
+                  externalCreator: f.externalCreator || 'Manpatel',
+                  externalCreatorId: f.externalCreatorId || 'u-manpatel-01',
+                };
+              }
               const cName = (f.candidateName || '').toLowerCase().trim();
               if (cName.includes('samanvi arcot') || cName.includes('mayuri kate')) {
                 return {
@@ -278,10 +265,17 @@ export const AppProvider = ({ children }) => {
               }
               return f;
             });
-            setFeedbacks(normalized);
-            try {
-              localStorage.setItem('ttt_feedbacks', JSON.stringify(normalized));
-            } catch (e) { }
+            setFeedbacks(prev => {
+              const liveIds = new Set(normalized.map(lf => String(lf.id)));
+              const recentLocalExtFb = (prev || []).filter(pf =>
+                !liveIds.has(String(pf.id)) && isExternalRecord(pf)
+              );
+              const mergedFb = [...recentLocalExtFb, ...normalized];
+              try {
+                localStorage.setItem('ttt_feedbacks', JSON.stringify(mergedFb));
+              } catch (e) { }
+              return mergedFb;
+            });
           }
         }
 
