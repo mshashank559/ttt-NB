@@ -99,6 +99,7 @@ export default function FeedbackPage() {
   // Filters state
   const [search, setSearch] = useState('');
   const [dateRange, setDateRange] = useState('all'); // 'all' | 'today' | 'week' | 'month'
+  const [selectedDate, setSelectedDate] = useState(''); // Single Date Calendar Filter
   const [candidateFeedbackFilter, setCandidateFeedbackFilter] = useState('all'); // 'all' | 'pending' | 'received'
   const [typeFilter, setTypeFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -356,6 +357,11 @@ export default function FeedbackPage() {
         if (!item.candidateFeedback?.submitted) return false;
       }
 
+      // Single Date Calendar Filter
+      if (selectedDate && item.date !== selectedDate) {
+        return false;
+      }
+
       // Date range filter
       if (dateRange !== 'all') {
         const itemDate = new Date(item.date);
@@ -373,14 +379,14 @@ export default function FeedbackPage() {
 
       return true;
     });
-  }, [unifiedFeedbacks, workflowFilter, search, dateRange, candidateFeedbackFilter, typeFilter, statusFilter]);
+  }, [unifiedFeedbacks, workflowFilter, search, dateRange, selectedDate, candidateFeedbackFilter, typeFilter, statusFilter]);
 
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, dateRange, candidateFeedbackFilter, typeFilter, statusFilter]);
+  }, [search, dateRange, selectedDate, candidateFeedbackFilter, typeFilter, statusFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredFeedbacks.length / pageSize));
   const paginatedFeedbacks = useMemo(() => {
@@ -549,6 +555,33 @@ export default function FeedbackPage() {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          {/* Single Date Calendar Picker */}
+          <div className="flex items-center gap-1.5 bg-white border border-slate-300 rounded-lg px-2.5 py-1 shadow-xs hover:border-[#1416c1] focus-within:border-[#1416c1] transition-colors">
+            <CalIcon size={13} className="text-slate-400 shrink-0" />
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider select-none">Date:</span>
+            <input
+              type="date"
+              data-testid="feedback-filter-date"
+              value={selectedDate}
+              onChange={(e) => {
+                setSelectedDate(e.target.value);
+                setDateRange('all');
+              }}
+              className="text-xs bg-transparent text-slate-800 outline-none font-medium cursor-pointer"
+            />
+          </div>
+          {selectedDate && (
+            <button
+              type="button"
+              onClick={() => setSelectedDate('')}
+              className="flex items-center gap-1 px-2 py-1 text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg border border-rose-200 transition-colors"
+              title="Clear Date"
+            >
+              <X size={12} />
+              <span>Clear Date</span>
+            </button>
+          )}
+
           {/* Date range filter */}
           <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200 text-xs">
             {[
@@ -559,9 +592,12 @@ export default function FeedbackPage() {
             ].map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => setDateRange(tab.id)}
+                onClick={() => {
+                  setDateRange(tab.id);
+                  setSelectedDate('');
+                }}
                 className={`px-3 py-1 rounded-md transition-colors ${
-                  dateRange === tab.id
+                  dateRange === tab.id && !selectedDate
                     ? 'bg-[#1416c1] text-white font-semibold shadow-xs'
                     : 'text-slate-600 hover:text-slate-900 font-medium'
                 }`}

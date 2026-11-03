@@ -424,45 +424,28 @@ export default function Interviews() {
         }
         actions={
           <div className="flex items-center gap-2.5 flex-wrap">
-            {/* From Date Filter */}
+            {/* Single Date Calendar Filter */}
             <div className="flex items-center gap-1.5 bg-white border border-slate-300 rounded-xl px-2.5 py-1 shadow-xs hover:border-[#1416c1] focus-within:border-[#1416c1] transition-colors">
               <Calendar size={13} className="text-slate-400 shrink-0" />
-              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider select-none">From:</span>
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider select-none">Date:</span>
               <input
                 type="date"
-                data-testid="iv-filter-from-date"
-                value={fromDate}
+                data-testid="iv-filter-date"
+                value={selectedDate}
                 onChange={(e) => {
-                  setFromDate(e.target.value);
+                  setSelectedDate(e.target.value);
                   setTablePage(1);
                 }}
                 className="text-xs bg-transparent text-slate-800 outline-none font-medium cursor-pointer"
               />
             </div>
 
-            {/* To Date Filter */}
-            <div className="flex items-center gap-1.5 bg-white border border-slate-300 rounded-xl px-2.5 py-1 shadow-xs hover:border-[#1416c1] focus-within:border-[#1416c1] transition-colors">
-              <Calendar size={13} className="text-slate-400 shrink-0" />
-              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider select-none">To:</span>
-              <input
-                type="date"
-                data-testid="iv-filter-to-date"
-                value={toDate}
-                onChange={(e) => {
-                  setToDate(e.target.value);
-                  setTablePage(1);
-                }}
-                className="text-xs bg-transparent text-slate-800 outline-none font-medium cursor-pointer"
-              />
-            </div>
-
-            {/* Quick Presets: Today / This Week / All Dates */}
+            {/* Quick Presets: Today / All Dates */}
             <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-xl border border-slate-200 text-xs shadow-xs">
               <button
                 type="button"
                 onClick={() => {
-                  setFromDate(todayStr);
-                  setToDate(todayStr);
+                  setSelectedDate(todayStr);
                   setTablePage(1);
                 }}
                 className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
@@ -472,21 +455,6 @@ export default function Interviews() {
                 }`}
               >
                 Today
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setFromDate(thisWeekRange.from);
-                  setToDate(thisWeekRange.to);
-                  setTablePage(1);
-                }}
-                className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                  isThisWeekActive
-                    ? 'bg-[#1416c1] text-white shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-                }`}
-              >
-                This Week
               </button>
               <button
                 type="button"
@@ -501,8 +469,8 @@ export default function Interviews() {
               </button>
             </div>
 
-            {/* Reset Dates Button */}
-            {isDateFiltered && (
+            {/* Reset Date Button */}
+            {selectedDate && (
               <button
                 type="button"
                 data-testid="iv-clear-dates-btn"
@@ -510,7 +478,7 @@ export default function Interviews() {
                 className="px-2.5 py-1 rounded-xl text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 flex items-center gap-1 transition-colors cursor-pointer"
               >
                 <X size={12} />
-                <span>Reset Dates</span>
+                <span>Reset Date</span>
               </button>
             )}
 

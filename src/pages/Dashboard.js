@@ -10,7 +10,7 @@ import { toast } from 'sonner';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip as RTooltip, CartesianGrid, BarChart, Bar, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 import { useApp } from '../context/AppContext';
 import { KpiCard, PageHeader, StatusBadge, TaskTypeBadge, SectionCard, EmptyState, ArcGaugeCard, NeumorphicMetricCard, CircularProgressRing } from '../components/common';
-import { ROLES, USERS, TECH_SUPPORT_TEAM, getInterviewTimingMeta, getSmartTseRecommendations, roleIsMarketing, getTseRealName, sortTasksByInterviewPriority, isExternalRecord } from '../data/mockData';
+import { ROLES, USERS, TECH_SUPPORT_TEAM, getInterviewTimingMeta, getSmartTseRecommendations, roleIsMarketing, getTseRealName, getTseCodeName, getTseId, sortTasksByInterviewPriority, isExternalRecord } from '../data/mockData';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
@@ -934,21 +934,18 @@ export default function Dashboard() {
                     const deadlineDate = ticket.deadline ? new Date(ticket.deadline) : new Date(new Date(ticket.createdAt || Date.now()).getTime() + 24 * 60 * 60 * 1000);
                     const isOverdue = ticket.status !== 'Resolved' && (ticket.isOverdue || deadlineDate < new Date());
                     const hoursRemaining = Math.round((deadlineDate.getTime() - Date.now()) / (1000 * 60 * 60));
-                    const canViewReal = ['upper_management', 'management', 'tsm'].includes(currentRole);
+                    const tseOfficialId = ticket.techSupportId?.startsWith('TSE-NB') 
+                      ? ticket.techSupportId 
+                      : (getTseId(ticket.tseCodeName || ticket.tseRealName || ticket.techPerson || ticket.techSupport, ticket) || 'TSE-ID');
+                    const tseDisplayCodeName = getTseCodeName(ticket.tseCodeName || ticket.tseRealName || ticket.techPerson || ticket.techSupport) || 'TSE';
 
                     return (
                       <tr key={ticket.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
                         <td className="py-3 mono text-xs font-bold text-rose-600">{ticket.id}</td>
                         <td className="font-bold text-slate-900">{ticket.candidateName}</td>
                         <td className="text-xs">
-                          {canViewReal ? (
-                            <div>
-                              <div className="font-bold text-slate-900">{ticket.tseCodeName || ticket.techSupportId || 'TSE-ID'}</div>
-                              <div className="text-[11px] text-slate-500">{ticket.tseRealName || ticket.techPerson || ticket.techSupport}</div>
-                            </div>
-                          ) : (
-                            <div className="font-mono font-bold text-blue-700">{ticket.tseCodeName || ticket.techSupportId || 'TSE-ID'}</div>
-                          )}
+                          <div className="font-bold text-slate-900">{tseOfficialId}</div>
+                          <div className="text-[11px] text-blue-700 font-semibold">{tseDisplayCodeName}</div>
                         </td>
                         <td className="whitespace-nowrap">
                           <span className="px-2 py-0.5 rounded bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold">
@@ -1210,10 +1207,14 @@ export default function Dashboard() {
                 <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-950 space-y-1.5">
                   <div>
                     <strong>TSE Assigned: </strong>
-                    <span className="font-bold text-[#1416c1]">{activeSlaTicketModal.tseCodeName || activeSlaTicketModal.techSupportId || 'TSE-ID'}</span>
-                    {['upper_management', 'management', 'tsm'].includes(currentRole) && (activeSlaTicketModal.tseRealName || activeSlaTicketModal.techPerson) && (
-                      <span className="text-slate-600 font-medium ml-1.5">({activeSlaTicketModal.tseRealName || activeSlaTicketModal.techPerson})</span>
-                    )}
+                    <span className="font-bold text-[#1416c1]">
+                      {activeSlaTicketModal.techSupportId?.startsWith('TSE-NB') 
+                        ? activeSlaTicketModal.techSupportId 
+                        : (getTseId(activeSlaTicketModal.tseCodeName || activeSlaTicketModal.tseRealName || activeSlaTicketModal.techPerson || activeSlaTicketModal.techSupport, activeSlaTicketModal) || 'TSE-ID')}
+                    </span>
+                    <span className="text-slate-800 font-semibold ml-1.5">
+                      • {getTseCodeName(activeSlaTicketModal.tseCodeName || activeSlaTicketModal.tseRealName || activeSlaTicketModal.techPerson || activeSlaTicketModal.techSupport) || 'TSE'}
+                    </span>
                   </div>
                   <div><strong>Rating Given:</strong> ⭐ {activeSlaTicketModal.rating} / 5</div>
                   <div>

@@ -2897,6 +2897,7 @@ export default function Tasks() {
     team: 'all',
     workflow: currentRole === 'external_user' ? 'external' : 'all',
     q: '',
+    date: '',
     dateFrom: '',
     dateTo: '',
   });
@@ -3096,12 +3097,11 @@ export default function Tasks() {
         (t.taskType && t.taskType.toLowerCase().includes(query)) ||
         (t.id && t.id.toLowerCase().includes(query));
       const taskDate = (t.date || t.dueDate || (t.interviewDateTime ? t.interviewDateTime.slice(0, 10) : '') || '').slice(0, 10);
-      const matchFrom = !filters.dateFrom || (taskDate && taskDate >= filters.dateFrom);
-      const matchTo = !filters.dateTo || (taskDate && taskDate <= filters.dateTo);
+      const matchDate = !filters.date || (taskDate && taskDate === filters.date);
       const matchTeam = isTaskMatchingTeam(t);
       const matchWorkflow = filters.workflow === 'all' || (filters.workflow === 'external' ? isExt : !isExt);
 
-      return matchStatus && matchType && matchAssignee && matchSr && matchQ && matchFrom && matchTo && matchTeam && matchWorkflow;
+      return matchStatus && matchType && matchAssignee && matchSr && matchQ && matchDate && matchTeam && matchWorkflow;
     });
   }, [tasks, filters, currentRole, currentUser, isMarketingTl, teamMemberIds, teamMemberNames, users]);
 
@@ -3148,45 +3148,32 @@ export default function Tasks() {
       {/* Filters */}
       <SectionCard
         title="Filters"
-        subtitle={`${sortedTasks.length} of ${tasks.length} tasks${filters.team !== 'all' ? ` (${selectedTeamMeta.shortLabel || selectedTeamMeta.label})` : ''}${(filters.dateFrom || filters.dateTo) ? ` (Date: ${filters.dateFrom || 'Any'} to ${filters.dateTo || 'Any'})` : ''}`}
+        subtitle={`${sortedTasks.length} of ${tasks.length} tasks${filters.team !== 'all' ? ` (${selectedTeamMeta.shortLabel || selectedTeamMeta.label})` : ''}${filters.date ? ` (Date: ${filters.date})` : ''}`}
         actions={
           <div className="flex items-center gap-2 flex-wrap">
-            {/* From Date Filter */}
+            {/* Single Date Calendar Filter */}
             <div className="flex items-center gap-1.5 bg-white border border-slate-300 rounded-xl px-2.5 py-1 shadow-xs hover:border-blue-600 focus-within:border-blue-600 transition-colors">
               <CalIcon size={13} className="text-slate-400 shrink-0" />
-              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider select-none">From:</span>
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider select-none">Date:</span>
               <input
                 type="date"
-                data-testid="task-filter-from-date"
-                value={filters.dateFrom}
-                onChange={(e) => setFilters(prev => ({ ...prev, dateFrom: e.target.value }))}
+                data-testid="task-filter-date"
+                value={filters.date || ''}
+                onChange={(e) => setFilters(prev => ({ ...prev, date: e.target.value }))}
                 className="text-xs bg-transparent text-slate-800 outline-none font-medium cursor-pointer"
               />
             </div>
 
-            {/* To Date Filter */}
-            <div className="flex items-center gap-1.5 bg-white border border-slate-300 rounded-xl px-2.5 py-1 shadow-xs hover:border-blue-600 focus-within:border-blue-600 transition-colors">
-              <CalIcon size={13} className="text-slate-400 shrink-0" />
-              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider select-none">To:</span>
-              <input
-                type="date"
-                data-testid="task-filter-to-date"
-                value={filters.dateTo}
-                onChange={(e) => setFilters(prev => ({ ...prev, dateTo: e.target.value }))}
-                className="text-xs bg-transparent text-slate-800 outline-none font-medium cursor-pointer"
-              />
-            </div>
-
-            {/* Clear Dates Button */}
-            {(filters.dateFrom || filters.dateTo) && (
+            {/* Clear Date Button */}
+            {filters.date && (
               <button
                 type="button"
-                onClick={() => setFilters(prev => ({ ...prev, dateFrom: '', dateTo: '' }))}
+                onClick={() => setFilters(prev => ({ ...prev, date: '' }))}
                 className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg border border-rose-200 transition-colors cursor-pointer"
-                title="Clear date range filter"
+                title="Clear date filter"
               >
                 <X size={12} />
-                <span>Clear Dates</span>
+                <span>Clear Date</span>
               </button>
             )}
           </div>
