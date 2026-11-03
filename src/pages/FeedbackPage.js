@@ -98,7 +98,6 @@ export default function FeedbackPage() {
 
   // Filters state
   const [search, setSearch] = useState('');
-  const [dateRange, setDateRange] = useState('all'); // 'all' | 'today' | 'week' | 'month'
   const [selectedDate, setSelectedDate] = useState(''); // Single Date Calendar Filter
   const [candidateFeedbackFilter, setCandidateFeedbackFilter] = useState('all'); // 'all' | 'pending' | 'received'
   const [typeFilter, setTypeFilter] = useState('all');
@@ -362,31 +361,16 @@ export default function FeedbackPage() {
         return false;
       }
 
-      // Date range filter
-      if (dateRange !== 'all') {
-        const itemDate = new Date(item.date);
-        const now = new Date();
-        if (dateRange === 'today') {
-          const todayStr = now.toISOString().slice(0, 10);
-          if (item.date !== todayStr && item.date !== '2026-10-08') return false;
-        } else if (dateRange === 'week') {
-          const diffDays = (now - itemDate) / (1000 * 60 * 60 * 24);
-          if (diffDays > 7 || diffDays < -7) return false;
-        } else if (dateRange === 'month') {
-          if (itemDate.getMonth() !== now.getMonth() && itemDate.getMonth() !== 9) return false;
-        }
-      }
-
       return true;
     });
-  }, [unifiedFeedbacks, workflowFilter, search, dateRange, selectedDate, candidateFeedbackFilter, typeFilter, statusFilter]);
+  }, [unifiedFeedbacks, workflowFilter, search, selectedDate, candidateFeedbackFilter, typeFilter, statusFilter]);
 
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, dateRange, selectedDate, candidateFeedbackFilter, typeFilter, statusFilter]);
+  }, [search, selectedDate, candidateFeedbackFilter, typeFilter, statusFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredFeedbacks.length / pageSize));
   const paginatedFeedbacks = useMemo(() => {
@@ -565,7 +549,6 @@ export default function FeedbackPage() {
               value={selectedDate}
               onChange={(e) => {
                 setSelectedDate(e.target.value);
-                setDateRange('all');
               }}
               className="text-xs bg-transparent text-slate-800 outline-none font-medium cursor-pointer"
             />
@@ -581,31 +564,6 @@ export default function FeedbackPage() {
               <span>Clear Date</span>
             </button>
           )}
-
-          {/* Date range filter */}
-          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200 text-xs">
-            {[
-              { id: 'all', label: 'All Dates' },
-              { id: 'today', label: 'Today' },
-              { id: 'week', label: 'This Week' },
-              { id: 'month', label: 'This Month' },
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => {
-                  setDateRange(tab.id);
-                  setSelectedDate('');
-                }}
-                className={`px-3 py-1 rounded-md transition-colors ${
-                  dateRange === tab.id && !selectedDate
-                    ? 'bg-[#1416c1] text-white font-semibold shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900 font-medium'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
 
           {/* Candidate Feedback Status Filter (Pending vs Received/Submitted) */}
           <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200 text-xs">

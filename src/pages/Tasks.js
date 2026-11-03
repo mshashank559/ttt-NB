@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Plus, Search, UserRound, Calendar as CalIcon, Clock, Building2, Briefcase, FileText, StickyNote, MessageSquare, ShieldAlert, CheckCircle2, Sparkles, Lock, Paperclip, UploadCloud, X, File, Download, Eye, Trash2, UserMinus, AlertTriangle, Pencil, Globe } from 'lucide-react';
+import { Plus, Search, UserRound, Calendar as CalIcon, Clock, Building2, Briefcase, FileText, StickyNote, MessageSquare, ShieldAlert, CheckCircle2, Sparkles, Lock, Paperclip, UploadCloud, X, File, Download, Eye, Trash2, UserMinus, AlertTriangle, Pencil, Globe, History } from 'lucide-react';
 import { toast } from 'sonner';
 import { useApp } from '../context/AppContext';
 import { PageHeader, StatusBadge, TaskTypeBadge, SectionCard, EmptyState, Pagination } from '../components/common';
@@ -2071,7 +2071,7 @@ const EditTaskModal = ({ task, open, onOpenChange }) => {
 };
 
 const TaskDrawer = ({ task, onClose }) => {
-  const { users, reassignTask, changeTaskStatus, assignMarketingSr, currentRole, currentUser, updateInterviewOutcome, unassignTask, deleteTask } = useApp();
+  const { tasks, users, reassignTask, changeTaskStatus, assignMarketingSr, currentRole, currentUser, updateInterviewOutcome, unassignTask, deleteTask } = useApp();
   const canViewRealName = ['tsm', 'management', 'upper_management'].includes(currentRole);
   const assignee = users.find(u => u.id === task?.assigneeId);
   const creator = users.find(u => u.id === task?.createdById);
@@ -2080,6 +2080,28 @@ const TaskDrawer = ({ task, onClose }) => {
   const canReassignTseInDrawer = ['management', 'upper_management', 'tsm'].includes(currentRole);
   const [completionRemark, setCompletionRemark] = useState(task?.completionRemark || task?.remark || '');
   const [selectedStatus, setSelectedStatus] = useState(task?.status || 'Pending');
+
+  // Candidate TSE Work History memo for TSM / Management
+  const candidateTseHistory = useMemo(() => {
+    if (!task?.candidateName) return [];
+    const targetName = task.candidateName.toLowerCase().trim();
+    const matched = (tasks || []).filter(t => {
+      if (!t.candidateName) return false;
+      if (t.candidateName.toLowerCase().trim() !== targetName) return false;
+      const hasTse = Boolean(
+        (t.assigneeId && t.assigneeId !== 'Unassigned') ||
+        (t.techPerson && t.techPerson !== 'Unassigned' && t.techPerson !== 'Code Name Unassigned') ||
+        (t.codeName && t.codeName !== 'Unassigned' && t.codeName !== 'Code Name Unassigned')
+      );
+      return hasTse;
+    });
+
+    return [...matched].sort((a, b) => {
+      const dateA = new Date(a.date || a.dueDate || 0).getTime();
+      const dateB = new Date(b.date || b.dueDate || 0).getTime();
+      return dateB - dateA;
+    });
+  }, [task?.candidateName, tasks]);
 
   useEffect(() => {
     if (task) {
@@ -2436,6 +2458,108 @@ const TaskDrawer = ({ task, onClose }) => {
                 <CheckCircle2 size={13} className="text-emerald-600" /> TSE Completion Remarks (Visible to all)
               </div>
               <p className="text-xs text-emerald-950 font-medium leading-relaxed">{task.completionRemark}</p>
+            </div>
+          )}
+
+          {/* Candidate TSE Work History Box (TSM, Upper Management, Management only) */}
+          {canViewRealName && task?.candidateName && (
+            <div className="rounded-xl border border-blue-200 bg-gradient-to-b from-blue-50/50 via-slate-50/30 to-white p-3.5 space-y-2.5 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-blue-100 text-blue-700">
+                    <History size={13} className="stroke-[2.5]" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                      <span>Candidate TSE Work History</span>
+                      <span className="text-[10px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.2 rounded-full">
+                        {candidateTseHistory.length}
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-slate-500 font-medium">
+                      All TSEs assigned to <span className="text-slate-800 font-semibold">{task.candidateName}</span>
+                    </div>
+                  </div>
+                </div>
+                <span className="text-[9px] uppercase tracking-wider font-extrabold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full">
+                  TSM / Mgmt Roster
+                </span>
+              </div>
+
+              {candidateTseHistory.length === 0 ? (
+                <div className="p-2.5 rounded-lg bg-white border border-dashed border-slate-200 text-center text-xs text-slate-500">
+                  No prior TSE assignment records found for this candidate.
+                </div>
+              ) : (
+                <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                        <th className="py-2 px-2.5">Assigned TSE</th>
+                        <th className="py-2 px-2.5">Date</th>
+                        <th className="py-2 px-2.5">Company</th>
+                        <th className="py-2 px-2.5 text-right">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-slate-700">
+                      {candidateTseHistory.map((item, idx) => {
+                        const assigneeObj = (users || []).find(u => u.id === item.assigneeId || u.empId === item.assigneeId || u.tttNbId === item.assigneeId);
+                        const cName = (item.codeName && item.codeName !== 'Code Name Unassigned' && item.codeName !== 'Unassigned' ? item.codeName : '') ||
+                          assigneeObj?.codeName ||
+                          (item.techPerson && item.techPerson !== 'Unassigned' && item.techPerson !== 'Code Name Unassigned' ? getTseCodeName(item.techPerson) : '') ||
+                          (assigneeObj?.name ? getTseCodeName(assigneeObj.name) : '') ||
+                          item.techPerson ||
+                          'TSE';
+                        const rName = getTseRealName(cName) ||
+                          getTseRealName(item.techPerson) ||
+                          getTseRealName(assigneeObj?.name) ||
+                          getTseRealName(item.assigneeId) ||
+                          (assigneeObj?.role === 'tse' ? assigneeObj.name : '');
+                        const tseId = item.assigneeId?.startsWith('TSE-NB') 
+                          ? item.assigneeId 
+                          : (assigneeObj?.empId || assigneeObj?.tttNbId || getTseId(cName, item) || 'TSE-ID');
+                        const itemDate = item.date || item.dueDate || (item.interviewDateTime ? item.interviewDateTime.slice(0, 10) : '—');
+                        const comp = item.companyName || item.company || '—';
+
+                        return (
+                          <tr key={item.id || idx} className="hover:bg-slate-50/80 transition-colors">
+                            <td className="py-2 px-2.5 align-middle">
+                              <div className="font-bold text-slate-900 text-xs flex items-center gap-1.5 flex-wrap">
+                                <span className="text-blue-700 font-mono text-[10px] bg-blue-50 px-1 py-0.5 rounded border border-blue-200">
+                                  {tseId}
+                                </span>
+                                <span>{cName}</span>
+                              </div>
+                              {rName && rName.toLowerCase() !== cName.toLowerCase() && (
+                                <div className="text-[11px] text-slate-500 font-medium mt-0.5">
+                                  Real: <span className="text-slate-800 font-semibold">{rName}</span>
+                                </div>
+                              )}
+                            </td>
+                            <td className="py-2 px-2.5 align-middle font-mono text-[11px] text-slate-600 whitespace-nowrap">
+                              {itemDate}
+                            </td>
+                            <td className="py-2 px-2.5 align-middle font-medium text-slate-800 text-xs">
+                              {comp}
+                            </td>
+                            <td className="py-2 px-2.5 align-middle text-right">
+                              <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                item.status === 'Done' || item.status === 'Completed'
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                  : item.status === 'Cancelled'
+                                  ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                                  : 'bg-amber-50 text-amber-700 border border-amber-200'
+                              }`}>
+                                {item.status || 'Pending'}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
 
