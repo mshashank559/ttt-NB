@@ -1180,13 +1180,19 @@ app.get('/api/sla-tickets', async (req, res) => {
   try {
     const now = new Date();
     const tickets = await SlaTicket.find().sort({ createdAt: -1 });
-    const mapped = tickets.map(t => {
+    const seen = new Set();
+    const unique = [];
+    for (const t of tickets) {
       const obj = t.toObject();
-      const isOverdue = obj.status !== 'Resolved' && Boolean(obj.deadline && new Date(obj.deadline) < now);
-      obj.isOverdue = isOverdue;
-      return obj;
-    });
-    res.json(mapped);
+      const key = obj.interviewId || obj.candidateName?.toLowerCase().trim() || obj.id;
+      if (!seen.has(key)) {
+        seen.add(key);
+        const isOverdue = obj.status !== 'Resolved' && Boolean(obj.deadline && new Date(obj.deadline) < now);
+        obj.isOverdue = isOverdue;
+        unique.push(obj);
+      }
+    }
+    res.json(unique);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1230,6 +1236,16 @@ app.put('/api/sla-tickets/:id', async (req, res) => {
     );
     if (!updated) return res.status(404).json({ error: 'SLA Ticket not found' });
     res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/sla-tickets/:id', async (req, res) => {
+  try {
+    const deleted = await SlaTicket.findOneAndDelete({ id: req.params.id });
+    if (!deleted) return res.status(404).json({ error: 'SLA Ticket not found' });
+    res.json({ message: 'Deleted SLA Ticket', id: req.params.id });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

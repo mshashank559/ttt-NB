@@ -186,10 +186,24 @@ export default function Dashboard() {
     return (sum / rated.length).toFixed(1);
   }, [feedbacks]);
 
+  // Deduplicated SLA Tickets by interviewId / candidate to prevent repeating tickets
+  const uniqueSlaTickets = useMemo(() => {
+    const seen = new Set();
+    const result = [];
+    (slaTickets || []).forEach(ticket => {
+      const key = ticket.interviewId || ticket.candidateName?.toLowerCase().trim() || ticket.id;
+      if (!seen.has(key)) {
+        seen.add(key);
+        result.push(ticket);
+      }
+    });
+    return result;
+  }, [slaTickets]);
+
   // Open SLA Escalations (Rating <= 3 stars or unresolved tickets)
   const openSlaCount = useMemo(() => {
-    return (slaTickets || []).filter(t => t.status !== 'Resolved').length;
-  }, [slaTickets]);
+    return (uniqueSlaTickets || []).filter(t => t.status !== 'Resolved').length;
+  }, [uniqueSlaTickets]);
 
   const allInterviews = (interviews && interviews.length) ? interviews : (visibleInterviews || []);
   const ivTotals = {
@@ -904,11 +918,11 @@ export default function Dashboard() {
           subtitle="Auto-escalated quality tickets requiring TSM follow-up and resolution"
           actions={
             <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-rose-100 text-rose-800 border border-rose-200">
-              {slaTickets.filter(t => t.status !== 'Resolved').length} Actionable Tickets
+              {uniqueSlaTickets.filter(t => t.status !== 'Resolved').length} Actionable Tickets
             </span>
           }
         >
-          {slaTickets.length === 0 ? (
+          {uniqueSlaTickets.length === 0 ? (
             <div className="p-6 text-center text-slate-500 bg-slate-50 rounded-xl border border-dashed border-slate-200">
               <ShieldCheck size={28} className="mx-auto text-emerald-500 mb-2" />
               <div className="text-sm font-bold text-slate-800">Zero SLA Escalations</div>
@@ -930,7 +944,7 @@ export default function Dashboard() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {slaTickets.map(ticket => {
+                  {uniqueSlaTickets.map(ticket => {
                     const deadlineDate = ticket.deadline ? new Date(ticket.deadline) : new Date(new Date(ticket.createdAt || Date.now()).getTime() + 24 * 60 * 60 * 1000);
                     const isOverdue = ticket.status !== 'Resolved' && (ticket.isOverdue || deadlineDate < new Date());
                     const hoursRemaining = Math.round((deadlineDate.getTime() - Date.now()) / (1000 * 60 * 60));

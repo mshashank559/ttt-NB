@@ -196,15 +196,13 @@ export default function Interviews() {
     };
   }, []);
 
-  const [fromDate, setFromDate] = useState(() => getLocalDateStr(new Date()));
-  const [toDate, setToDate] = useState(() => getLocalDateStr(new Date()));
+  const [selectedDate, setSelectedDate] = useState(() => getLocalDateStr(new Date()));
   const [tablePage, setTablePage] = useState(1);
   const [tablePageSize, setTablePageSize] = useState(10);
   const isMk = roleIsMarketing(currentRole);
 
-  const isTodayActive = fromDate === todayStr && toDate === todayStr;
-  const isThisWeekActive = fromDate === thisWeekRange.from && toDate === thisWeekRange.to;
-  const isAllDatesActive = !fromDate && !toDate;
+  const isTodayActive = selectedDate === todayStr;
+  const isAllDatesActive = !selectedDate;
 
   const dynamicTeams = useMemo(() => {
     const list = [{ id: 'all', label: 'All Teams' }];
@@ -357,14 +355,13 @@ export default function Interviews() {
       if (!matchStatus) return false;
 
       const iDate = getInterviewDateStr(i);
-      if (fromDate && (!iDate || iDate < fromDate)) return false;
-      if (toDate && (!iDate || iDate > toDate)) return false;
+      if (selectedDate && iDate !== selectedDate) return false;
 
       if (!isInterviewMatchingTeam(i)) return false;
 
       return true;
     });
-  }, [visibleInterviews, statusFilter, fromDate, toDate, teamFilter, teamMemberIds, teamMemberNames, tasks]);
+  }, [visibleInterviews, statusFilter, selectedDate, teamFilter, teamMemberIds, teamMemberNames, tasks]);
 
   const handleStatusFilterChange = (val) => {
     setStatusFilter(val);
@@ -372,8 +369,7 @@ export default function Interviews() {
   };
 
   const handleClearDates = () => {
-    setFromDate('');
-    setToDate('');
+    setSelectedDate('');
     setTablePage(1);
   };
 
@@ -392,7 +388,7 @@ export default function Interviews() {
     hold: filtered.filter(i => i.interviewOutcome === 'On Hold' || i.status === 'Hold').length,
   };
 
-  const isDateFiltered = Boolean(fromDate || toDate);
+  const isDateFiltered = Boolean(selectedDate);
 
   return (
     <div className="space-y-6">
@@ -414,13 +410,9 @@ export default function Interviews() {
         subtitle={
           isTodayActive
             ? `Today's Interviews — Showing ${filtered.length} of ${(visibleInterviews || []).length} total recorded`
-            : isThisWeekActive
-            ? `This Week's Interviews — Showing ${filtered.length} of ${(visibleInterviews || []).length} total recorded`
             : isAllDatesActive
             ? `All Dates — Showing all ${(visibleInterviews || []).length} interviews`
-            : (isDateFiltered || statusFilter !== 'all')
-            ? `Showing ${filtered.length} of ${(visibleInterviews || []).length} interviews`
-            : undefined
+            : `Date: ${selectedDate} — Showing ${filtered.length} of ${(visibleInterviews || []).length} interviews`
         }
         actions={
           <div className="flex items-center gap-2.5 flex-wrap">

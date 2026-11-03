@@ -306,9 +306,19 @@ export const AppProvider = ({ children }) => {
         if (slaRes && slaRes.ok) {
           const liveSla = await slaRes.json();
           if (Array.isArray(liveSla)) {
-            setSlaTickets(liveSla);
+            // Deduplicate SLA tickets by interviewId or candidateName to prevent repeating tickets
+            const seen = new Set();
+            const uniqueSla = [];
+            liveSla.forEach(t => {
+              const key = t.interviewId || t.candidateName?.toLowerCase().trim() || t.id;
+              if (!seen.has(key)) {
+                seen.add(key);
+                uniqueSla.push(t);
+              }
+            });
+            setSlaTickets(uniqueSla);
             try {
-              localStorage.setItem('ttt_sla_tickets', JSON.stringify(liveSla));
+              localStorage.setItem('ttt_sla_tickets', JSON.stringify(uniqueSla));
             } catch (e) {}
           }
         }
