@@ -651,6 +651,57 @@ app.post('/api/tasks', async (req, res) => {
 
 app.put('/api/tasks/:id', async (req, res) => {
   try {
+    const callerRole = req.headers['x-user-role'] || req.body.currentRole || req.body.userRole;
+    
+    // Module 1 Security: Only TSM, Management, Upper Management can assign/reassign TSEs
+    if (req.body.assigneeId !== undefined && callerRole && !['tsm', 'management', 'upper_management', 'admin'].includes(callerRole.toLowerCase())) {
+      return res.status(403).json({ error: 'Unauthorized: Only TSM, Management, and Upper Management can assign TSEs.' });
+    }
+
+    // Module 3 & 8 Validation: Check interview slot conflict if assigning TSE to an Interview task
+    if (req.body.assigneeId && req.body.assigneeId !== 'Unassigned' && req.body.assigneeId !== '') {
+      const existingTask = await Task.findOne({ id: req.params.id });
+      const targetTaskType = req.body.taskType || existingTask?.taskType;
+      const targetIvDt = req.body.interviewDateTime || existingTask?.interviewDateTime;
+      const targetDur = req.body.duration || existingTask?.duration || '30 mins';
+
+      if ((targetTaskType === 'Interview' || existingTask?.category === 'Interview') && targetIvDt && !req.body.allowTseOverride) {
+        const reqStart = new Date(targetIvDt).getTime();
+        if (!isNaN(reqStart)) {
+          const durMins = parseDurationMinutes(targetDur);
+          const reqEnd = reqStart + durMins * 60000;
+
+          const conflict = await Task.findOne({
+            id: { $ne: req.params.id },
+            status: { $ne: 'Cancelled' },
+            interviewDateTime: { $exists: true, $ne: '' },
+            $or: [
+              { assigneeId: req.body.assigneeId },
+              { techPerson: { $regex: new RegExp(`^${req.body.assigneeId}$`, 'i') } },
+              { codeName: { $regex: new RegExp(`^${req.body.assigneeId}$`, 'i') } }
+            ]
+          });
+
+          if (conflict) {
+            const conflictStart = new Date(conflict.interviewDateTime).getTime();
+            const conflictDur = parseDurationMinutes(conflict.duration);
+            const conflictEnd = conflictStart + conflictDur * 60000;
+
+            if (conflictStart < reqEnd && conflictEnd > reqStart) {
+              return res.status(409).json({
+                error: `TSE is already occupied in an interview for candidate "${conflict.candidateName || 'Another session'}" at this scheduled time.`,
+                conflict: {
+                  taskId: conflict.id,
+                  candidateName: conflict.candidateName,
+                  interviewDateTime: conflict.interviewDateTime,
+                }
+              });
+            }
+          }
+        }
+      }
+    }
+
     const updated = await Task.findOneAndUpdate({ id: req.params.id }, req.body, { new: true });
     if (!updated) return res.status(404).json({ error: 'Task not found' });
 
@@ -821,6 +872,11 @@ app.post('/api/tse/check-availability', async (req, res) => {
 // TSM TSE Unassign Endpoint
 app.put('/api/tasks/:id/unassign', async (req, res) => {
   try {
+    const callerRole = req.headers['x-user-role'] || req.body.currentRole || req.body.userRole;
+    if (callerRole && !['tsm', 'management', 'upper_management', 'admin'].includes(callerRole.toLowerCase())) {
+      return res.status(403).json({ error: 'Unauthorized: Only TSM, Management, and Upper Management can unassign TSEs.' });
+    }
+
     const unassignPatch = {
       assigneeId: '',
       techPerson: 'Unassigned',

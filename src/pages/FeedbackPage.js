@@ -4,7 +4,7 @@ import {
   Star, Search, Calendar as CalIcon, Building2, UserRound, Briefcase,
   CheckCircle2, Clock, MessageSquare, Filter, ChevronRight, ChevronLeft, X,
   ShieldCheck, AlertCircle, Sparkles, Award, ArrowUpRight, Check,
-  Link2, Copy, ExternalLink, Share2, Send, Globe
+  Link2, Copy, ExternalLink, Share2, Send, Globe, Eye, FileText
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useApp } from '../context/AppContext';
@@ -94,6 +94,7 @@ const InteractiveStarPicker = ({ value, onChange, label }) => {
 export default function FeedbackPage() {
   const { feedbacks, addMarketingReview, submitCandidateFeedback, currentRole, currentUser, createPendingFeedbackLink, slaTickets, updateSlaTicket, tasks, users } = useApp();
   const canViewRealName = ['upper_management', 'management', 'tsm'].includes(currentRole);
+  const canViewTseReviewCol = ['upper_management', 'tsm', 'management', 'marketing_tl', 'marketing_sr'].includes(currentRole);
   const canSubmitReview = currentRole !== 'marketing_tl' && ['marketing_sr', 'recruiter', 'management', 'upper_management'].includes(currentRole);
 
   // Filters state
@@ -108,6 +109,7 @@ export default function FeedbackPage() {
   const [selectedTechSupport, setSelectedTechSupport] = useState(null); // { name, date }
   const [activeCandidateFeedback, setActiveCandidateFeedback] = useState(null); // record
   const [activeMarketingReviewModal, setActiveMarketingReviewModal] = useState(null); // record
+  const [activeTseReviewModal, setActiveTseReviewModal] = useState(null); // TSE Review for candidate record
 
   // Row-level Generated Link Modal State
   const [activeLinkModal, setActiveLinkModal] = useState(null); // { record, link }
@@ -278,6 +280,8 @@ export default function FeedbackPage() {
         round: t.taskType || fb?.round || 'Interview',
         techSupportType: t.taskType || fb?.techSupportType || 'Interview',
         taskStatus: t.status,
+        completionRemark: t.completionRemark || fb?.completionRemark || fb?.tseReview || t.remark || '',
+        tseReview: t.completionRemark || fb?.completionRemark || fb?.tseReview || t.remark || '',
         isExternal: Boolean(t.isExternal || t.taskSource === 'external' || fb?.isExternal),
         taskSource: t.taskSource || fb?.taskSource || (t.isExternal ? 'external' : 'internal'),
         taskClassification: t.taskClassification || fb?.taskClassification || (t.isExternal ? 'External' : 'Internal'),
@@ -298,6 +302,13 @@ export default function FeedbackPage() {
     const standaloneFeedbacks = (feedbacks || []).filter(f => {
       const rawTaskId = f.taskId || (f.id && String(f.id).startsWith('fb-task-') ? String(f.id).replace('fb-task-', '') : null);
       return !rawTaskId || !taskIdsSeen.has(String(rawTaskId));
+    }).map(f => {
+      const matchedTask = (tasks || []).find(t => t.id === f.taskId || (t.candidateName && f.candidateName && t.candidateName.toLowerCase().trim() === f.candidateName.toLowerCase().trim()));
+      return {
+        ...f,
+        completionRemark: f.completionRemark || f.tseReview || matchedTask?.completionRemark || matchedTask?.remark || '',
+        tseReview: f.completionRemark || f.tseReview || matchedTask?.completionRemark || matchedTask?.remark || '',
+      };
     });
 
     return [...taskRows, ...standaloneFeedbacks];
@@ -325,9 +336,12 @@ export default function FeedbackPage() {
         if (!matchTech && !matchCand && !matchComp) return false;
       }
 
-      // Type filter
-      if (typeFilter !== 'all' && item.techSupportType !== typeFilter) {
-        return false;
+      // Type filter (Supports Interview, TQC, RUC, JDC, TAC, Demo)
+      if (typeFilter !== 'all') {
+        const itemType = (item.techSupportType || item.round || item.taskType || item.type || '').toLowerCase();
+        if (itemType !== typeFilter.toLowerCase()) {
+          return false;
+        }
       }
 
       // Status filter
@@ -610,9 +624,10 @@ export default function FeedbackPage() {
           <select
             value={typeFilter}
             onChange={(e) => setTypeFilter(e.target.value)}
-            className="bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-[#1416c1] shadow-xs"
+            className="bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-[#1416c1] shadow-xs cursor-pointer"
           >
             <option value="all">All Types</option>
+            <option value="Interview">Interview</option>
             <option value="TQC">TQC</option>
             <option value="RUC">RUC</option>
             <option value="JDC">JDC</option>
@@ -666,13 +681,16 @@ export default function FeedbackPage() {
                 <th className="py-3 px-4">{roleIsMarketing(currentRole) ? 'Tech ID' : 'Tech Support'}</th>
                 <th className="py-3 px-4">Candidate & Recruiter</th>
                 <th className="py-3 px-4">Status & Overall Stars</th>
+                {canViewTseReviewCol && (
+                  <th className="py-3 px-4">TSE Review for Candidate</th>
+                )}
                 <th className="py-3 px-4 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredFeedbacks.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="py-12 text-center text-slate-500">
+                  <td colSpan={canViewTseReviewCol ? 6 : 5} className="py-12 text-center text-slate-500">
                     No feedback records match the selected criteria.
                   </td>
                 </tr>
@@ -824,6 +842,36 @@ export default function FeedbackPage() {
                           </div>
                         )}
                       </td>
+
+                      {/* Column: TSE Review for Candidate (upper_management, tsm, management, marketing_tl, marketing_sr) */}
+                      {canViewTseReviewCol && (
+                        <td className="py-3.5 px-4">
+                          {row.completionRemark ? (
+                            <button
+                              type="button"
+                              onClick={() => setActiveTseReviewModal(row)}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-xs transition-colors cursor-pointer group shadow-2xs text-left"
+                              title="Click to view TSE completion remarks"
+                            >
+                              <CheckCircle2 size={13} className="text-emerald-600 shrink-0" />
+                              <span className="truncate max-w-[140px] block">
+                                {row.completionRemark}
+                              </span>
+                              <Eye size={12} className="text-emerald-700 opacity-60 group-hover:opacity-100 shrink-0 ml-1" />
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setActiveTseReviewModal(row)}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-500 text-[11px] font-medium transition-colors cursor-pointer"
+                              title="Click to check TSE review status"
+                            >
+                              <span className="italic">No Review Yet</span>
+                              <Eye size={11} className="text-slate-400" />
+                            </button>
+                          )}
+                        </td>
+                      )}
 
                       {/* Column 5: Actions (Generate Link + Log TSE Review) */}
                       <td className="py-3.5 px-4 text-right whitespace-nowrap">
@@ -1533,6 +1581,98 @@ export default function FeedbackPage() {
               type="button"
               onClick={() => setActiveLinkModal(null)}
               className="h-9 px-5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-semibold transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* TSE Review for Candidate Modal */}
+      <Dialog open={!!activeTseReviewModal} onOpenChange={(open) => !open && setActiveTseReviewModal(null)}>
+        <DialogContent className="sm:max-w-md bg-white text-slate-900 border border-slate-200 p-0 overflow-hidden shadow-2xl">
+          <DialogHeader className="p-5 border-b border-slate-100 bg-slate-50/80">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 rounded-xl bg-emerald-100 text-emerald-700">
+                <CheckCircle2 size={18} />
+              </div>
+              <div>
+                <DialogTitle className="text-base font-bold text-slate-900">
+                  TSE Review for {activeTseReviewModal?.candidateName}
+                </DialogTitle>
+                <DialogDescription className="text-xs text-slate-500 mt-0.5">
+                  {activeTseReviewModal?.company} • {activeTseReviewModal?.jobRole}
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="p-5 space-y-4">
+            {/* TSE & Session Info */}
+            <div className="grid grid-cols-2 gap-3 p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+              <div>
+                <span className="text-slate-500 block text-[10px] uppercase font-bold">Assigned TSE</span>
+                <span className="font-bold text-slate-900 text-xs">
+                  {activeTseReviewModal?.techSupport}
+                  {canViewRealName && activeTseReviewModal?.employeeName && activeTseReviewModal.employeeName !== activeTseReviewModal.techSupport && (
+                    <span className="text-slate-500 font-normal ml-1">({activeTseReviewModal.employeeName})</span>
+                  )}
+                </span>
+                <span className="text-[10px] text-blue-600 font-mono block">
+                  {activeTseReviewModal?.techSupportId || 'TSE-ID'}
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-500 block text-[10px] uppercase font-bold">Session Date</span>
+                <span className="font-bold text-slate-900 text-xs font-mono">
+                  {activeTseReviewModal?.date || '—'}
+                </span>
+                <span className="text-[10px] text-slate-500 block font-medium">
+                  Type: {activeTseReviewModal?.techSupportType || 'Interview'}
+                </span>
+              </div>
+            </div>
+
+            {/* TSE Completion Remarks Body */}
+            <div>
+              <div className="text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5 flex items-center gap-1.5">
+                <MessageSquare size={13} className="text-emerald-600" />
+                TSE Completion Remarks (Evaluation)
+              </div>
+              {activeTseReviewModal?.completionRemark ? (
+                <div className="p-4 rounded-xl bg-emerald-50/70 border border-emerald-200 text-emerald-950 text-xs leading-relaxed font-medium whitespace-pre-wrap">
+                  {activeTseReviewModal.completionRemark}
+                </div>
+              ) : (
+                <div className="p-4 rounded-xl bg-slate-50 border border-dashed border-slate-200 text-center text-xs text-slate-500 italic">
+                  No completion remarks submitted by TSE for this candidate yet.
+                </div>
+              )}
+            </div>
+
+            {/* Candidate Feedback snippet if available */}
+            {activeTseReviewModal?.candidateFeedback?.submitted && (
+              <div className="p-3 rounded-xl bg-blue-50/60 border border-blue-200 text-xs space-y-1">
+                <div className="font-bold text-blue-900 text-[11px] flex items-center justify-between">
+                  <span>Candidate Rating:</span>
+                  <span className="text-amber-600 font-extrabold">
+                    ⭐ {activeTseReviewModal.candidateFeedback.experienceRating || activeTseReviewModal.candidateFeedback.performanceRating || 5} / 5
+                  </span>
+                </div>
+                {activeTseReviewModal.candidateFeedback.comments && (
+                  <p className="text-slate-700 text-[11px] italic">
+                    "{activeTseReviewModal.candidateFeedback.comments}"
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-end">
+            <button
+              type="button"
+              onClick={() => setActiveTseReviewModal(null)}
+              className="px-4 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-bold rounded-lg transition-colors cursor-pointer"
             >
               Close
             </button>

@@ -2658,29 +2658,65 @@ const TaskDrawer = ({ task, onClose }) => {
                     </SelectContent>
                   </Select>
                 </div>
-                {canReassignTseInDrawer && (
-                  <div>
-                    <label className="text-xs text-slate-600 font-semibold">Reassign TSE</label>
-                    <Select value={task.assigneeId} onValueChange={v => reassignTask(task.id, v)}>
-                      <SelectTrigger data-testid="task-reassign" className="mt-1 bg-white border-slate-300 text-slate-900 h-9">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className="bg-white border-slate-200 text-slate-900">
-                        {tseUsers.map(u => {
-                          const codeName = u.codeName || u.name;
-                          const realName = getTseRealName(u.name) || getTseRealName(u.id);
-                          return (
-                            <SelectItem key={u.id} value={u.id}>
-                              {canViewRealName && realName && realName.toLowerCase() !== codeName.toLowerCase()
-                                ? `${codeName} (${realName})`
-                                : codeName}
-                            </SelectItem>
-                          );
-                        })}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
+                {canReassignTseInDrawer && (() => {
+                  const isIv = task.taskType === 'Interview' || task.category === 'Interview';
+                  const ivDateTime = task.interviewDateTime || (task.date && task.startTime ? `${task.date}T${to24HourTime(task.startTime, task.startPeriod || 'AM')}` : (task.date && task.timing ? `${task.date}T10:00` : null));
+
+                  return (
+                    <div>
+                      <label className="text-xs text-slate-600 font-semibold">Reassign TSE</label>
+                      <Select
+                        value={task.assigneeId}
+                        onValueChange={v => {
+                          if (isIv && ivDateTime) {
+                            const chk = checkTseAvailability(v, ivDateTime, task.duration, tasks, task.id);
+                            if (!chk.available) {
+                              toast.error(`Cannot assign: TSE is occupied in ${chk.conflicts[0]?.timeWindowFormatted || 'another interview'}`);
+                              return;
+                            }
+                          }
+                          reassignTask(task.id, v);
+                        }}
+                      >
+                        <SelectTrigger data-testid="task-reassign" className="mt-1 bg-white border-slate-300 text-slate-900 h-9">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="bg-white border-slate-200 text-slate-900 max-h-64 min-w-[280px] z-50">
+                          {tseUsers.map(u => {
+                            const codeName = u.codeName || u.name;
+                            const realName = getTseRealName(u.name) || getTseRealName(u.id);
+                            const avail = (isIv && ivDateTime)
+                              ? checkTseAvailability(u.id, ivDateTime, task.duration, tasks, task.id)
+                              : { available: true, conflicts: [] };
+                            const isOccupied = !avail.available;
+
+                            return (
+                              <SelectItem key={u.id} value={u.id} disabled={isOccupied} className="text-xs py-1.5">
+                                <div className="flex items-center justify-between w-full gap-2.5">
+                                  <div>
+                                    <span className="font-bold">{codeName}</span>
+                                    {canViewRealName && realName && realName.toLowerCase() !== codeName.toLowerCase() && (
+                                      <span className="text-[11px] text-slate-500 ml-1.5 font-normal">({realName})</span>
+                                    )}
+                                  </div>
+                                  {isOccupied ? (
+                                    <span className="text-[10px] font-bold text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200 shrink-0">
+                                      🔴 {avail.conflicts[0]?.timeWindowFormatted || 'Occupied'}
+                                    </span>
+                                  ) : (
+                                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 shrink-0">
+                                      🟢 Available
+                                    </span>
+                                  )}
+                                </div>
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Completion remarks input - ONLY appears when status is changed from Pending to any other status */}
@@ -3653,47 +3689,90 @@ export default function Tasks() {
                         );
                       })()}
 
-                      {/* Assign TSE Dropdown with Unassign Option (Feature 4) */}
+                      {/* Assign TSE Dropdown with Dynamic Availability & Occupancy Check */}
                       <td className="py-3 px-4 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end">
-                          {canAssignTse ? (
-                            <Select
-                              value={currentAssigneeId || undefined}
-                              onValueChange={(val) => {
-                                if (val === 'UNASSIGN_TASK') {
-                                  unassignTask(t.id);
-                                } else {
-                                  reassignTask(t.id, val);
-                                }
-                              }}
-                            >
-                              <SelectTrigger
-                                data-testid={`task-assign-select-${t.id}`}
-                                className="h-8 text-xs bg-white border border-slate-300 rounded-lg w-40 font-semibold text-slate-800 shadow-xs focus:ring-1 focus:ring-blue-500 hover:border-blue-400"
+                          {canAssignTse ? (() => {
+                            const isIv = t.taskType === 'Interview' || t.category === 'Interview';
+                            const ivDateTime = t.interviewDateTime || (t.date && t.startTime ? `${t.date}T${to24HourTime(t.startTime, t.startPeriod || 'AM')}` : (t.date && t.timing ? `${t.date}T10:00` : null));
+
+                            return (
+                              <Select
+                                value={currentAssigneeId || undefined}
+                                onValueChange={(val) => {
+                                  if (val === 'UNASSIGN_TASK') {
+                                    unassignTask(t.id);
+                                  } else {
+                                    if (isIv && ivDateTime) {
+                                      const chk = checkTseAvailability(val, ivDateTime, t.duration, tasks, t.id);
+                                      if (!chk.available) {
+                                        toast.error(`Cannot assign: TSE is occupied in ${chk.conflicts[0]?.timeWindowFormatted || 'another interview'}`);
+                                        return;
+                                      }
+                                    }
+                                    reassignTask(t.id, val);
+                                  }
+                                }}
                               >
-                                <SelectValue placeholder="Assign TSE" />
-                              </SelectTrigger>
-                              <SelectContent className="bg-white border-slate-200 text-slate-900 max-h-60 z-50">
-                                {canManageTasks && t.assigneeId && (
-                                  <SelectItem value="UNASSIGN_TASK" className="text-amber-700 font-bold text-xs bg-amber-50/70 mb-1 border-b border-amber-200">
-                                    ⚠️ Unassign TSE
-                                  </SelectItem>
-                                )}
-                                {tseUsers.map(u => {
-                                  const cName = u.codeName || u.name;
-                                  const rName = getTseRealName(u.name) || getTseRealName(u.id);
-                                  return (
-                                    <SelectItem key={u.id} value={u.id} className="text-xs">
-                                      <span className="font-bold">{cName}</span>
-                                      {canViewRealName && rName && rName.toLowerCase() !== cName.toLowerCase() && (
-                                        <span className="text-[11px] text-slate-500 ml-1.5 font-normal">({rName})</span>
-                                      )}
+                                <SelectTrigger
+                                  data-testid={`task-assign-select-${t.id}`}
+                                  className="h-8 text-xs bg-white border border-slate-300 rounded-lg w-44 font-semibold text-slate-800 shadow-xs focus:ring-1 focus:ring-blue-500 hover:border-blue-400"
+                                >
+                                  <SelectValue placeholder="Assign TSE" />
+                                </SelectTrigger>
+                                <SelectContent className="bg-white border-slate-200 text-slate-900 max-h-64 min-w-[280px] z-50 shadow-xl">
+                                  {canManageTasks && t.assigneeId && (
+                                    <SelectItem value="UNASSIGN_TASK" className="text-amber-700 font-bold text-xs bg-amber-50/70 mb-1 border-b border-amber-200">
+                                      ⚠️ Unassign TSE
                                     </SelectItem>
-                                  );
-                                })}
-                              </SelectContent>
-                            </Select>
-                          ) : (
+                                  )}
+                                  {tseUsers.map(u => {
+                                    const cName = u.codeName || u.name;
+                                    const rName = getTseRealName(u.name) || getTseRealName(u.id);
+
+                                    // Dynamic Availability Check:
+                                    // Rule 1: For Interview tasks, check overlap collision against existing active tasks
+                                    // Rule 2: For non-interview sessions (TAC, TQC, date-only), show as Available per Module 4
+                                    const avail = (isIv && ivDateTime)
+                                      ? checkTseAvailability(u.id, ivDateTime, t.duration, tasks, t.id)
+                                      : { available: true, conflicts: [] };
+
+                                    const isOccupied = !avail.available;
+
+                                    return (
+                                      <SelectItem
+                                        key={u.id}
+                                        value={u.id}
+                                        disabled={isOccupied}
+                                        className="text-xs py-1.5 cursor-pointer"
+                                      >
+                                        <div className="flex items-center justify-between w-full gap-2.5">
+                                          <div className="flex items-center gap-1.5 flex-wrap">
+                                            <span className="font-bold text-slate-900">{cName}</span>
+                                            {canViewRealName && rName && rName.toLowerCase() !== cName.toLowerCase() && (
+                                              <span className="text-[11px] text-slate-500 font-normal">({rName})</span>
+                                            )}
+                                          </div>
+                                          {isOccupied ? (
+                                            <span
+                                              className="text-[10px] font-bold text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200 shrink-0"
+                                              title={`Conflicting Candidate: ${avail.conflicts[0]?.candidateName || 'Another session'} (${avail.conflicts[0]?.timeWindowFormatted || 'Occupied'})`}
+                                            >
+                                              🔴 {avail.conflicts[0]?.timeWindowFormatted || 'Occupied'}
+                                            </span>
+                                          ) : (
+                                            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 shrink-0">
+                                              🟢 Available
+                                            </span>
+                                          )}
+                                        </div>
+                                      </SelectItem>
+                                    );
+                                  })}
+                                </SelectContent>
+                              </Select>
+                            );
+                          })() : (
                             <span className="text-xs text-slate-500 font-medium">{techName}</span>
                           )}
                         </div>
