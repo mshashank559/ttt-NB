@@ -319,7 +319,7 @@ const TimeWithAmPmInput = ({
 
 const CreateTaskModal = ({ open, onOpenChange }) => {
   const { users, addTask, tasks, feedbacks, currentRole, currentUser } = useApp();
-  const tseUsers = users.filter(u => u.role === 'tse');
+  const tseUsers = users.filter(u => u.role === 'tse' || u.role === 'tsm');
   const canViewRealName = ['tsm', 'management', 'upper_management'].includes(currentRole);
   const todayStr = new Date().toISOString().slice(0, 10);
 
@@ -998,8 +998,8 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
                     const avail = tseAvailabilityMap[u.id];
                     const isOccupied = avail && !avail.available;
                     const displayName = canViewRealName && realName && realName.toLowerCase() !== codeName.toLowerCase()
-                      ? `${codeName} (${realName})`
-                      : codeName;
+                      ? `${codeName} (${realName})${u.role === 'tsm' ? ' [TSM]' : ''}`
+                      : (u.role === 'tsm' ? `${codeName} [TSM]` : codeName);
 
                     return (
                       <SelectItem key={u.id} value={u.id} disabled={isOccupied && !allowTseOverride}>
@@ -1348,7 +1348,7 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
 
 const EditTaskModal = ({ task, open, onOpenChange }) => {
   const { users, updateTask, currentRole, currentUser } = useApp();
-  const tseUsers = users.filter(u => u.role === 'tse');
+  const tseUsers = users.filter(u => u.role === 'tse' || u.role === 'tsm');
   const canViewRealName = ['tsm', 'management', 'upper_management'].includes(currentRole);
   const canAssignTse = ['tsm', 'management', 'upper_management'].includes(currentRole);
   const isMarketingUser = roleIsMarketing(currentRole) || currentRole === 'marketing_tl' || currentRole === 'marketing_sr';
@@ -1959,8 +1959,8 @@ const EditTaskModal = ({ task, open, onOpenChange }) => {
                     const codeName = u.codeName || u.name;
                     const realName = getTseRealName(u.name) || getTseRealName(u.id);
                     const displayName = canViewRealName && realName && realName.toLowerCase() !== codeName.toLowerCase()
-                      ? `${codeName} (${realName})`
-                      : codeName;
+                      ? `${codeName} (${realName})${u.role === 'tsm' ? ' [TSM]' : ''}`
+                      : (u.role === 'tsm' ? `${codeName} [TSM]` : codeName);
 
                     return (
                       <SelectItem key={u.id} value={u.id}>
@@ -2075,7 +2075,7 @@ const TaskDrawer = ({ task, onClose }) => {
   const canViewRealName = ['tsm', 'management', 'upper_management'].includes(currentRole);
   const assignee = users.find(u => u.id === task?.assigneeId);
   const creator = users.find(u => u.id === task?.createdById);
-  const tseUsers = (users || []).filter(u => u.role === 'tse');
+  const tseUsers = (users || []).filter(u => u.role === 'tse' || u.role === 'tsm');
   const canUpdateStatus = ['management', 'upper_management', 'marketing_tl', 'marketing_sr', 'tsm', 'tse', 'admin'].includes(currentRole) || roleCanEditAny(currentRole) || task?.assigneeId === currentUser?.id;
   const canReassignTseInDrawer = ['management', 'upper_management', 'tsm'].includes(currentRole);
   const [completionRemark, setCompletionRemark] = useState(task?.completionRemark || task?.remark || '');
@@ -3091,7 +3091,7 @@ export default function Tasks() {
     );
   };
 
-  const tseUsers = useMemo(() => (users || []).filter(u => u.role === 'tse'), [users]);
+  const tseUsers = useMemo(() => (users || []).filter(u => u.role === 'tse' || u.role === 'tsm'), [users]);
   const canAssignTse = ['tsm', 'management', 'upper_management'].includes(currentRole);
   const canViewRealName = ['tsm', 'management', 'upper_management'].includes(currentRole);
 
@@ -3716,13 +3716,13 @@ export default function Tasks() {
                               >
                                 <SelectTrigger
                                   data-testid={`task-assign-select-${t.id}`}
-                                  className="h-8 text-xs bg-white border border-slate-300 rounded-lg w-44 font-semibold text-slate-800 shadow-xs focus:ring-1 focus:ring-blue-500 hover:border-blue-400"
+                                  className="h-9 text-xs bg-white border border-slate-300 rounded-full min-w-[250px] max-w-[340px] px-3.5 font-semibold text-slate-800 shadow-2xs focus:ring-2 focus:ring-blue-100 hover:border-blue-400 transition-all flex items-center justify-between cursor-pointer"
                                 >
-                                  <SelectValue placeholder="Assign TSE" />
+                                  <SelectValue placeholder="Assign Tech Person" />
                                 </SelectTrigger>
-                                <SelectContent className="bg-white border-slate-200 text-slate-900 max-h-64 min-w-[280px] z-50 shadow-xl">
+                                <SelectContent className="bg-white border-slate-200 text-slate-900 max-h-64 min-w-[300px] z-50 shadow-xl rounded-xl">
                                   {canManageTasks && t.assigneeId && (
-                                    <SelectItem value="UNASSIGN_TASK" className="text-amber-700 font-bold text-xs bg-amber-50/70 mb-1 border-b border-amber-200">
+                                    <SelectItem value="UNASSIGN_TASK" className="text-amber-700 font-bold text-xs bg-amber-50/70 mb-1 border-b border-amber-200 rounded-lg">
                                       ⚠️ Unassign TSE
                                     </SelectItem>
                                   )}
@@ -3744,7 +3744,7 @@ export default function Tasks() {
                                         key={u.id}
                                         value={u.id}
                                         disabled={isOccupied}
-                                        className="text-xs py-1.5 cursor-pointer"
+                                        className="text-xs py-1.5 cursor-pointer rounded-lg"
                                       >
                                         <div className="flex items-center justify-between w-full gap-2.5">
                                           <div className="flex items-center gap-1.5 flex-wrap">
@@ -3752,16 +3752,21 @@ export default function Tasks() {
                                             {canViewRealName && rName && rName.toLowerCase() !== cName.toLowerCase() && (
                                               <span className="text-[11px] text-slate-500 font-normal">({rName})</span>
                                             )}
+                                            {u.role === 'tsm' && (
+                                              <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                                TSM
+                                              </span>
+                                            )}
                                           </div>
                                           {isOccupied ? (
                                             <span
-                                              className="text-[10px] font-bold text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200 shrink-0"
+                                              className="text-[10px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200 shrink-0"
                                               title={`Conflicting Candidate: ${avail.conflicts[0]?.candidateName || 'Another session'} (${avail.conflicts[0]?.timeWindowFormatted || 'Occupied'})`}
                                             >
                                               🔴 {avail.conflicts[0]?.timeWindowFormatted || 'Occupied'}
                                             </span>
                                           ) : (
-                                            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 shrink-0">
+                                            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 shrink-0">
                                               🟢 Available
                                             </span>
                                           )}

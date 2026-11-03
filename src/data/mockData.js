@@ -67,6 +67,7 @@ export const TSE_CODE_NAMES = {
 export const TSM_CODE_NAMES = {
   'Aditya Mishra': 'TSM Titan',
   'Aditya': 'TSM Titan',
+  'Sachin': 'Sachin',
   'Rohan Kapoor': 'TSM Titan',
   'Rohan': 'TSM Titan',
   'Neha Iyer': 'TSM Nova',
@@ -404,6 +405,19 @@ export const USERS = [
     tttNbId: 'TTT-NB-006',
     status: 'Active',
     avatar: 'https://api.dicebear.com/7.x/notionists/svg?seed=tech_Alex_1',
+  },
+  {
+    id: 'u-tsm-sachin',
+    name: 'Sachin',
+    email: 'sachin@netbounceplacement.com',
+    password: 'TSM@123',
+    role: 'tsm',
+    dept: 'Tech Support',
+    empId: 'TTT-NB-022',
+    tttNbId: 'TTT-NB-022',
+    codeName: 'Sachin',
+    status: 'Active',
+    avatar: 'https://api.dicebear.com/7.x/lorelei/svg?seed=port_sachin_22',
   },
   {
     id: 'u-1791926042864',
@@ -810,6 +824,9 @@ export const getTseRealName = (nameOrId) => {
 export const TSM_IDS = {
   'Abhishek': 'TTT-NB-008',
   'Rohan Kapoor': 'TTT-NB-008',
+  'Sachin': 'TTT-NB-022',
+  'Aditya Mishra': 'TTT-NB-020',
+  'Aditya': 'TTT-NB-020',
   'TSM Titan': 'TTT-NB-008',
   'TSM Nova': 'TTT-NB-008',
 };
