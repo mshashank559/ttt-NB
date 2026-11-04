@@ -5,7 +5,7 @@ import { Plus, Search, UserRound, Calendar as CalIcon, Clock, Building2, Briefca
 import { toast } from 'sonner';
 import { useApp } from '../context/AppContext';
 import { PageHeader, StatusBadge, TaskTypeBadge, SectionCard, EmptyState, Pagination } from '../components/common';
-import { TASK_TYPES, TASK_STATUSES, MARKETING_TEAMS, getTseCodeName, getTsmCodeName, roleIsMarketing, getInterviewTimingMeta, sortTasksByInterviewPriority, getTaskScheduleMeta, getSmartTseRecommendations, INTERVIEW_OUTCOMES, TSE_IDS, getTseId, getTseRealName, checkTseAvailability, parseDurationMinutes, isExternalRecord } from '../data/mockData';
+import { TASK_TYPES, TASK_STATUSES, MARKETING_TEAMS, getTseCodeName, getTsmCodeName, roleIsMarketing, getInterviewTimingMeta, sortTasksByInterviewPriority, getTaskScheduleMeta, getSmartTseRecommendations, INTERVIEW_OUTCOMES, TSE_IDS, getTseId, getTseRealName, checkTseAvailability, parseDurationMinutes, isExternalRecord, isExcludedFromTseAssign } from '../data/mockData';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
@@ -319,7 +319,7 @@ const TimeWithAmPmInput = ({
 
 const CreateTaskModal = ({ open, onOpenChange }) => {
   const { users, addTask, tasks, feedbacks, currentRole, currentUser } = useApp();
-  const tseUsers = users.filter(u => u.role === 'tse' || u.role === 'tsm');
+  const tseUsers = users.filter(u => (u.role === 'tse' || u.role === 'tsm') && !isExcludedFromTseAssign(u));
   const canViewRealName = ['tsm', 'management', 'upper_management'].includes(currentRole);
   const todayStr = new Date().toISOString().slice(0, 10);
 
@@ -1378,7 +1378,7 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
 
 const EditTaskModal = ({ task, open, onOpenChange }) => {
   const { users, updateTask, currentRole, currentUser } = useApp();
-  const tseUsers = users.filter(u => u.role === 'tse' || u.role === 'tsm');
+  const tseUsers = users.filter(u => (u.role === 'tse' || u.role === 'tsm') && !isExcludedFromTseAssign(u));
   const canViewRealName = ['tsm', 'management', 'upper_management'].includes(currentRole);
   const canAssignTse = ['tsm', 'management', 'upper_management'].includes(currentRole);
   const isMarketingUser = roleIsMarketing(currentRole) || currentRole === 'marketing_tl' || currentRole === 'marketing_sr';
@@ -2136,7 +2136,7 @@ const TaskDrawer = ({ task, onClose }) => {
   const canViewRealName = ['tsm', 'management', 'upper_management'].includes(currentRole);
   const assignee = users.find(u => u.id === task?.assigneeId);
   const creator = users.find(u => u.id === task?.createdById);
-  const tseUsers = (users || []).filter(u => u.role === 'tse' || u.role === 'tsm');
+  const tseUsers = (users || []).filter(u => (u.role === 'tse' || u.role === 'tsm') && !isExcludedFromTseAssign(u));
   const canUpdateStatus = ['management', 'upper_management', 'marketing_tl', 'marketing_sr', 'tsm', 'tse', 'admin'].includes(currentRole) || roleCanEditAny(currentRole) || task?.assigneeId === currentUser?.id;
   const canReassignTseInDrawer = ['management', 'upper_management', 'tsm'].includes(currentRole);
   const [completionRemark, setCompletionRemark] = useState(task?.completionRemark || task?.remark || '');
@@ -3152,7 +3152,7 @@ export default function Tasks() {
     );
   };
 
-  const tseUsers = useMemo(() => (users || []).filter(u => u.role === 'tse' || u.role === 'tsm'), [users]);
+  const tseUsers = useMemo(() => (users || []).filter(u => (u.role === 'tse' || u.role === 'tsm') && !isExcludedFromTseAssign(u)), [users]);
   const canAssignTse = ['tsm', 'management', 'upper_management'].includes(currentRole);
   const canViewRealName = ['tsm', 'management', 'upper_management'].includes(currentRole);
 

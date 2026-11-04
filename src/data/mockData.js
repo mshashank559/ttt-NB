@@ -65,15 +65,29 @@ export const TSE_CODE_NAMES = {
 };
 
 export const TSM_CODE_NAMES = {
-  'Aditya Mishra': 'TSM Titan',
-  'Aditya': 'TSM Titan',
-  'Sachin': 'Sachin',
+  'Aditya Mishra': 'Aditya Mishra',
+  'Aditya': 'Aditya Mishra',
   'Rohan Kapoor': 'TSM Titan',
   'Rohan': 'TSM Titan',
   'Neha Iyer': 'TSM Nova',
   'Neha': 'TSM Nova',
   'TSM Titan': 'TSM Titan',
   'TSM Nova': 'TSM Nova',
+};
+
+export const isExcludedFromTseAssign = (u) => {
+  if (!u) return false;
+  const name = (u.name || '').trim().toLowerCase();
+  const codeName = (u.codeName || '').trim().toLowerCase();
+  const id = (u.id || '').trim();
+
+  // Exclude Sachin, Sachin Patel, and TSM Titan (Rohan Kapoor)
+  if (name === 'sachin' || name === 'sachin patel' || name === 'tsm titan') return true;
+  if (codeName === 'sachin' || codeName === 'sachin patel') return true;
+  if (codeName === 'tsm titan' && id !== 'u-1791926042864' && name !== 'aditya mishra') return true;
+  if (name.startsWith('sachin')) return true;
+  if (id === 'u-tsm-sachin' || id === 'u-1793044171859' || id === 'u-tsm-rohan') return true;
+  return false;
 };
 
 export const getTseCodeName = (name) => {
@@ -428,7 +442,7 @@ export const USERS = [
     dept: 'Tech Support',
     empId: 'TTT-NB-020',
     tttNbId: 'TTT-NB-020',
-    codeName: 'TSM Titan',
+    codeName: 'Aditya Mishra',
     status: 'Active',
     avatar: 'https://api.dicebear.com/7.x/lorelei/svg?seed=port_Kendall_17',
   },
