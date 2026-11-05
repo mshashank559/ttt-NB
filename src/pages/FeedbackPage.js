@@ -91,6 +91,22 @@ const InteractiveStarPicker = ({ value, onChange, label }) => {
   );
 };
 
+export const isCancelledOrRescheduled = (statusRaw, ivStatusRaw, outcomeRaw) => {
+  const s = String(statusRaw || '').toLowerCase().trim();
+  const ivS = String(ivStatusRaw || '').toLowerCase().trim();
+  const o = String(outcomeRaw || '').toLowerCase().trim();
+
+  const isCancelled = ['cancel', 'cancelled', 'not possible', 'not_possible'].includes(s) ||
+    ['cancel', 'cancelled', 'not possible', 'not_possible'].includes(ivS) ||
+    ['cancel', 'cancelled', 'not possible', 'not_possible'].includes(o);
+
+  const isRescheduled = ['reschedule', 'rescheduled', 'interview rescheduled'].includes(s) ||
+    ['reschedule', 'rescheduled', 'interview rescheduled'].includes(ivS) ||
+    ['reschedule', 'rescheduled', 'interview rescheduled'].includes(o);
+
+  return isCancelled || isRescheduled;
+};
+
 export default function FeedbackPage() {
   const { feedbacks, addMarketingReview, submitCandidateFeedback, currentRole, currentUser, createPendingFeedbackLink, slaTickets, updateSlaTicket, tasks, users } = useApp();
   const canViewRealName = ['upper_management', 'management', 'tsm'].includes(currentRole);
@@ -220,7 +236,18 @@ export default function FeedbackPage() {
 
     const taskIdsSeen = new Set();
 
-    const taskRows = (tasks || []).map(t => {
+    // Filter out cancelled and rescheduled interviews from feedback panel (unless candidate feedback was already submitted)
+    const activeTasks = (tasks || []).filter(t => {
+      if (isCancelledOrRescheduled(t.status, t.interviewStatus, t.interviewOutcome)) {
+        const fb = feedbackByTaskId.get(String(t.id));
+        if (!fb?.candidateFeedback?.submitted) {
+          return false;
+        }
+      }
+      return true;
+    });
+
+    const taskRows = activeTasks.map(t => {
       taskIdsSeen.add(String(t.id));
       const fb = feedbackByTaskId.get(String(t.id));
 
@@ -301,7 +328,11 @@ export default function FeedbackPage() {
     // Standalone historical feedbacks that don't match any task
     const standaloneFeedbacks = (feedbacks || []).filter(f => {
       const rawTaskId = f.taskId || (f.id && String(f.id).startsWith('fb-task-') ? String(f.id).replace('fb-task-', '') : null);
-      return !rawTaskId || !taskIdsSeen.has(String(rawTaskId));
+      if (rawTaskId && taskIdsSeen.has(String(rawTaskId))) return false;
+      if (isCancelledOrRescheduled(f.taskStatus || f.status, f.interviewStatus, f.interviewOutcome)) {
+        if (!f.candidateFeedback?.submitted) return false;
+      }
+      return true;
     }).map(f => {
       const matchedTask = (tasks || []).find(t => t.id === f.taskId || (t.candidateName && f.candidateName && t.candidateName.toLowerCase().trim() === f.candidateName.toLowerCase().trim()));
       return {
@@ -325,6 +356,11 @@ export default function FeedbackPage() {
       if (workflowFilter !== 'all') {
         if (workflowFilter === 'external' && !isExt) return false;
         if (workflowFilter === 'internal' && isExt) return false;
+      }
+
+      // Exclude cancelled and rescheduled interviews unless candidate feedback was submitted
+      if (isCancelledOrRescheduled(item.taskStatus || item.status, item.interviewStatus, item.interviewOutcome)) {
+        if (!item.candidateFeedback?.submitted) return false;
       }
 
       // Search filter
