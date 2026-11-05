@@ -92,19 +92,18 @@ const InteractiveStarPicker = ({ value, onChange, label }) => {
 };
 
 export const isCancelledOrRescheduled = (statusRaw, ivStatusRaw, outcomeRaw) => {
-  const s = String(statusRaw || '').toLowerCase().trim();
-  const ivS = String(ivStatusRaw || '').toLowerCase().trim();
-  const o = String(outcomeRaw || '').toLowerCase().trim();
+  const check = (val) => {
+    const str = String(val || '').toLowerCase().trim();
+    if (!str) return false;
+    return (
+      str.includes('cancel') ||
+      str.includes('resched') ||
+      str.includes('not possible') ||
+      str.includes('not_possible')
+    );
+  };
 
-  const isCancelled = ['cancel', 'cancelled', 'not possible', 'not_possible'].includes(s) ||
-    ['cancel', 'cancelled', 'not possible', 'not_possible'].includes(ivS) ||
-    ['cancel', 'cancelled', 'not possible', 'not_possible'].includes(o);
-
-  const isRescheduled = ['reschedule', 'rescheduled', 'interview rescheduled'].includes(s) ||
-    ['reschedule', 'rescheduled', 'interview rescheduled'].includes(ivS) ||
-    ['reschedule', 'rescheduled', 'interview rescheduled'].includes(o);
-
-  return isCancelled || isRescheduled;
+  return check(statusRaw) || check(ivStatusRaw) || check(outcomeRaw);
 };
 
 export default function FeedbackPage() {
@@ -234,7 +233,11 @@ export default function FeedbackPage() {
       }
     });
 
-    const taskIdsSeen = new Set();
+    // Track all task IDs in tasks so standaloneFeedbacks never duplicates or resurrects ANY task
+    const allKnownTaskIds = new Set();
+    (tasks || []).forEach(t => {
+      if (t.id) allKnownTaskIds.add(String(t.id));
+    });
 
     // Filter out cancelled and rescheduled interviews from feedback panel (unless candidate feedback was already submitted)
     const activeTasks = (tasks || []).filter(t => {
@@ -248,7 +251,6 @@ export default function FeedbackPage() {
     });
 
     const taskRows = activeTasks.map(t => {
-      taskIdsSeen.add(String(t.id));
       const fb = feedbackByTaskId.get(String(t.id));
 
       // Resolve assigned TSE accurately from task & users without falling back to Abhishek
@@ -325,18 +327,38 @@ export default function FeedbackPage() {
       };
     });
 
-    // Standalone historical feedbacks that don't match any task
+    // Standalone historical feedbacks that don't match any task in tasks
     const standaloneFeedbacks = (feedbacks || []).filter(f => {
       const rawTaskId = f.taskId || (f.id && String(f.id).startsWith('fb-task-') ? String(f.id).replace('fb-task-', '') : null);
-      if (rawTaskId && taskIdsSeen.has(String(rawTaskId))) return false;
+      
+      // If linked to a task in tasks, activeTasks already included it or intentionally excluded it if cancelled/rescheduled!
+      if (rawTaskId && allKnownTaskIds.has(String(rawTaskId))) return false;
+
+      // Check if it matches a task by candidate name
+      const matchedTask = (tasks || []).find(t =>
+        (rawTaskId && String(t.id) === String(rawTaskId)) ||
+        (t.candidateName && f.candidateName && t.candidateName.toLowerCase().trim() === f.candidateName.toLowerCase().trim())
+      );
+
+      if (matchedTask) {
+        if (isCancelledOrRescheduled(matchedTask.status, matchedTask.interviewStatus, matchedTask.interviewOutcome)) {
+          if (!f.candidateFeedback?.submitted) return false;
+        }
+        return false;
+      }
+
       if (isCancelledOrRescheduled(f.taskStatus || f.status, f.interviewStatus, f.interviewOutcome)) {
         if (!f.candidateFeedback?.submitted) return false;
       }
       return true;
     }).map(f => {
-      const matchedTask = (tasks || []).find(t => t.id === f.taskId || (t.candidateName && f.candidateName && t.candidateName.toLowerCase().trim() === f.candidateName.toLowerCase().trim()));
+      const matchedTask = (tasks || []).find(t =>
+        (f.taskId && String(t.id) === String(f.taskId)) ||
+        (t.candidateName && f.candidateName && t.candidateName.toLowerCase().trim() === f.candidateName.toLowerCase().trim())
+      );
       return {
         ...f,
+        taskStatus: matchedTask?.status || f.taskStatus || f.status,
         completionRemark: f.completionRemark || f.tseReview || matchedTask?.completionRemark || matchedTask?.remark || '',
         tseReview: f.completionRemark || f.tseReview || matchedTask?.completionRemark || matchedTask?.remark || '',
       };
