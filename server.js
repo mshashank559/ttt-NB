@@ -705,13 +705,15 @@ app.put('/api/tasks/:id', async (req, res) => {
     const updated = await Task.findOneAndUpdate({ id: req.params.id }, req.body, { new: true });
     if (!updated) return res.status(404).json({ error: 'Task not found' });
 
-    // Sync to linked feedback record when assignedSr, TSE assignment, or position changed
+    // Sync to linked feedback record when assignedSr, TSE assignment, position, or date changed
     const feedbackPatch = {};
     if (req.body.assignedSrName) feedbackPatch.recruiterName = req.body.assignedSrName;
     if (req.body.assignedSrId) feedbackPatch.pocId = req.body.assignedSrId;
     if (req.body.position) feedbackPatch.jobRole = req.body.position;
     if (req.body.companyName) feedbackPatch.company = req.body.companyName;
     if (req.body.candidateName) feedbackPatch.candidateName = req.body.candidateName;
+    if (req.body.date) feedbackPatch.date = req.body.date;
+    if (req.body.interviewDateTime) feedbackPatch.date = req.body.interviewDateTime.slice(0, 10);
 
     if (req.body.assigneeId || req.body.techPerson) {
       const { tseRealName, tseCodeName, tseOfficialId } = await resolveTseAndTsm(

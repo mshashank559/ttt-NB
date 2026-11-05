@@ -257,12 +257,12 @@ export default function FeedbackPage() {
       const resolvedOfficialId = matchingTse?.id || TSE_IDS[resolvedCodeName] || (assignedUser?.empId?.startsWith('TSE-NB') ? assignedUser.empId : '') || (t.techPersonId?.startsWith('TSE-NB') ? t.techPersonId : '') || (resolvedCodeName !== 'Unassigned' ? (TSE_IDS[resolvedCodeName] || '') : '');
       const resolvedEmail = matchingTse?.email || assignedUser?.email || (matchingTse ? fb?.techSupportEmail : '') || '';
 
-      const taskDate = t.date || (t.interviewDateTime ? t.interviewDateTime.slice(0, 10) : new Date().toISOString().slice(0, 10));
+      const taskDate = t.date || (t.interviewDateTime ? t.interviewDateTime.slice(0, 10) : (fb?.date || new Date().toISOString().slice(0, 10)));
 
       return {
         id: fb?.id || `fb-task-${t.id}`,
         taskId: t.id,
-        date: fb?.date || taskDate,
+        date: taskDate,
         techSupport: resolvedCodeName,
         techSupportId: resolvedOfficialId,
         techSupportEmail: resolvedEmail,

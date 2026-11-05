@@ -751,8 +751,25 @@ export const AppProvider = ({ children }) => {
       body: JSON.stringify(patch),
     }).catch(() => {});
 
+    // Sync date and key attributes to linked feedback in state
+    if (patch.date || patch.interviewDateTime || patch.candidateName || patch.companyName || patch.position) {
+      updateFeedbacksWithStorage(prev => prev.map(f => {
+        if (f.taskId === id || f.id === `fb-task-${id}`) {
+          const newDate = patch.date || (patch.interviewDateTime ? patch.interviewDateTime.slice(0, 10) : f.date);
+          return {
+            ...f,
+            date: newDate,
+            candidateName: patch.candidateName || f.candidateName,
+            company: patch.companyName || f.company,
+            jobRole: patch.position || f.jobRole,
+          };
+        }
+        return f;
+      }));
+    }
+
     toast.success(note || 'Task updated.');
-  }, [currentUser]);
+  }, [currentUser, updateFeedbacksWithStorage]);
 
   const assignMarketingSr = useCallback((taskId, srUser) => {
     if (!srUser) return;
