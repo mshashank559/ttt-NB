@@ -911,7 +911,7 @@ export const filterAuthorizedData = (items, currentUser, currentRole) => {
     return items;
   }
 
-  // 2. TSE: Can ONLY see internal candidate tasks/interviews specifically assigned to them!
+  // 2. TSE: Can ONLY see candidate tasks/interviews specifically assigned to them (both internal & assigned external tasks)!
   if (currentRole === 'tse') {
     const currentName = (currentUser.name || '').toLowerCase();
     const currentCode = (currentUser.codeName || '').toLowerCase();
@@ -919,21 +919,40 @@ export const filterAuthorizedData = (items, currentUser, currentRole) => {
     const currentEmpId = currentUser.empId || '';
 
     return items.filter(item => {
-      if (isExternalRecord(item)) return false;
       const isAssigneeId = item.assigneeId === currentId ||
         item.interviewerId === currentId ||
         item.techSupportId === currentId ||
-        item.techSupportId === currentEmpId;
+        item.techSupportId === currentEmpId ||
+        item.techPersonId === currentId ||
+        item.techPersonId === currentEmpId ||
+        (currentCode && (
+          item.assigneeId === currentCode ||
+          item.interviewerId === currentCode ||
+          item.techSupportId === currentCode ||
+          item.techPersonId === currentCode
+        ));
+
       const isTechPersonName = item.techPerson && (
         item.techPerson.toLowerCase() === currentName ||
         (currentCode && item.techPerson.toLowerCase() === currentCode)
       );
+
+      const isCodeName = item.codeName && (
+        (currentCode && item.codeName.toLowerCase() === currentCode) ||
+        item.codeName.toLowerCase() === currentName
+      );
+
       const isSupportName = item.techSupport && (
         item.techSupport.toLowerCase() === currentName ||
         (currentCode && item.techSupport.toLowerCase() === currentCode)
       );
-      const isEmployeeName = item.employeeName && item.employeeName.toLowerCase().includes(currentName);
-      return isAssigneeId || isTechPersonName || isSupportName || isEmployeeName;
+
+      const isEmployeeName = item.employeeName && currentName && (
+        item.employeeName.toLowerCase().includes(currentName) ||
+        currentName.includes(item.employeeName.toLowerCase())
+      );
+
+      return isAssigneeId || isTechPersonName || isCodeName || isSupportName || isEmployeeName;
     });
   }
 

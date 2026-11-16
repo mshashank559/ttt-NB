@@ -3295,7 +3295,32 @@ export default function Tasks() {
   const filtered = useMemo(() => {
     let base = tasks;
     if (currentRole === 'tse') {
-      base = base.filter(t => t.assigneeId === currentUser?.id || (currentUser?.name && t.techPerson?.toLowerCase() === currentUser?.name?.toLowerCase()));
+      base = base.filter(t => {
+        const isId = t.assigneeId === currentUser?.id ||
+          t.interviewerId === currentUser?.id ||
+          t.techSupportId === currentUser?.id ||
+          t.techSupportId === currentUser?.empId ||
+          t.techPersonId === currentUser?.id ||
+          t.techPersonId === currentUser?.empId ||
+          (currentUser?.codeName && (
+            t.assigneeId === currentUser.codeName ||
+            t.interviewerId === currentUser.codeName ||
+            t.techSupportId === currentUser.codeName ||
+            t.techPersonId === currentUser.codeName
+          ));
+        const isName = currentUser?.name && (
+          (t.techPerson && t.techPerson.toLowerCase() === currentUser.name.toLowerCase()) ||
+          (t.codeName && t.codeName.toLowerCase() === currentUser.name.toLowerCase()) ||
+          (t.techSupport && t.techSupport.toLowerCase() === currentUser.name.toLowerCase()) ||
+          (t.employeeName && t.employeeName.toLowerCase().includes(currentUser.name.toLowerCase()))
+        );
+        const isCode = currentUser?.codeName && (
+          (t.techPerson && t.techPerson.toLowerCase() === currentUser.codeName.toLowerCase()) ||
+          (t.codeName && t.codeName.toLowerCase() === currentUser.codeName.toLowerCase()) ||
+          (t.techSupport && t.techSupport.toLowerCase() === currentUser.codeName.toLowerCase())
+        );
+        return isId || isName || isCode;
+      });
     } else if (currentRole === 'external_user') {
       base = base.filter(t => isExternalTask(t));
     }

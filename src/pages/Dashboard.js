@@ -1293,12 +1293,39 @@ export default function Dashboard() {
 
   // ---------- TSE ----------
   if (currentRole === 'tse') {
-    const myTasks = sortTasksByInterviewPriority(tasks.filter(t => t.assigneeId === currentUser?.id || (currentUser?.name && (t.techPerson || '').toLowerCase() === currentUser?.name?.toLowerCase())));
+    const myTasks = sortTasksByInterviewPriority(
+      tasks.filter(t => {
+        const isId = t.assigneeId === currentUser?.id ||
+          t.interviewerId === currentUser?.id ||
+          t.techSupportId === currentUser?.id ||
+          t.techSupportId === currentUser?.empId ||
+          t.techPersonId === currentUser?.id ||
+          t.techPersonId === currentUser?.empId ||
+          (currentUser?.codeName && (
+            t.assigneeId === currentUser.codeName ||
+            t.interviewerId === currentUser.codeName ||
+            t.techSupportId === currentUser.codeName ||
+            t.techPersonId === currentUser.codeName
+          ));
+        const isName = currentUser?.name && (
+          (t.techPerson && t.techPerson.toLowerCase() === currentUser.name.toLowerCase()) ||
+          (t.codeName && t.codeName.toLowerCase() === currentUser.name.toLowerCase()) ||
+          (t.techSupport && t.techSupport.toLowerCase() === currentUser.name.toLowerCase()) ||
+          (t.employeeName && t.employeeName.toLowerCase().includes(currentUser.name.toLowerCase()))
+        );
+        const isCode = currentUser?.codeName && (
+          (t.techPerson && t.techPerson.toLowerCase() === currentUser.codeName.toLowerCase()) ||
+          (t.codeName && t.codeName.toLowerCase() === currentUser.codeName.toLowerCase()) ||
+          (t.techSupport && t.techSupport.toLowerCase() === currentUser.codeName.toLowerCase())
+        );
+        return isId || isName || isCode;
+      })
+    );
     const myStats = {
       assigned: myTasks.length,
       inProgress: myTasks.filter(t => t.status === 'In Progress').length,
       pending: myTasks.filter(t => t.status === 'Pending').length,
-      completed: myTasks.filter(t => t.status === 'Completed').length,
+      completed: myTasks.filter(t => t.status === 'Completed' || t.status === 'Done').length,
     };
     const tseRate = myStats.assigned ? Math.round((myStats.completed / myStats.assigned) * 100) : 0;
 
@@ -1372,7 +1399,7 @@ export default function Dashboard() {
         >
           {myTasks.length === 0 ? <EmptyState title="No tasks assigned" /> : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {myTasks.slice(0, 6).map(t => (
+              {myTasks.map(t => (
                 <div
                   key={t.id}
                   className="p-4 rounded-2xl bg-white dark:bg-[#111A2E] border border-slate-300 dark:border-white/10 hover:border-blue-400 dark:hover:border-blue-500 transition-all shadow-sm"
