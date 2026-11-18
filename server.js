@@ -588,7 +588,7 @@ app.post('/api/tasks', async (req, res) => {
     };
 
     // Ensure unique ID
-    if (!taskData.id || await Task.findOne({ id: taskData.id })) {
+    if (!taskData.id || taskData.id === 'undefined' || await Task.findOne({ id: taskData.id })) {
       taskData.id = await getNextTaskId();
     }
 
@@ -671,6 +671,11 @@ app.post('/api/tasks', async (req, res) => {
 
 app.put('/api/tasks/:id', async (req, res) => {
   try {
+    const targetId = req.params.id;
+    if (!targetId || targetId === 'undefined') {
+      return res.status(400).json({ error: 'Valid Task ID is required for update.' });
+    }
+
     const callerRole = req.headers['x-user-role'] || req.body.currentRole || req.body.userRole;
     
     // Module 1 Security: Only TSM, Management, Upper Management can assign/reassign TSEs
@@ -678,9 +683,13 @@ app.put('/api/tasks/:id', async (req, res) => {
       return res.status(403).json({ error: 'Unauthorized: Only TSM, Management, and Upper Management can assign TSEs.' });
     }
 
+    const taskQuery = mongoose.Types.ObjectId.isValid(targetId)
+      ? { $or: [{ id: targetId }, { _id: targetId }] }
+      : { id: targetId };
+
     // Module 3 & 8 Validation: Check interview slot conflict if assigning TSE to an Interview task
     if (req.body.assigneeId && req.body.assigneeId !== 'Unassigned' && req.body.assigneeId !== '') {
-      const existingTask = await Task.findOne({ id: req.params.id });
+      const existingTask = await Task.findOne(taskQuery);
       const targetTaskType = req.body.taskType || existingTask?.taskType;
       const targetIvDt = req.body.interviewDateTime || existingTask?.interviewDateTime;
       const targetDur = req.body.duration || existingTask?.duration || '30 mins';
@@ -692,7 +701,7 @@ app.put('/api/tasks/:id', async (req, res) => {
           const reqEnd = reqStart + durMins * 60000;
 
           const conflict = await Task.findOne({
-            id: { $ne: req.params.id },
+            id: { $ne: existingTask?.id || targetId },
             status: { $ne: 'Cancelled' },
             interviewDateTime: { $exists: true, $ne: '' },
             $or: [
@@ -722,7 +731,7 @@ app.put('/api/tasks/:id', async (req, res) => {
       }
     }
 
-    const updated = await Task.findOneAndUpdate({ id: req.params.id }, req.body, { new: true });
+    const updated = await Task.findOneAndUpdate(taskQuery, req.body, { new: true });
     if (!updated) return res.status(404).json({ error: 'Task not found' });
 
     // Sync to linked feedback record when assignedSr, TSE assignment, position, or date changed
@@ -761,10 +770,17 @@ app.put('/api/tasks/:id', async (req, res) => {
 
 app.put('/api/tasks/:id/outcome', async (req, res) => {
   try {
+    const targetId = req.params.id;
+    if (!targetId || targetId === 'undefined') {
+      return res.status(400).json({ error: 'Valid Task ID is required for updating outcome.' });
+    }
     const { outcome, outcomeAuditTrail } = req.body;
     const patch = { interviewOutcome: outcome };
     if (outcomeAuditTrail) patch.outcomeAuditTrail = outcomeAuditTrail;
-    const updated = await Task.findOneAndUpdate({ id: req.params.id }, { $set: patch }, { new: true });
+    const taskQuery = mongoose.Types.ObjectId.isValid(targetId)
+      ? { $or: [{ id: targetId }, { _id: targetId }] }
+      : { id: targetId };
+    const updated = await Task.findOneAndUpdate(taskQuery, { $set: patch }, { new: true });
     if (!updated) return res.status(404).json({ error: 'Task not found' });
     res.json(updated);
   } catch (err) {
@@ -905,8 +921,15 @@ app.put('/api/tasks/:id/unassign', async (req, res) => {
       codeName: 'Unassigned',
       techPersonId: '',
     };
+    const targetId = req.params.id;
+    if (!targetId || targetId === 'undefined') {
+      return res.status(400).json({ error: 'Valid Task ID is required for unassign.' });
+    }
+    const taskQuery = mongoose.Types.ObjectId.isValid(targetId)
+      ? { $or: [{ id: targetId }, { _id: targetId }] }
+      : { id: targetId };
     const updated = await Task.findOneAndUpdate(
-      { id: req.params.id },
+      taskQuery,
       {
         $set: unassignPatch,
         $push: {
@@ -1333,8 +1356,15 @@ app.delete('/api/sla-tickets/:id', async (req, res) => {
 app.put('/api/tasks/:id/outcome', async (req, res) => {
   try {
     const { outcome } = req.body;
+    const targetId = req.params.id;
+    if (!targetId || targetId === 'undefined') {
+      return res.status(400).json({ error: 'Valid Task ID is required for unassign.' });
+    }
+    const taskQuery = mongoose.Types.ObjectId.isValid(targetId)
+      ? { $or: [{ id: targetId }, { _id: targetId }] }
+      : { id: targetId };
     const updated = await Task.findOneAndUpdate(
-      { id: req.params.id },
+      taskQuery,
       { $set: { interviewOutcome: outcome } },
       { new: true }
     );

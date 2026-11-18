@@ -732,20 +732,32 @@ export const AppProvider = ({ children }) => {
   }, [tasks.length, currentUser, updateFeedbacksWithStorage]);
 
   const updateTask = useCallback((id, patch, note) => {
-    setTasks(prev => prev.map(t => {
-      if (t.id !== id) return t;
-      const updated = { ...t, ...patch };
-      if (note) {
-        updated.timeline = [
-          ...(t.timeline || []),
-          { at: new Date().toISOString().slice(0, 10), event: note, by: currentUser?.name || 'System' },
-        ];
-      }
-      return updated;
-    }));
+    const resolvedId = (id && id !== 'undefined') ? id : (patch?.id || patch?._id || '');
+    if (!resolvedId) {
+      console.warn('updateTask called without valid taskId:', { id, patch });
+      return;
+    }
+
+    setTasks(prev => {
+      const updatedList = prev.map(t => {
+        if (t.id !== resolvedId && t._id !== resolvedId) return t;
+        const updated = { ...t, ...patch };
+        if (note) {
+          updated.timeline = [
+            ...(t.timeline || []),
+            { at: new Date().toISOString().slice(0, 10), event: note, by: currentUser?.name || 'System' },
+          ];
+        }
+        return updated;
+      });
+      try {
+        localStorage.setItem('ttt_tasks', JSON.stringify(updatedList));
+      } catch (e) {}
+      return updatedList;
+    });
 
     // Persist to MongoDB Atlas via PUT endpoint
-    fetch(`/api/tasks/${id}`, {
+    fetch(`/api/tasks/${resolvedId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(patch),
@@ -754,7 +766,7 @@ export const AppProvider = ({ children }) => {
     // Sync date and key attributes to linked feedback in state
     if (patch.date || patch.interviewDateTime || patch.candidateName || patch.companyName || patch.position) {
       updateFeedbacksWithStorage(prev => prev.map(f => {
-        if (f.taskId === id || f.id === `fb-task-${id}`) {
+        if (f.taskId === resolvedId || f.id === `fb-task-${resolvedId}`) {
           const newDate = patch.date || (patch.interviewDateTime ? patch.interviewDateTime.slice(0, 10) : f.date);
           return {
             ...f,
@@ -1066,7 +1078,9 @@ export const AppProvider = ({ children }) => {
   }, []);
 
   const updateInterviewOutcome = useCallback((taskId, outcome) => {
-    const currentTask = (tasks || []).find(t => t.id === taskId);
+    if (!taskId || taskId === 'undefined') return;
+    const currentTask = (tasks || []).find(t => t.id === taskId || t._id === taskId);
+    const resolvedId = currentTask?.id || taskId;
     const oldOutcome = currentTask?.interviewOutcome || 'Unset';
     const auditEntry = {
       changedBy: currentUser?.name || 'User',
@@ -1078,19 +1092,17 @@ export const AppProvider = ({ children }) => {
     };
     const auditTrail = [...(currentTask?.outcomeAuditTrail || []), auditEntry];
 
-    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, interviewOutcome: outcome, outcomeAuditTrail: auditTrail } : t));
-    setInterviews(prev => prev.map(iv => iv.id === taskId ? { ...iv, interviewOutcome: outcome, outcomeAuditTrail: auditTrail } : iv));
+    setTasks(prev => {
+      const updated = prev.map(t => (t.id === resolvedId || t._id === resolvedId) ? { ...t, interviewOutcome: outcome, outcomeAuditTrail: auditTrail } : t);
+      try { localStorage.setItem('ttt_tasks', JSON.stringify(updated)); } catch (e) {}
+      return updated;
+    });
+    setInterviews(prev => prev.map(iv => (iv.id === resolvedId || iv._id === resolvedId) ? { ...iv, interviewOutcome: outcome, outcomeAuditTrail: auditTrail } : iv));
 
-    fetch(`/api/tasks/${taskId}/outcome`, {
+    fetch(`/api/tasks/${resolvedId}/outcome`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ outcome, outcomeAuditTrail: auditTrail }),
-    }).catch(() => {});
-
-    fetch(`/api/tasks/${taskId}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ interviewOutcome: outcome, outcomeAuditTrail: auditTrail }),
     }).catch(() => {});
 
     toast.success(`Interview outcome recorded: ${outcome}`);

@@ -2206,11 +2206,14 @@ const TaskDrawer = ({ task, onClose }) => {
     } catch (e) {}
 
     // Track link generation
-    fetch(`/api/tasks/${t.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ feedbackLinkGenerated: true, feedbackLinkUrl: link }),
-    }).catch(() => {});
+    const targetTaskId = t.id || t._id;
+    if (targetTaskId) {
+      fetch(`/api/tasks/${targetTaskId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ feedbackLinkGenerated: true, feedbackLinkUrl: link }),
+      }).catch(() => {});
+    }
 
     if (isExt) {
       toast.success(`External Unbranded Feedback Link generated & copied for ${t.candidateName || 'Candidate'}!`);
@@ -2700,14 +2703,16 @@ const TaskDrawer = ({ task, onClose }) => {
                     value={selectedStatus}
                     onValueChange={v => {
                       setSelectedStatus(v);
+                      const targetTaskId = task?.id || task?._id;
+                      if (!targetTaskId) return;
                       if (v === 'Done') {
                         if (!completionRemark.trim()) {
                           toast.info('Status set to Done. Please enter TSE completion remarks below to finish.');
                         } else {
-                          changeTaskStatus(task.id, 'Done', completionRemark.trim());
+                          changeTaskStatus(targetTaskId, 'Done', completionRemark.trim());
                         }
                       } else {
-                        changeTaskStatus(task.id, v, completionRemark.trim());
+                        changeTaskStatus(targetTaskId, v, completionRemark.trim());
                       }
                     }}
                   >
@@ -2803,7 +2808,12 @@ const TaskDrawer = ({ task, onClose }) => {
                           toast.error('Please enter completion remarks before saving.');
                           return;
                         }
-                        changeTaskStatus(task.id, targetStatus, completionRemark.trim());
+                        const targetTaskId = task?.id || task?._id;
+                        if (!targetTaskId) {
+                          toast.error('Task ID missing.');
+                          return;
+                        }
+                        changeTaskStatus(targetTaskId, targetStatus, completionRemark.trim());
                         toast.success(`Task status updated to ${targetStatus} with remarks!`);
                       }}
                       className="px-3.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shrink-0 cursor-pointer transition-colors shadow-2xs"
@@ -2825,7 +2835,12 @@ const TaskDrawer = ({ task, onClose }) => {
               </label>
               <Select
                 value={task.interviewOutcome || ''}
-                onValueChange={v => updateInterviewOutcome && updateInterviewOutcome(task.id, v)}
+                onValueChange={v => {
+                  const targetTaskId = task?.id || task?._id;
+                  if (targetTaskId && updateInterviewOutcome) {
+                    updateInterviewOutcome(targetTaskId, v);
+                  }
+                }}
               >
                 <SelectTrigger data-testid="task-interview-outcome" className="bg-white border-purple-300 text-slate-900 h-9">
                   <SelectValue placeholder="Mark Outcome (Passed, Failed, Next Round, Offer)" />
@@ -3695,7 +3710,7 @@ export default function Tasks() {
                           )}
                         </div>
                         <div className="flex items-center gap-2 mt-0.5">
-                          <span className="mono text-[10px] text-blue-600 font-medium">{t.id}</span>
+                          <span className="mono text-[10px] text-blue-600 font-medium">{t.id || t._id}</span>
                           {(t.creatorName || t.externalCreator) && (
                             <span className="text-[10px] text-slate-400">
                               by {t.creatorName || t.externalCreator}
