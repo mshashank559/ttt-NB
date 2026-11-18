@@ -80,18 +80,38 @@ const upload = multer({
 });
 
 // -------------------------------------------------------------
-// MongoDB Connection
+// MongoDB Connection with Auto-Reconnect & Resilient Retries
 // -------------------------------------------------------------
-mongoose.connect(MONGODB_URI, {
-  serverSelectionTimeoutMS: 8000,
-})
-  .then(() => {
-    console.log('✅ Connected to MongoDB Atlas (Mumbai Region - TTT-Database)');
-    seedDatabaseIfEmpty();
+let isConnecting = false;
+const connectMongo = () => {
+  if (isConnecting || mongoose.connection.readyState === 1) return;
+  isConnecting = true;
+  mongoose.connect(MONGODB_URI, {
+    serverSelectionTimeoutMS: 30000,
+    connectTimeoutMS: 30000,
   })
-  .catch((err) => {
-    console.error('❌ MongoDB Connection Error:', err.message);
-  });
+    .then(() => {
+      isConnecting = false;
+      console.log('✅ Connected to MongoDB Atlas (Mumbai Region - TTT-Database)');
+      seedDatabaseIfEmpty();
+    })
+    .catch((err) => {
+      isConnecting = false;
+      console.error('❌ MongoDB Connection Error:', err.message, '- Retrying in 5 seconds...');
+      setTimeout(connectMongo, 5000);
+    });
+};
+
+mongoose.connection.on('disconnected', () => {
+  console.warn('⚠️ MongoDB disconnected! Attempting reconnect in 5s...');
+  setTimeout(connectMongo, 5000);
+});
+
+mongoose.connection.on('error', (err) => {
+  console.error('⚠️ MongoDB connection error:', err.message);
+});
+
+connectMongo();
 
 // -------------------------------------------------------------
 // Mongoose Models
