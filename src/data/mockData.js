@@ -821,6 +821,10 @@ export const TSE_REAL_NAMES = {
   'Aarti': 'Aarti Vishwakarma',
   'u-1791910998393': 'Aarti Vishwakarma',
   'TSE-NB-008': 'Aarti Vishwakarma',
+  'Aditya Mishra': 'Aditya Mishra',
+  'Aditya': 'Aditya Mishra',
+  'TTT-NB-020': 'Aditya Mishra',
+  'u-1791926042864': 'Aditya Mishra',
 };
 
 export const getTseRealName = (nameOrId) => {
@@ -832,7 +836,16 @@ export const getTseRealName = (nameOrId) => {
     t.supportName.toLowerCase() === clean.toLowerCase() ||
     t.employeeName.toLowerCase().includes(clean.toLowerCase())
   );
-  return matching?.employeeName || '';
+  if (matching?.employeeName) return matching.employeeName;
+  const user = (USERS || []).find(u =>
+    u.id === clean ||
+    u.empId === clean ||
+    u.tttNbId === clean ||
+    u.codeName?.toLowerCase() === clean.toLowerCase() ||
+    u.name?.toLowerCase() === clean.toLowerCase()
+  );
+  if (user?.name) return user.name;
+  return '';
 };
 
 export const TSM_IDS = {
@@ -841,6 +854,7 @@ export const TSM_IDS = {
   'Sachin': 'TTT-NB-022',
   'Aditya Mishra': 'TTT-NB-020',
   'Aditya': 'TTT-NB-020',
+  'u-1791926042864': 'TTT-NB-020',
   'TSM Titan': 'TTT-NB-008',
   'TSM Nova': 'TTT-NB-008',
 };

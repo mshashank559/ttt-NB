@@ -9,7 +9,7 @@ import {
 import { toast } from 'sonner';
 import { useApp } from '../context/AppContext';
 import { PageHeader, SectionCard, StatusBadge, Pagination } from '../components/common';
-import { calculateOverallRating, TECH_SUPPORT_TEAM, ROLES, roleIsMarketing, TSE_IDS, getTseId, getTseRealName, isExternalRecord } from '../data/mockData';
+import { calculateOverallRating, TECH_SUPPORT_TEAM, ROLES, roleIsMarketing, TSE_IDS, TSM_IDS, getTseId, getTseRealName, isExternalRecord } from '../data/mockData';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import { Textarea } from '../components/ui/textarea';
 
@@ -145,8 +145,8 @@ export default function FeedbackPage() {
     const pathname = window.location.pathname;
     const isExt = Boolean(record.isExternal || record.taskSource === 'external' || record.taskClassification === 'External');
     const recruiter = isExt ? (record.externalCreator || 'Manpatel') : (record.recruiterName || 'Aditi Sharma');
-    const tseId = record.techSupportId || 'TSE-NB-008';
-    const tseName = record.techSupport || 'Shreya';
+    const tseId = record.techSupportId || '';
+    const tseName = record.techSupport || '';
     const jobRole = record.jobRole || 'Software Engineer';
     return `${origin}${pathname}#/candidate-saga?id=${record.id}&external=${isExt}&recruiter=${encodeURIComponent(recruiter)}&tseId=${encodeURIComponent(tseId)}&tseName=${encodeURIComponent(tseName)}&candidate=${encodeURIComponent(record.candidateName || '')}&company=${encodeURIComponent(record.company || '')}&type=${encodeURIComponent(record.techSupportType || 'TQC')}&technology=${encodeURIComponent(jobRole)}&role=${encodeURIComponent(jobRole)}`;
   };
@@ -175,10 +175,11 @@ export default function FeedbackPage() {
       (row.candidateName && t.candidateName === row.candidateName)
     );
 
-    // Authoritative TSE resolution from users & TECH_SUPPORT_TEAM
+    // Authoritative TSE / TSM resolution from users & TECH_SUPPORT_TEAM
     const assignedUserId = linkedTask?.assigneeId || row.assigneeId || row.techSupportId;
     const assignedUser = (users || []).find(u => u.id === assignedUserId || u.empId === assignedUserId || u.tttNbId === assignedUserId) ||
-                         (users || []).find(u => u.name?.toLowerCase() === (row.techSupport || linkedTask?.techPerson || '').toLowerCase());
+                         (users || []).find(u => u.name?.toLowerCase() === (row.techSupport || linkedTask?.techPerson || '').toLowerCase() ||
+                                                 (row.techSupport && u.codeName?.toLowerCase() === row.techSupport.toLowerCase()));
 
     const matchingTse = TECH_SUPPORT_TEAM.find(t =>
       t.id === assignedUserId ||
@@ -188,8 +189,8 @@ export default function FeedbackPage() {
       t.supportName.toLowerCase() === (assignedUser?.codeName || row.techSupport || '').toLowerCase()
     );
 
-    const tseCodeName = assignedUser?.codeName || matchingTse?.supportName || row.techSupport || 'Shreya';
-    const officialTseId = matchingTse?.id || (assignedUserId && TSE_IDS[assignedUserId]) || (assignedUser?.empId?.startsWith('TSE-NB') ? assignedUser.empId : '') || TSE_IDS[tseCodeName] || row.techSupportId || 'TSE-NB-008';
+    const tseCodeName = assignedUser?.codeName || matchingTse?.supportName || row.techSupport || assignedUser?.name || 'Unassigned';
+    const officialTseId = matchingTse?.id || assignedUser?.empId || assignedUser?.tttNbId || (assignedUserId && (TSE_IDS[assignedUserId] || TSM_IDS[assignedUserId])) || TSE_IDS[tseCodeName] || TSM_IDS[tseCodeName] || row.techSupportId || '';
     const jobRole = linkedTask?.position || row.jobRole || 'Software Engineer';
     const recruiter = row.recruiterName || linkedTask?.assignedSrName || 'Senior Recruiter';
     const team = row.teamName || linkedTask?.teamName || 'Team Mukesh';
@@ -259,11 +260,11 @@ export default function FeedbackPage() {
         u.id === assignedUserId ||
         u.empId === assignedUserId ||
         u.tttNbId === assignedUserId ||
-        (t.codeName && u.codeName?.toLowerCase() === t.codeName.toLowerCase()) ||
-        (t.techPerson && u.name?.toLowerCase() === t.techPerson.toLowerCase())
+        (t.codeName && (u.codeName?.toLowerCase() === t.codeName.toLowerCase() || u.name?.toLowerCase() === t.codeName.toLowerCase())) ||
+        (t.techPerson && (u.name?.toLowerCase() === t.techPerson.toLowerCase() || u.codeName?.toLowerCase() === t.techPerson.toLowerCase()))
       );
 
-      const candidateCodeName = (t.codeName && t.codeName !== 'Code Name Unassigned' && t.codeName !== 'Unassigned') ? t.codeName : (assignedUser?.codeName || '');
+      const candidateCodeName = (t.codeName && t.codeName !== 'Code Name Unassigned' && t.codeName !== 'Unassigned') ? t.codeName : (assignedUser?.codeName || assignedUser?.name || '');
       const candidateRealName = (t.techPerson && t.techPerson !== 'Unassigned') ? t.techPerson : (assignedUser?.name || '');
 
       let matchingTse = TECH_SUPPORT_TEAM.find(item =>
@@ -273,7 +274,7 @@ export default function FeedbackPage() {
         (t.techPersonId && item.id === t.techPersonId)
       );
 
-      if (!matchingTse && fb && fb.techSupport && fb.techSupport !== 'Code Name Unassigned' && fb.techSupport !== 'Unassigned') {
+      if (!matchingTse && !assignedUser && fb && fb.techSupport && fb.techSupport !== 'Code Name Unassigned' && fb.techSupport !== 'Unassigned') {
         matchingTse = TECH_SUPPORT_TEAM.find(item =>
           item.id === fb.techSupportId ||
           item.supportName.toLowerCase() === fb.techSupport.toLowerCase() ||
@@ -282,8 +283,8 @@ export default function FeedbackPage() {
       }
 
       const resolvedCodeName = matchingTse?.supportName || candidateCodeName || (assignedUser?.codeName) || (t.techPerson && t.techPerson !== 'Unassigned' ? t.techPerson : (fb?.techSupport && fb.techSupport !== 'Code Name Unassigned' ? fb.techSupport : 'Unassigned'));
-      const resolvedRealName = matchingTse?.employeeName || getTseRealName(resolvedCodeName) || candidateRealName || (assignedUser?.name) || (fb?.employeeName || '');
-      const resolvedOfficialId = matchingTse?.id || TSE_IDS[resolvedCodeName] || (assignedUser?.empId?.startsWith('TSE-NB') ? assignedUser.empId : '') || (t.techPersonId?.startsWith('TSE-NB') ? t.techPersonId : '') || (resolvedCodeName !== 'Unassigned' ? (TSE_IDS[resolvedCodeName] || '') : '');
+      const resolvedRealName = matchingTse?.employeeName || assignedUser?.name || getTseRealName(resolvedCodeName) || candidateRealName || (fb?.employeeName || '');
+      const resolvedOfficialId = matchingTse?.id || assignedUser?.empId || assignedUser?.tttNbId || (assignedUserId && (TSE_IDS[assignedUserId] || TSM_IDS[assignedUserId])) || TSE_IDS[resolvedCodeName] || TSM_IDS[resolvedCodeName] || (t.techPersonId?.startsWith('TSE-NB') || t.techPersonId?.startsWith('TTT-NB') ? t.techPersonId : '') || (fb?.techSupportId && fb?.techSupportId !== 'TSE-NB-008' ? fb.techSupportId : '') || '';
       const resolvedEmail = matchingTse?.email || assignedUser?.email || (matchingTse ? fb?.techSupportEmail : '') || '';
 
       const taskDate = t.date || (t.interviewDateTime ? t.interviewDateTime.slice(0, 10) : (fb?.date || new Date().toISOString().slice(0, 10)));
@@ -787,7 +788,7 @@ export default function FeedbackPage() {
                                 <div>
                                   {roleIsMarketing(currentRole) ? (
                                     <div className="font-bold text-[#1416c1] font-mono text-xs group-hover/btn:underline flex items-center gap-1">
-                                      <span>{officialIdDisplay || 'TSE-NB-008'}</span>
+                                      <span>{officialIdDisplay || 'Unassigned'}</span>
                                       <ChevronRight size={13} className="opacity-0 group-hover/btn:opacity-100 -translate-x-1 group-hover/btn:translate-x-0 transition-all text-[#1416c1]" />
                                     </div>
                                   ) : (

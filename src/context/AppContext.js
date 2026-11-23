@@ -21,6 +21,7 @@ import {
   getUserById,
   getTseId,
   TSE_IDS,
+  TSM_IDS,
   getTseRealName,
   isExternalRecord,
 } from '../data/mockData';
@@ -637,11 +638,12 @@ export const AppProvider = ({ children }) => {
       (codeName && t.supportName.toLowerCase() === codeName.toLowerCase()) ||
       (assignee?.name && t.employeeName.toLowerCase().includes(assignee.name.toLowerCase())) ||
       (assignee?.name && t.supportName.toLowerCase() === assignee.name.toLowerCase()) ||
-      (assignee?.id && (t.id === assignee.id || TSE_IDS[assignee.id] === t.id))
+      (assignee?.id && (t.id === assignee.id || TSE_IDS[assignee.id] === t.id)) ||
+      (assignee?.empId && t.id === assignee.empId)
     );
 
-    const resolvedOfficialId = matchingTse?.id || (codeName && TSE_IDS[codeName]) || (assignee?.empId?.startsWith('TSE-NB') ? assignee.empId : '') || '';
-    const resolvedCodeName = matchingTse?.supportName || codeName || 'Unassigned';
+    const resolvedOfficialId = matchingTse?.id || (codeName && TSE_IDS[codeName]) || assignee?.empId || assignee?.tttNbId || (codeName && TSM_IDS[codeName]) || (assignee?.name && TSM_IDS[assignee.name]) || '';
+    const resolvedCodeName = matchingTse?.supportName || codeName || assignee?.codeName || assignee?.name || (task.techPerson && task.techPerson !== 'Unassigned' ? task.techPerson : 'Unassigned');
     const resolvedRealName = matchingTse?.employeeName || getTseRealName(resolvedCodeName) || assignee?.name || '';
     const resolvedEmail = matchingTse?.email || assignee?.email || '';
 
@@ -808,7 +810,7 @@ export const AppProvider = ({ children }) => {
     const newUser = users.find(u => u.id === newAssigneeId) || getUserById(newAssigneeId);
     if (!newUser) return;
 
-    // Resolve code name, real name, and authoritative official TSE ID (TSE-NB-001 to TSE-NB-008)
+    // Resolve code name, real name, and authoritative official TSE or TSM ID
     const matchingTse = TECH_SUPPORT_TEAM.find(t =>
       t.id === newUser.id ||
       t.id === newUser.empId ||
@@ -818,7 +820,8 @@ export const AppProvider = ({ children }) => {
 
     const codeName = matchingTse?.supportName || newUser.codeName || newUser.name;
     const realName = matchingTse?.employeeName || newUser.name || codeName;
-    const officialId = matchingTse?.id || TSE_IDS[newUser.id] || TSE_IDS[codeName] || TSE_IDS[realName] || 'TSE-NB-008';
+    const officialId = matchingTse?.id || newUser.empId || newUser.tttNbId || TSE_IDS[newUser.id] || TSE_IDS[codeName] || TSE_IDS[realName] || TSM_IDS[codeName] || TSM_IDS[realName] || '';
+    const email = matchingTse?.email || newUser.email || '';
 
     const patch = {
       assigneeId: newAssigneeId,
@@ -838,6 +841,7 @@ export const AppProvider = ({ children }) => {
           techSupportId: officialId,
           employeeName: realName,
           codeName: codeName,
+          techSupportEmail: email,
         };
       }
       return f;
