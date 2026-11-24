@@ -483,11 +483,41 @@ app.get('/api/tasks', async (req, res) => {
       const isShivam = userId === 'u-1791911115518' || (req.query.teamName && req.query.teamName.includes('Shivam'));
       const defaultTeam = isShivam ? 'team-shivam' : 'team-mukesh';
       filter = { $or: [{ teamLeadId: userId }, { teamId: teamId || defaultTeam }] };
-    } else if (role === 'marketing_sr') {
+    } else if (role === 'marketing_sr' || role === 'recruiter') {
       if (userId) {
-        filter = { $or: [{ assignedSrId: userId }, { teamId: teamId || 'team-mukesh' }] };
+        const srUser = await User.findOne({
+          $or: [{ id: userId }, { empId: userId }, { tttNbId: userId }, { name: userId }]
+        });
+        const userIds = [userId];
+        if (srUser) {
+          if (srUser.id) userIds.push(srUser.id);
+          if (srUser.empId) userIds.push(srUser.empId);
+          if (srUser.tttNbId) userIds.push(srUser.tttNbId);
+        }
+        const namePatterns = [];
+        if (srUser?.name) {
+          namePatterns.push(srUser.name.trim());
+          const nameParts = srUser.name.trim().split(/\s+/);
+          if (nameParts.length >= 2) {
+            namePatterns.push(`${nameParts[0]} ${nameParts[nameParts.length - 1]}`);
+          }
+        } else {
+          namePatterns.push(userId);
+        }
+
+        const nameRegex = new RegExp(namePatterns.map(p => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'i');
+
+        filter = {
+          $or: [
+            { assignedSrId: { $in: userIds } },
+            { pocId: { $in: userIds } },
+            { createdById: { $in: userIds } },
+            { recruiterName: nameRegex },
+            { assignedSrName: nameRegex }
+          ]
+        };
       } else {
-        filter = { teamId: teamId || 'team-mukesh' };
+        filter = { _id: null };
       }
     } else if (role === 'external_user') {
       filter = {
@@ -973,15 +1003,45 @@ app.get('/api/feedbacks', async (req, res) => {
 
     if (role === 'tse' && userId) {
       filter = { $or: [{ techSupportId: userId }, { employeeName: { $regex: new RegExp(userId, 'i') } }] };
-    } else if (role === 'recruiter' && userId) {
-      filter = { $or: [{ pocId: userId }, { recruiterName: { $regex: new RegExp(userId, 'i') } }] };
+    } else if (role === 'marketing_sr' || role === 'recruiter') {
+      if (userId) {
+        const srUser = await User.findOne({
+          $or: [{ id: userId }, { empId: userId }, { tttNbId: userId }, { name: userId }]
+        });
+        const userIds = [userId];
+        if (srUser) {
+          if (srUser.id) userIds.push(srUser.id);
+          if (srUser.empId) userIds.push(srUser.empId);
+          if (srUser.tttNbId) userIds.push(srUser.tttNbId);
+        }
+        const namePatterns = [];
+        if (srUser?.name) {
+          namePatterns.push(srUser.name.trim());
+          const nameParts = srUser.name.trim().split(/\s+/);
+          if (nameParts.length >= 2) {
+            namePatterns.push(`${nameParts[0]} ${nameParts[nameParts.length - 1]}`);
+          }
+        } else {
+          namePatterns.push(userId);
+        }
+
+        const nameRegex = new RegExp(namePatterns.map(p => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'i');
+
+        filter = {
+          $or: [
+            { pocId: { $in: userIds } },
+            { assignedSrId: { $in: userIds } },
+            { recruiterName: nameRegex },
+            { assignedSrName: nameRegex }
+          ]
+        };
+      } else {
+        filter = { _id: null };
+      }
     } else if (role === 'marketing_tl') {
       const isShivam = userId === 'u-1791911115518' || (req.query.teamName && req.query.teamName.includes('Shivam'));
       const defaultTeam = isShivam ? 'team-shivam' : 'team-mukesh';
       filter = { $or: [{ teamLeadId: userId }, { teamId: teamId || defaultTeam }] };
-    } else if (role === 'marketing_sr') {
-      const defaultTeam = (req.query.teamName && req.query.teamName.includes('Shivam')) ? 'team-shivam' : 'team-mukesh';
-      filter = { teamId: teamId || defaultTeam };
     } else if (role === 'external_user') {
       filter = {
         isExternal: true,

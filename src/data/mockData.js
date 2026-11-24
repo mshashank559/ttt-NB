@@ -972,16 +972,36 @@ export const filterAuthorizedData = (items, currentUser, currentRole) => {
 
   // 3. Recruiter / POC (Marketing SR): Can ONLY see their own assigned candidates + ID only!
   if (currentRole === 'recruiter') {
+    if (!currentUser) return [];
     const currentId = currentUser.id;
-    const currentName = (currentUser.name || '').toLowerCase();
+    const currentEmpId = currentUser.empId || currentUser.tttNbId;
+    const currentName = (currentUser.name || '').toLowerCase().trim();
+    const currentEmail = (currentUser.email || '').toLowerCase().trim();
+
+    const isNameMatch = (targetName) => {
+      if (!targetName || !currentName) return false;
+      const t = targetName.toLowerCase().trim();
+      if (t === currentName) return true;
+      const currentParts = currentName.split(/\s+/).filter(p => p.length > 1);
+      const targetParts = t.split(/\s+/).filter(p => p.length > 1);
+      if (currentParts.length >= 2 && targetParts.length >= 2) {
+        return currentParts.every(part => targetParts.includes(part)) || targetParts.every(part => currentParts.includes(part));
+      }
+      return false;
+    };
 
     return items
       .filter(item => {
-        if (isExternalRecord(item)) return false;
-        const isPocId = item.pocId === currentId || item.assignedSrId === currentId;
-        const isRecruiterName = (item.recruiterName && item.recruiterName.toLowerCase() === currentName) ||
-          (item.assignedSrName && item.assignedSrName.toLowerCase() === currentName);
-        return isPocId || isRecruiterName;
+        if (!item || isExternalRecord(item)) return false;
+        const isMyItem = Boolean(
+          (item.pocId && (item.pocId === currentId || (currentEmpId && item.pocId === currentEmpId))) ||
+          (item.assignedSrId && (item.assignedSrId === currentId || (currentEmpId && item.assignedSrId === currentEmpId))) ||
+          (item.createdById && (item.createdById === currentId || (currentEmpId && item.createdById === currentEmpId))) ||
+          (item.assignedSrEmail && currentEmail && item.assignedSrEmail.toLowerCase().trim() === currentEmail) ||
+          isNameMatch(item.recruiterName) ||
+          isNameMatch(item.assignedSrName)
+        );
+        return isMyItem;
       })
       .map(item => sanitizeForIdentityPrivacy(item, currentRole));
   }
@@ -1022,59 +1042,46 @@ export const filterAuthorizedData = (items, currentUser, currentRole) => {
       .map(item => sanitizeForIdentityPrivacy(item, currentRole));
   }
 
-  // 5. Marketing SR:
-  // Can ONLY see records belonging to their assigned team, and if assigned specifically to an SR, only their own assigned items + code names only
+  // 5. Marketing SR (Senior Recruiter):
+  // STRICT DATA ISOLATION: SRS users can ONLY view their own interviews, related feedback, and assigned tasks,
+  // without having access to other team members’ data.
   if (currentRole === 'marketing_sr') {
-    const currentTeamId = currentUser.teamId || currentUser.team || (
-      (currentUser.teamName || '').toLowerCase().includes('mukesh') ? 'team-mukesh' :
-      (currentUser.teamName || '').toLowerCase().includes('shivam') ? 'team-shivam' : ''
-    );
+    if (!currentUser) return [];
     const currentUserId = currentUser.id;
-    const currentName = (currentUser.name || '').toLowerCase();
-    const currentTeamName = (currentUser.teamName || (currentTeamId === 'team-shivam' ? 'Team Shivam' : currentTeamId === 'team-mukesh' ? 'Team Mukesh' : '')).toLowerCase();
+    const currentEmpId = currentUser.empId || currentUser.tttNbId;
+    const currentName = (currentUser.name || '').toLowerCase().trim();
+    const currentEmail = (currentUser.email || '').toLowerCase().trim();
+
+    const isNameMatch = (targetName) => {
+      if (!targetName || !currentName) return false;
+      const t = targetName.toLowerCase().trim();
+      if (t === currentName) return true;
+      // Handle variations like "Smit H Patel" vs "Smit Patel"
+      const currentParts = currentName.split(/\s+/).filter(p => p.length > 1);
+      const targetParts = t.split(/\s+/).filter(p => p.length > 1);
+      if (currentParts.length >= 2 && targetParts.length >= 2) {
+        const matchesAllCurrent = currentParts.every(part => targetParts.includes(part));
+        const matchesAllTarget = targetParts.every(part => currentParts.includes(part));
+        if (matchesAllCurrent || matchesAllTarget) return true;
+      }
+      return false;
+    };
 
     return items
       .filter(item => {
-        if (isExternalRecord(item)) return false;
-        const cName = (item.candidateName || '').toLowerCase().trim();
-        // Strict candidate team isolation: Samanvi Arcot & Mayuri Kate belong exclusively to Team Shivam
-        if (cName.includes('samanvi arcot') || cName.includes('mayuri kate')) {
-          if (currentTeamId === 'team-mukesh') return false;
-        }
-        const itemTeamId = (item.teamId || item.team || item.marketingTeam || '').toLowerCase();
-        const itemTeamName = (item.teamName || '').toLowerCase();
+        if (!item || isExternalRecord(item)) return false;
 
-        // Direct assignment check takes highest priority
+        // Direct assignment check: ONLY user's own items!
         const isMyItem = Boolean(
-          (item.assignedSrId && item.assignedSrId === currentUserId) ||
-          (item.pocId && item.pocId === currentUserId) ||
-          (item.createdById && item.createdById === currentUserId) ||
-          (currentName && (
-            (item.assignedSrName && item.assignedSrName.toLowerCase() === currentName) ||
-            (item.recruiterName && item.recruiterName.toLowerCase() === currentName)
-          ))
+          (item.assignedSrId && (item.assignedSrId === currentUserId || (currentEmpId && item.assignedSrId === currentEmpId))) ||
+          (item.pocId && (item.pocId === currentUserId || (currentEmpId && item.pocId === currentEmpId))) ||
+          (item.createdById && (item.createdById === currentUserId || (currentEmpId && item.createdById === currentEmpId))) ||
+          (item.assignedSrEmail && currentEmail && item.assignedSrEmail.toLowerCase().trim() === currentEmail) ||
+          isNameMatch(item.assignedSrName) ||
+          isNameMatch(item.recruiterName)
         );
 
-        if (isMyItem) return true;
-
-        // Check if item belongs to user's team pool
-        const matchesTeamId = currentTeamId && (
-          itemTeamId === currentTeamId.toLowerCase() ||
-          (currentTeamId === 'team-shivam' && itemTeamName.includes('shivam')) ||
-          (currentTeamId === 'team-mukesh' && itemTeamName.includes('mukesh'))
-        );
-        const matchesTeamName = currentTeamName && itemTeamName && (itemTeamName.includes(currentTeamName) || currentTeamName.includes(itemTeamName));
-        const matchesTeam = matchesTeamId || matchesTeamName;
-
-        if (!matchesTeam) return false;
-
-        // If item belongs to team pool, check if assigned specifically to another SR
-        const hasSpecificOtherSr = Boolean(
-          (item.assignedSrId && item.assignedSrId !== currentUserId) ||
-          (item.assignedSrName && currentName && item.assignedSrName.toLowerCase() !== currentName && !item.assignedSrName.toLowerCase().startsWith('team '))
-        );
-
-        return !hasSpecificOtherSr;
+        return isMyItem;
       })
       .map(item => sanitizeForIdentityPrivacy(item, currentRole));
   }
