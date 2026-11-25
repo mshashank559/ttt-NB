@@ -85,7 +85,16 @@ export const AppProvider = ({ children }) => {
             localStorage.setItem('ttt_users', JSON.stringify(USERS));
             return USERS;
           }
-          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed.filter(u =>
+              u.name !== 'Hemant Desai' &&
+              u.name !== 'Himanshu Barot' &&
+              u.id !== 'u-sr-shivam-05' &&
+              u.id !== 'u-1795645061682' &&
+              u.empId !== 'TTT-NB-026' &&
+              u.empId !== 'TTT-NB-MSR-12'
+            );
+          }
         }
       } catch (e) {
         console.warn('Failed to parse saved users:', e);
@@ -178,7 +187,7 @@ export const AppProvider = ({ children }) => {
 
   const [dbConnected, setDbConnected] = useState(false);
   const deletedTaskIdsRef = useRef(new Set());
-  const deletedUserIdsRef = useRef(new Set());
+  const deletedUserIdsRef = useRef(new Set(['u-sr-shivam-05', 'u-1795645061682', 'TTT-NB-026', 'TTT-NB-MSR-12']));
 
   // Live Sync with MongoDB Atlas Backend (Mumbai Region)
   React.useEffect(() => {

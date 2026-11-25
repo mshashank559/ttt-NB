@@ -106,9 +106,10 @@ export default function CalendarPage() {
   }, [dynamicTeams, teamFilter]);
 
   const selectedTeamSrs = useMemo(() => {
-    if (teamFilter === 'all') return (users || []).filter(u => u.role === 'marketing_sr');
+    if (teamFilter === 'all') return (users || []).filter(u => u.role === 'marketing_sr' && u.status !== 'Inactive');
     return (users || []).filter(u =>
-      u.role === 'marketing_sr' && (
+      u.role === 'marketing_sr' &&
+      u.status !== 'Inactive' && (
         u.teamId === teamFilter ||
         u.team === teamFilter ||
         (teamFilter === 'team-mukesh' && ((u.teamName || '').toLowerCase().includes('mukesh') || u.teamLeadId === 'u-1791911058812')) ||

@@ -479,10 +479,12 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
     const targetTeamId = form.teamId || initialTeam.id;
     return (users || []).filter(u =>
       u.role === 'marketing_sr' &&
+      u.status !== 'Inactive' &&
+      !['Hemant Desai', 'Himanshu Barot'].includes(u.name) &&
       (u.teamId === targetTeamId || u.team === targetTeamId ||
        (targetTeamId === 'team-mukesh'
-          ? (u.teamName?.includes('Mukesh') || u.teamLeadId === 'u-1791911058812' || (u.name && ['Snehal', 'Ritik', 'Ausafkhan', 'Himanshu', 'Deepkumar', 'Rohan', 'Mukesh'].some(part => u.name.includes(part))))
-          : (u.teamName?.includes('Shivam') || u.teamLeadId === 'u-1791911115518' || (u.name && ['Vishal', 'Riyen', 'Smit', 'Rehan', 'Yug', 'Jinesh'].some(part => u.name.includes(part))))
+          ? (u.teamName?.includes('Mukesh') || u.teamLeadId === 'u-1791911058812' || (u.name && ['Snehal', 'Ritik', 'Ausafkhan', 'Chaudhari Himanshu', 'Deepkumar', 'Rohan', 'Mukesh'].some(part => u.name.includes(part))))
+          : (u.teamName?.includes('Shivam') || u.teamLeadId === 'u-1791911115518' || (u.name && ['Vishal', 'Riyen', 'Smit', 'Rehan', 'Yug', 'Jinesh', 'Hinanshi'].some(part => u.name.includes(part))))
        )
       )
     );
@@ -1418,10 +1420,12 @@ const EditTaskModal = ({ task, open, onOpenChange }) => {
     const targetTeamId = form.teamId || 'team-mukesh';
     return (users || []).filter(u =>
       u.role === 'marketing_sr' &&
+      u.status !== 'Inactive' &&
+      !['Hemant Desai', 'Himanshu Barot'].includes(u.name) &&
       (u.teamId === targetTeamId || u.team === targetTeamId ||
        (targetTeamId === 'team-mukesh'
-          ? (u.teamName?.includes('Mukesh') || u.teamLeadId === 'u-1791911058812' || (u.name && ['Snehal', 'Ritik', 'Ausafkhan', 'Himanshu', 'Deepkumar', 'Rohan', 'Mukesh'].some(part => u.name.includes(part))))
-          : (u.teamName?.includes('Shivam') || u.teamLeadId === 'u-1791911115518' || (u.name && ['Vishal', 'Riyen', 'Smit', 'Rehan', 'Yug', 'Jinesh'].some(part => u.name.includes(part))))
+          ? (u.teamName?.includes('Mukesh') || u.teamLeadId === 'u-1791911058812' || (u.name && ['Snehal', 'Ritik', 'Ausafkhan', 'Chaudhari Himanshu', 'Deepkumar', 'Rohan', 'Mukesh'].some(part => u.name.includes(part))))
+          : (u.teamName?.includes('Shivam') || u.teamLeadId === 'u-1791911115518' || (u.name && ['Vishal', 'Riyen', 'Smit', 'Rehan', 'Yug', 'Jinesh', 'Hinanshi'].some(part => u.name.includes(part))))
        )
       )
     );
@@ -2172,7 +2176,11 @@ const TaskDrawer = ({ task, onClose }) => {
   }, [task]);
 
   const eligibleSrs = useMemo(() => {
-    const allSrs = (users || []).filter(u => u.role === 'marketing_sr');
+    const allSrs = (users || []).filter(u =>
+      u.role === 'marketing_sr' &&
+      u.status !== 'Inactive' &&
+      !['Hemant Desai', 'Himanshu Barot'].includes(u.name)
+    );
     const teamSrs = allSrs.filter(u => 
       u.teamId === task?.teamId || 
       (task?.teamId === 'team-mukesh' ? (u.teamName?.includes('Mukesh') || u.teamLeadId === 'u-1791911058812') : (u.teamName?.includes('Shivam') || u.teamLeadId === 'u-1791911115518'))
