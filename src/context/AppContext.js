@@ -178,6 +178,7 @@ export const AppProvider = ({ children }) => {
 
   const [dbConnected, setDbConnected] = useState(false);
   const deletedTaskIdsRef = useRef(new Set());
+  const deletedUserIdsRef = useRef(new Set());
 
   // Live Sync with MongoDB Atlas Backend (Mumbai Region)
   React.useEffect(() => {
@@ -286,15 +287,21 @@ export const AppProvider = ({ children }) => {
         if (usersRes && usersRes.ok) {
           const liveUsers = await usersRes.json();
           if (Array.isArray(liveUsers) && liveUsers.length > 0) {
+            const filteredUsers = liveUsers.filter(u =>
+              !deletedUserIdsRef.current.has(String(u.id)) &&
+              !deletedUserIdsRef.current.has(String(u._id)) &&
+              !deletedUserIdsRef.current.has(String(u.empId)) &&
+              !deletedUserIdsRef.current.has(String(u.tttNbId))
+            );
             setUsers(prev => {
               const savedAvatar = typeof window !== 'undefined' ? localStorage.getItem('ttt_user_avatar') : null;
-              const merged = liveUsers.map(lu => {
-                const existing = prev.find(p => p.id === lu.id || p.email === lu.email);
+              const merged = filteredUsers.map(lu => {
+                const existing = prev.find(p => p.id === lu.id || p._id === lu._id || p.email === lu.email);
                 let avatar = lu.avatar || existing?.avatar;
                 if (!avatar && savedAvatar && (lu.id === currentUserId || lu.id === 'u-shashank-01' || lu.email === 'shashank.m@netbounceplacement.com')) {
                   avatar = savedAvatar;
                 }
-                return { ...lu, avatar: avatar || lu.avatar || DEFAULT_AVATAR };
+                return { ...existing, ...lu, avatar: avatar || lu.avatar || DEFAULT_AVATAR };
               });
               try {
                 localStorage.setItem('ttt_users', JSON.stringify(merged));
@@ -480,7 +487,7 @@ export const AppProvider = ({ children }) => {
   const updateUser = useCallback((userId, updatedData) => {
     setUsers(prev => {
       const updated = prev.map(u => {
-        if (u.id === userId || u.empId === userId || u.tttNbId === userId) {
+        if (u.id === userId || u._id === userId || u.empId === userId || u.tttNbId === userId) {
           return { ...u, ...updatedData };
         }
         return u;
@@ -493,7 +500,7 @@ export const AppProvider = ({ children }) => {
       return updated;
     });
 
-    if (updatedData.avatar && (userId === currentUserId || (currentUser && (userId === currentUser.id || userId === currentUser.empId || userId === currentUser.tttNbId)))) {
+    if (updatedData.avatar && (userId === currentUserId || (currentUser && (userId === currentUser.id || userId === currentUser._id || userId === currentUser.empId || userId === currentUser.tttNbId)))) {
       setUserAvatar(updatedData.avatar);
       if (typeof window !== 'undefined') {
         try {
@@ -503,7 +510,7 @@ export const AppProvider = ({ children }) => {
     }
 
     // Sync to MongoDB Atlas backend
-    fetch(`/api/users/${userId}`, {
+    fetch(`/api/users/${encodeURIComponent(userId)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updatedData),
@@ -513,8 +520,9 @@ export const AppProvider = ({ children }) => {
   }, [currentUserId, currentUser]);
 
   const deleteUser = useCallback((userId) => {
+    deletedUserIdsRef.current.add(String(userId));
     setUsers(prev => {
-      const updated = prev.filter(u => u.id !== userId && u.empId !== userId && u.tttNbId !== userId);
+      const updated = prev.filter(u => u.id !== userId && u._id !== userId && u.empId !== userId && u.tttNbId !== userId);
       if (typeof window !== 'undefined') {
         try {
           localStorage.setItem('ttt_users', JSON.stringify(updated));
@@ -524,7 +532,7 @@ export const AppProvider = ({ children }) => {
     });
 
     // Sync deletion to MongoDB Atlas backend
-    fetch(`/api/users/${userId}`, {
+    fetch(`/api/users/${encodeURIComponent(userId)}`, {
       method: 'DELETE',
     }).catch(err => console.warn('Failed to delete user on server:', err));
 

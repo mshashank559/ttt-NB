@@ -241,7 +241,7 @@ export function EditUserModal({ user, open, onOpenChange }) {
       avatar,
     };
 
-    updateUser(user.id, updatedData);
+    updateUser(user.id || user._id, updatedData);
     setIsSubmitting(false);
     onOpenChange(false);
   };
@@ -483,7 +483,7 @@ export function DeleteUserDialog({ user, open, onOpenChange }) {
 
   const handleDelete = () => {
     setIsDeleting(true);
-    deleteUser(user.id);
+    deleteUser(user.id || user._id);
     setIsDeleting(false);
     onOpenChange(false);
   };

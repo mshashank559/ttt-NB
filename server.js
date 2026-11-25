@@ -264,42 +264,36 @@ const SlaTicket = mongoose.model('SlaTicket', SlaTicketSchema);
 // -------------------------------------------------------------
 async function seedDatabaseIfEmpty() {
   try {
-    const { USERS } = await import('./src/data/mockData.js');
-    if (Array.isArray(USERS) && USERS.length > 0) {
-      let added = 0;
-      for (const u of USERS) {
-        const exists = await User.findOne({ $or: [{ id: u.id }, { email: u.email }] });
-        if (!exists) {
-          await new User(u).save();
-          added++;
-        }
+    const userCount = await User.countDocuments();
+    if (userCount === 0) {
+      const { USERS } = await import('./src/data/mockData.js');
+      if (Array.isArray(USERS) && USERS.length > 0) {
+        await User.insertMany(USERS);
+        console.log(`✅ Provisioned ${USERS.length} authoritative members to MongoDB Atlas on initial empty collection.`);
       }
-      if (added > 0) {
-        console.log(`✅ Provisioned ${added} authoritative members to MongoDB Atlas.`);
-      } else {
-        console.log('✅ Database is already configured with real authoritative members.');
-      }
-
-      // Automatically normalize any legacy "Code Name Unassigned" or Harit Verma tasks/feedbacks to Abhishek (TSE-NB-001)
-      await Feedback.updateMany(
-        { $or: [{ techSupport: 'Code Name Unassigned' }, { techSupport: 'Unassigned', employeeName: { $regex: /harit/i } }, { employeeName: { $regex: /harit/i }, techSupport: { $ne: 'Abhishek' } }] },
-        { $set: { techSupport: 'Abhishek', techSupportId: 'TSE-NB-001', employeeName: 'Harit verma', techSupportEmail: 'nbtech1@netbounceplacement.com' } }
-      );
-      await Task.updateMany(
-        { $or: [{ codeName: 'Code Name Unassigned' }, { techPerson: { $regex: /harit/i }, codeName: { $in: ['', null, 'Unassigned', 'Code Name Unassigned'] } }] },
-        { $set: { codeName: 'Abhishek' } }
-      );
-
-      // Ensure Samanvi Arcot and Mayuri Kate strictly belong to Team Shivam
-      await Feedback.updateMany(
-        { candidateName: { $regex: /(samanvi arcot|mayuri kate)/i } },
-        { $set: { teamId: 'team-shivam', teamName: 'Team Shivam', teamLeadId: 'u-1791911115518' } }
-      );
-      await Task.updateMany(
-        { candidateName: { $regex: /(samanvi arcot|mayuri kate)/i } },
-        { $set: { teamId: 'team-shivam', teamName: 'Team Shivam', teamLeadId: 'u-1791911115518' } }
-      );
+    } else {
+      console.log(`✅ User collection already configured (${userCount} users). Preserving user modifications and deletions.`);
     }
+
+    // Automatically normalize any legacy "Code Name Unassigned" or Harit Verma tasks/feedbacks to Abhishek (TSE-NB-001)
+    await Feedback.updateMany(
+      { $or: [{ techSupport: 'Code Name Unassigned' }, { techSupport: 'Unassigned', employeeName: { $regex: /harit/i } }, { employeeName: { $regex: /harit/i }, techSupport: { $ne: 'Abhishek' } }] },
+      { $set: { techSupport: 'Abhishek', techSupportId: 'TSE-NB-001', employeeName: 'Harit verma', techSupportEmail: 'nbtech1@netbounceplacement.com' } }
+    );
+    await Task.updateMany(
+      { $or: [{ codeName: 'Code Name Unassigned' }, { techPerson: { $regex: /harit/i }, codeName: { $in: ['', null, 'Unassigned', 'Code Name Unassigned'] } }] },
+      { $set: { codeName: 'Abhishek' } }
+    );
+
+    // Ensure Samanvi Arcot and Mayuri Kate strictly belong to Team Shivam
+    await Feedback.updateMany(
+      { candidateName: { $regex: /(samanvi arcot|mayuri kate)/i } },
+      { $set: { teamId: 'team-shivam', teamName: 'Team Shivam', teamLeadId: 'u-1791911115518' } }
+    );
+    await Task.updateMany(
+      { candidateName: { $regex: /(samanvi arcot|mayuri kate)/i } },
+      { $set: { teamId: 'team-shivam', teamName: 'Team Shivam', teamLeadId: 'u-1791911115518' } }
+    );
   } catch (err) {
     console.error('⚠️ Seeding error:', err.message);
   }
@@ -404,13 +398,27 @@ app.post('/api/users', async (req, res) => {
 
 app.put('/api/users/:id', async (req, res) => {
   try {
-    const userId = req.params.id;
-    const updateData = req.body;
+    const rawId = req.params.id;
+    const userId = decodeURIComponent(rawId);
+    const updateData = { ...req.body };
+    if (updateData.empId && !updateData.tttNbId) {
+      updateData.tttNbId = updateData.empId;
+    }
     const requesterRole = req.body.requesterRole || req.headers['x-user-role'];
+
+    const userQuery = {
+      $or: [
+        { id: userId },
+        { empId: userId },
+        { tttNbId: userId },
+        { email: userId.toLowerCase() },
+        ...(mongoose.Types.ObjectId.isValid(userId) ? [{ _id: userId }] : [])
+      ]
+    };
 
     // TSM can ONLY update TSE and TSM users, and cannot elevate to other roles
     if (requesterRole === 'tsm') {
-      const targetUser = await User.findOne({ $or: [{ id: userId }, { empId: userId }, { tttNbId: userId }] });
+      const targetUser = await User.findOne(userQuery);
       if (!targetUser || !['tse', 'tsm'].includes(targetUser.role)) {
         return res.status(403).json({ error: 'TSM is only authorized to edit TSE and TSM accounts.' });
       }
@@ -420,9 +428,9 @@ app.put('/api/users/:id', async (req, res) => {
     }
 
     const user = await User.findOneAndUpdate(
-      { $or: [{ id: userId }, { empId: userId }, { tttNbId: userId }] },
+      userQuery,
       { $set: updateData },
-      { new: true }
+      { returnDocument: 'after' }
     );
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
@@ -435,20 +443,29 @@ app.put('/api/users/:id', async (req, res) => {
 
 app.delete('/api/users/:id', async (req, res) => {
   try {
-    const userId = req.params.id;
+    const rawId = req.params.id;
+    const userId = decodeURIComponent(rawId);
     const requesterRole = req.query.requesterRole || req.query.role || req.headers['x-user-role'];
+
+    const userQuery = {
+      $or: [
+        { id: userId },
+        { empId: userId },
+        { tttNbId: userId },
+        { email: userId.toLowerCase() },
+        ...(mongoose.Types.ObjectId.isValid(userId) ? [{ _id: userId }] : [])
+      ]
+    };
 
     // TSM can ONLY delete TSE and TSM users
     if (requesterRole === 'tsm') {
-      const targetUser = await User.findOne({ $or: [{ id: userId }, { empId: userId }, { tttNbId: userId }] });
+      const targetUser = await User.findOne(userQuery);
       if (!targetUser || !['tse', 'tsm'].includes(targetUser.role)) {
         return res.status(403).json({ error: 'TSM is only authorized to delete TSE and TSM accounts.' });
       }
     }
 
-    const result = await User.findOneAndDelete({
-      $or: [{ id: userId }, { empId: userId }, { tttNbId: userId }]
-    });
+    const result = await User.findOneAndDelete(userQuery);
     res.json({ message: 'User deleted successfully', deleted: result });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1056,9 +1073,19 @@ app.get('/api/feedbacks', async (req, res) => {
 
     let feedbacks = await Feedback.find(filter).sort({ createdAt: -1 });
 
-    const allTasks = await Task.find({}).lean();
+    const taskIds = feedbacks
+      .map(fb => fb.taskId || (fb.id ? fb.id.replace('fb-task-', '') : ''))
+      .filter(Boolean);
+
+    const relevantTasks = taskIds.length > 0
+      ? await Task.find(
+          { id: { $in: taskIds } },
+          'id teamId teamName teamLeadId recruiterName assignedSrId techPerson codeName assigneeId'
+        ).lean()
+      : [];
+
     const taskMap = new Map();
-    allTasks.forEach(t => {
+    relevantTasks.forEach(t => {
       if (t.id) taskMap.set(t.id, t);
     });
 
