@@ -62,23 +62,36 @@ export default function Login() {
     } catch (err) {}
 
     const allUsers = users && users.length > 0 ? users : USERS;
-    const found = allUsers.find(u => (u.email || '').toLowerCase() === cleanEmail) ||
-      USERS.find(u => (u.email || '').toLowerCase() === cleanEmail);
+    const found = allUsers.find(u => 
+      (u.email || '').toLowerCase() === cleanEmail ||
+      (u.empId || '').toLowerCase() === cleanEmail ||
+      (u.tttNbId || '').toLowerCase() === cleanEmail ||
+      (u.id || '').toLowerCase() === cleanEmail
+    ) || USERS.find(u => 
+      (u.email || '').toLowerCase() === cleanEmail ||
+      (u.empId || '').toLowerCase() === cleanEmail ||
+      (u.tttNbId || '').toLowerCase() === cleanEmail ||
+      (u.id || '').toLowerCase() === cleanEmail
+    );
 
     if (found) {
       if (password && found.password && found.password !== password) {
         toast.error('Invalid Password. Please check your credentials.');
         return;
       }
-      loginAs(found.role, found.id);
+      loginAs(found.role, found.id || found._id || found.empId || found.email);
       navigate('/dashboard');
       return;
     }
 
     // Also match if user entered name (e.g. "shashank" or "mukesh")
-    const foundByName = allUsers.find(u => (u.name || '').toLowerCase().includes(cleanEmail));
+    const foundByName = allUsers.find(u => (u.name || '').toLowerCase() === cleanEmail || (u.name || '').toLowerCase().includes(cleanEmail));
     if (foundByName) {
-      loginAs(foundByName.role, foundByName.id);
+      if (password && foundByName.password && foundByName.password !== password) {
+        toast.error('Invalid Password. Please check your credentials.');
+        return;
+      }
+      loginAs(foundByName.role, foundByName.id || foundByName._id || foundByName.empId || foundByName.email);
       navigate('/dashboard');
       return;
     }

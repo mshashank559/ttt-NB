@@ -364,8 +364,12 @@ app.get('/api/users', async (req, res) => {
     if (requesterRole === 'tsm') {
       query = { role: { $in: ['tse', 'tsm'] } };
     }
-    const users = await User.find(query).sort({ createdAt: -1 });
-    res.json(users);
+    const users = await User.find(query).sort({ createdAt: -1 }).lean();
+    const normalized = users.map(u => ({
+      ...u,
+      id: u.id || String(u._id),
+    }));
+    res.json(normalized);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

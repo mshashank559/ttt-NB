@@ -30,8 +30,18 @@ import { DEFAULT_AVATAR } from '../data/avatars';
 const AppCtx = createContext(null);
 
 export const AppProvider = ({ children }) => {
-  const [currentRole, setCurrentRole] = useState(null); // null = login screen
-  const [currentUserId, setCurrentUserId] = useState(null);
+  const [currentRole, setCurrentRole] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('ttt_session_role') || null;
+    }
+    return null;
+  });
+  const [currentUserId, setCurrentUserId] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('ttt_session_user_id') || null;
+    }
+    return null;
+  });
   const [tasks, setTasks] = useState(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -380,7 +390,18 @@ export const AppProvider = ({ children }) => {
     return DEFAULT_AVATAR;
   });
 
-  const currentUser = useMemo(() => (currentUserId ? (users.find(u => u.id === currentUserId) || getUserById(currentUserId)) : null), [currentUserId, users]);
+  const currentUser = useMemo(() => {
+    if (!currentUserId) return null;
+    const match = (u) =>
+      u && (
+        u.id === currentUserId ||
+        String(u._id || '') === String(currentUserId) ||
+        u.empId === currentUserId ||
+        u.tttNbId === currentUserId ||
+        (u.email && u.email.toLowerCase() === String(currentUserId).toLowerCase())
+      );
+    return (users || []).find(match) || (USERS || []).find(match) || getUserById(currentUserId) || null;
+  }, [currentUserId, users]);
 
   const updateUserAvatar = useCallback((url) => {
     setUserAvatar(url);
@@ -441,16 +462,39 @@ export const AppProvider = ({ children }) => {
     // Dark mode disabled by project requirements
   }, []);
 
-  const loginAs = useCallback((roleId, userId) => {
+  const loginAs = useCallback((roleId, userIdentifier) => {
     let user = null;
-    if (userId) {
-      user = users.find(u => u.id === userId) || USERS.find(u => u.id === userId);
-    } else {
-      user = users.find(u => u.role === roleId) || USERS.find(u => u.role === roleId);
+    if (userIdentifier) {
+      const match = (u) =>
+        u && (
+          u.id === userIdentifier ||
+          String(u._id || '') === String(userIdentifier) ||
+          u.empId === userIdentifier ||
+          u.tttNbId === userIdentifier ||
+          (u.email && u.email.toLowerCase() === String(userIdentifier).toLowerCase())
+        );
+      user = (users || []).find(match) || (USERS || []).find(match);
+    } else if (roleId) {
+      user = (users || []).find(u => u.role === roleId) || (USERS || []).find(u => u.role === roleId);
     }
-    const finalRole = user?.role || roleId;
+
+    if (!user) {
+      toast.error('User account could not be found.');
+      return;
+    }
+
+    const finalRole = user.role || roleId;
+    const finalUserId = user.id || user._id || user.empId || user.email;
     setCurrentRole(finalRole);
-    setCurrentUserId(user?.id || null);
+    setCurrentUserId(finalUserId);
+
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('ttt_session_role', finalRole);
+        localStorage.setItem('ttt_session_user_id', String(finalUserId));
+      } catch (e) {}
+    }
+
     if (user?.avatar) {
       setUserAvatar(user.avatar);
       if (typeof window !== 'undefined') {
@@ -465,6 +509,12 @@ export const AppProvider = ({ children }) => {
   const logout = useCallback(() => {
     setCurrentRole(null);
     setCurrentUserId(null);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.removeItem('ttt_session_role');
+        localStorage.removeItem('ttt_session_user_id');
+      } catch (e) {}
+    }
     toast.info('Signed out successfully.');
   }, []);
 

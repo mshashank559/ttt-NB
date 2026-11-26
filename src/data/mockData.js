@@ -1047,8 +1047,12 @@ export const filterAuthorizedData = (items, currentUser, currentRole) => {
   // without having access to other team members’ data.
   if (currentRole === 'marketing_sr') {
     if (!currentUser) return [];
-    const currentUserId = currentUser.id;
-    const currentEmpId = currentUser.empId || currentUser.tttNbId;
+    const userIds = new Set([
+      currentUser.id,
+      currentUser._id ? String(currentUser._id) : null,
+      currentUser.empId,
+      currentUser.tttNbId
+    ].filter(Boolean));
     const currentName = (currentUser.name || '').toLowerCase().trim();
     const currentEmail = (currentUser.email || '').toLowerCase().trim();
 
@@ -1073,9 +1077,9 @@ export const filterAuthorizedData = (items, currentUser, currentRole) => {
 
         // Direct assignment check: ONLY user's own items!
         const isMyItem = Boolean(
-          (item.assignedSrId && (item.assignedSrId === currentUserId || (currentEmpId && item.assignedSrId === currentEmpId))) ||
-          (item.pocId && (item.pocId === currentUserId || (currentEmpId && item.pocId === currentEmpId))) ||
-          (item.createdById && (item.createdById === currentUserId || (currentEmpId && item.createdById === currentEmpId))) ||
+          (item.assignedSrId && userIds.has(item.assignedSrId)) ||
+          (item.pocId && userIds.has(item.pocId)) ||
+          (item.createdById && userIds.has(item.createdById)) ||
           (item.assignedSrEmail && currentEmail && item.assignedSrEmail.toLowerCase().trim() === currentEmail) ||
           isNameMatch(item.assignedSrName) ||
           isNameMatch(item.recruiterName)
