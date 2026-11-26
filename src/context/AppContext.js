@@ -88,11 +88,8 @@ export const AppProvider = ({ children }) => {
           if (Array.isArray(parsed) && parsed.length > 0) {
             return parsed.filter(u =>
               u.name !== 'Hemant Desai' &&
-              u.name !== 'Himanshu Barot' &&
-              u.id !== 'u-sr-shivam-05' &&
               u.id !== 'u-1795645061682' &&
-              u.empId !== 'TTT-NB-026' &&
-              u.empId !== 'TTT-NB-MSR-12'
+              u.empId !== 'TTT-NB-026'
             );
           }
         }
@@ -187,7 +184,7 @@ export const AppProvider = ({ children }) => {
 
   const [dbConnected, setDbConnected] = useState(false);
   const deletedTaskIdsRef = useRef(new Set());
-  const deletedUserIdsRef = useRef(new Set(['u-sr-shivam-05', 'u-1795645061682', 'TTT-NB-026', 'TTT-NB-MSR-12']));
+  const deletedUserIdsRef = useRef(new Set(['u-1795645061682', 'TTT-NB-026']));
 
   // Live Sync with MongoDB Atlas Backend (Mumbai Region)
   React.useEffect(() => {

@@ -480,11 +480,11 @@ const CreateTaskModal = ({ open, onOpenChange }) => {
     return (users || []).filter(u =>
       u.role === 'marketing_sr' &&
       u.status !== 'Inactive' &&
-      !['Hemant Desai', 'Himanshu Barot'].includes(u.name) &&
+      u.name !== 'Hemant Desai' &&
       (u.teamId === targetTeamId || u.team === targetTeamId ||
        (targetTeamId === 'team-mukesh'
           ? (u.teamName?.includes('Mukesh') || u.teamLeadId === 'u-1791911058812' || (u.name && ['Snehal', 'Ritik', 'Ausafkhan', 'Chaudhari Himanshu', 'Deepkumar', 'Rohan', 'Mukesh'].some(part => u.name.includes(part))))
-          : (u.teamName?.includes('Shivam') || u.teamLeadId === 'u-1791911115518' || (u.name && ['Vishal', 'Riyen', 'Smit', 'Rehan', 'Yug', 'Jinesh', 'Hinanshi'].some(part => u.name.includes(part))))
+          : (u.teamName?.includes('Shivam') || u.teamLeadId === 'u-1791911115518' || (u.name && ['Vishal', 'Riyen', 'Smit', 'Rehan', 'Yug', 'Jinesh', 'Hinanshi', 'Himanshu Barot'].some(part => u.name.includes(part))))
        )
       )
     );
@@ -1421,11 +1421,11 @@ const EditTaskModal = ({ task, open, onOpenChange }) => {
     return (users || []).filter(u =>
       u.role === 'marketing_sr' &&
       u.status !== 'Inactive' &&
-      !['Hemant Desai', 'Himanshu Barot'].includes(u.name) &&
+      u.name !== 'Hemant Desai' &&
       (u.teamId === targetTeamId || u.team === targetTeamId ||
        (targetTeamId === 'team-mukesh'
           ? (u.teamName?.includes('Mukesh') || u.teamLeadId === 'u-1791911058812' || (u.name && ['Snehal', 'Ritik', 'Ausafkhan', 'Chaudhari Himanshu', 'Deepkumar', 'Rohan', 'Mukesh'].some(part => u.name.includes(part))))
-          : (u.teamName?.includes('Shivam') || u.teamLeadId === 'u-1791911115518' || (u.name && ['Vishal', 'Riyen', 'Smit', 'Rehan', 'Yug', 'Jinesh', 'Hinanshi'].some(part => u.name.includes(part))))
+          : (u.teamName?.includes('Shivam') || u.teamLeadId === 'u-1791911115518' || (u.name && ['Vishal', 'Riyen', 'Smit', 'Rehan', 'Yug', 'Jinesh', 'Hinanshi', 'Himanshu Barot'].some(part => u.name.includes(part))))
        )
       )
     );
@@ -2179,7 +2179,7 @@ const TaskDrawer = ({ task, onClose }) => {
     const allSrs = (users || []).filter(u =>
       u.role === 'marketing_sr' &&
       u.status !== 'Inactive' &&
-      !['Hemant Desai', 'Himanshu Barot'].includes(u.name)
+      u.name !== 'Hemant Desai'
     );
     const teamSrs = allSrs.filter(u => 
       u.teamId === task?.teamId || 
